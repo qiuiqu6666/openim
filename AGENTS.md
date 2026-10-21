@@ -1,5 +1,15 @@
 # OpenIM → 99Chat Migration Rules
 
+## Android 发布打包
+
+用户要求日常发布打包固定输出三个独立架构的 APK。Windows 下运行根目录
+`.\build-apks.ps1`；其他环境使用
+`flutter build apk --release --split-per-abi --target-platform android-arm,android-arm64,android-x64`。
+除非用户明确要求通用包，不使用 `flutter build apk --release` 生成全架构合并包。
+三个发布文件位于 `build/app/outputs/flutter-apk/`：
+`app-armeabi-v7a-release.apk`、`app-arm64-v8a-release.apk`、`app-x86_64-release.apk`。
+真机调试及明确指定单一架构的诊断构建不受此发布规则影响。
+
 ## 项目定位
 
 当前工作区基于 OpenIM 开发，是一个即时通讯客户端。

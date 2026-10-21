@@ -31,6 +31,16 @@ class _EmailAccountPageState extends State<EmailAccountPage> {
   bool get _changing => _current?.isNotEmpty == true;
   bool get _active => mounted && _service.isCurrent;
 
+  bool _rejectUnchangedEmail() {
+    if (!_changing ||
+        _email.text.trim().toLowerCase() != _current!.trim().toLowerCase()) {
+      return false;
+    }
+    setState(() => _error = authText(
+        '新邮箱不能与当前邮箱相同', 'The new email must differ from the current email.'));
+    return true;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -62,6 +72,7 @@ class _EmailAccountPageState extends State<EmailAccountPage> {
 
   Future<bool> _send(bool old) async {
     if (!_active || _busy || _current == null) return false;
+    if (!old && _rejectUnchangedEmail()) return false;
     if (!old && AuthFormRules.email(_email.text) != null) {
       setState(() => _submitted = true);
       return false;
@@ -97,6 +108,7 @@ class _EmailAccountPageState extends State<EmailAccountPage> {
       _submitted = true;
       _error = null;
     });
+    if (_rejectUnchangedEmail()) return;
     if (AuthFormRules.email(_email.text) != null ||
         AuthFormRules.verificationCode(_code.text, sixDigits: true) != null ||
         (_changing

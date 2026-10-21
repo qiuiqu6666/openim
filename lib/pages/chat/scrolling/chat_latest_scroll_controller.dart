@@ -28,6 +28,7 @@ class ChatLatestScrollController {
   int _revision = 0;
 
   bool get _active => !_closed && !isClosed() && controller.hasClients;
+  bool get followingEntry => _entryFollowing;
 
   /// Initial layout offsets are not evidence of a deliberate history read.
   /// Follow both the local preview and the first authoritative page.

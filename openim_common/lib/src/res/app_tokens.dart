@@ -8,6 +8,23 @@ import 'package:flutter/material.dart';
 class AppTokens {
   AppTokens._();
 
+  // Video seeking: generous touch area with a clearly visible handle.
+  static const double videoSeekTouchHeight = 56;
+  static const double videoSeekTrackHeight = 6;
+  static const double videoSeekThumbRadius = 10;
+  static const double videoSeekOverlayRadius = 24;
+  static const Size videoSpeedMinimumSize = Size(72, 48);
+  static const double videoHoldEdgeFraction = 0.22;
+  static const double videoHoldHintTop = 64;
+  static const double videoHoldHintRadius = 20;
+  static const Color videoHoldHintBackground = Color(0xB3000000);
+  static const EdgeInsets videoHoldHintPadding =
+      EdgeInsets.symmetric(horizontal: 16, vertical: 8);
+  static const EdgeInsets videoSpeedPadding =
+      EdgeInsets.fromLTRB(8, 16, 8, 0);
+  static const TextStyle videoSpeedTextStyle =
+      TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+
   // In-place content transitions shared by surfaces such as conversation search.
   static const Duration contentTransitionDuration = Duration(milliseconds: 180);
   static const Curve contentTransitionCurve = Curves.easeOutCubic;
@@ -106,6 +123,7 @@ class AppTokens {
   static const double profileContentMaxWidth = 600;
   static const double minimumTapSize = 48;
   static const double browserSheetHeightFactor = .94;
+  static const double browserPagePickerHeightFactor = .6;
   static const double browserBackgroundScale = .90;
   static const double browserBackgroundOffset = s4;
   static const Duration browserOpenDuration = Duration(milliseconds: 420);

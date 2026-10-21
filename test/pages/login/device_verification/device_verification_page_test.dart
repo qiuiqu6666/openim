@@ -19,6 +19,44 @@ void main() {
     Styles.isDark = false;
   });
 
+  for (final dark in [false, true]) {
+    testWidgets('rejected send reports failure and allows retry (dark=$dark)',
+        (tester) async {
+      addTearDown(() => clearDevicePage(tester));
+      var requests = 0;
+      await mountDevicePage(
+        tester,
+        DeviceVerificationPage(
+          methods: const ['email'],
+          onSendCode: (_, __) async {
+            requests++;
+            return VerificationCodeResult(
+              captchaVerified: requests > 1,
+              sent: requests > 1,
+              retryAfter: 60,
+            );
+          },
+        ),
+        dark: dark,
+      );
+      await tester.tap(deviceSend);
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 300));
+      expect(find.text('验证码发送失败，请稍后重试'), findsOneWidget);
+      expect(find.text('验证码已发送'), findsNothing);
+      expect(find.text('60s'), findsNothing);
+      expect(deviceSendButton(tester).onPressed, isNotNull);
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pump(const Duration(milliseconds: 300));
+      await tester.tap(deviceSend);
+      await tester.pump();
+      expect(requests, 2);
+      expect(find.text('60s'), findsOneWidget);
+      expect(deviceSendButton(tester).onPressed, isNull);
+      await clearDevicePage(tester);
+    });
+  }
+
   testWidgets('both methods can switch and switching clears entered proof',
       (tester) async {
     addTearDown(() => clearDevicePage(tester));
@@ -86,6 +124,42 @@ void main() {
         await clearDevicePage(tester);
       }
     }
+  });
+
+  testWidgets('email reference and footer share the send cooldown',
+      (tester) async {
+    addTearDown(() => clearDevicePage(tester));
+    final key = GlobalKey();
+    var sends = 0;
+    final resend = find.byKey(const ValueKey('device-verification-resend'));
+    await mountDevicePage(
+        tester,
+        DeviceVerificationPage(
+          methods: const ['email'],
+          onSendCode: (_, __) async {
+            sends++;
+            return const VerificationCodeResult(
+                captchaVerified: true, sent: true, retryAfter: 3);
+          },
+          onVerify: (_) async => false,
+        ),
+        boundaryKey: key);
+    expect(
+        tester.widget<TextField>(deviceCodeField).focusNode!.hasFocus, isFalse);
+    await exportDevicePreview(tester, key, 'email-reference');
+    await tester.tap(resend);
+    await tester.pump();
+    expect(sends, 1);
+    expect(find.text('重新发送 (3s)'), findsOneWidget);
+    expect(tester.widget<TextButton>(resend).onPressed, isNull);
+    expect(deviceSendButton(tester).onPressed, isNull);
+    await tester.pump(const Duration(seconds: 4));
+    await tester.pumpAndSettle();
+    expect(tester.widget<TextButton>(resend).onPressed, isNotNull);
+    await tester.tap(resend);
+    await tester.pump();
+    expect(sends, 2);
+    await clearDevicePage(tester);
   });
 
   testWidgets('static preview never claims to send or verify a code',
@@ -223,7 +297,7 @@ void main() {
     expect(find.text('60s'), findsNothing);
   });
 
-  testWidgets('failed slider can retry; successful slider observes retryAfter',
+  testWidgets('rejected send can retry; accepted gate observes retryAfter',
       (tester) async {
     addTearDown(() => clearDevicePage(tester));
     final responses = [
@@ -242,12 +316,16 @@ void main() {
     await tester.pump();
     expect(deviceSendButton(tester).onPressed, isNotNull);
     expect(find.text('60s'), findsNothing);
+    await tester.pump(const Duration(milliseconds: 300));
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pump(const Duration(milliseconds: 300));
     await tester.tap(deviceSend);
     await tester.pump();
     expect(calls, 2);
     expect(deviceSendButton(tester).onPressed, isNull);
     expect(find.text('4s'), findsOneWidget);
     expect(find.text('验证码已发送'), findsNothing);
+    await clearDevicePage(tester);
   });
 
   testWidgets('six numeric digits are required and verify is single-flight',

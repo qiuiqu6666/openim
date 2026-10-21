@@ -15,9 +15,13 @@ class AuthFormScaffold extends StatelessWidget {
     this.onBack,
     this.backLabel,
     this.titleStyle,
+    this.showDivider = true,
+    this.contentPadding = AuthReferenceTokens.plainFormPadding,
   });
 
   final TextStyle? titleStyle;
+  final bool showDivider;
+  final EdgeInsetsGeometry contentPadding;
   final String title;
   final String subtitle;
   final Widget child;
@@ -114,14 +118,15 @@ class AuthFormScaffold extends StatelessWidget {
                     ],
                   ),
                 ),
-                SizedBox(
-                  height: 1,
-                  child: ColoredBox(
-                      color: AuthReferenceTokens.color(
-                          context, AuthReferenceTokens.divider)),
-                ),
+                if (showDivider)
+                  SizedBox(
+                    height: 1,
+                    child: ColoredBox(
+                        color: AuthReferenceTokens.color(
+                            context, AuthReferenceTokens.divider)),
+                  ),
                 Padding(
-                  padding: AuthReferenceTokens.plainFormPadding,
+                  padding: contentPadding,
                   child: child,
                 ),
               ],

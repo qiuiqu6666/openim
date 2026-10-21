@@ -332,6 +332,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
 
   Future<bool> _login(int attempt) async {
     PasswordDeviceLoginAttempt? passwordAttempt;
+    var credentialsReceived = false;
     var deviceVerified = false;
     var ownerAccount = DataSp.userID;
     var ownerToken = DataSp.chatToken;
@@ -406,6 +407,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
         );
       }
       if (!ownsRequest()) return false;
+      credentialsReceived = true;
       ownerAccount = data.userID;
       ownerToken = data.chatToken;
       ownerIMToken = data.imToken;
@@ -458,6 +460,20 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
     } catch (e) {
       Logger.print('Login failed');
       if (ownsFeedback()) {
+        if (!credentialsReceived && deviceLoginErrorCode(e) == 20002) {
+          _feedback.reset();
+          await showAuthNotice(
+            loginType.value == LoginType.email
+                ? authText('邮箱未注册，请先注册',
+                    'This email is not registered. Please sign up first.')
+                : authText('账号不存在，请先注册',
+                    'This account does not exist. Please sign up first.'),
+            onConfirmed: () {
+              if (ownsFeedback()) registerNow();
+            },
+          );
+          return false;
+        }
         _feedback.recordFailure(e, Urls.login);
         showAuthNotice(formError!);
       }
@@ -544,7 +560,13 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   void registerNow() {
     operateType =
         loginType.value == LoginType.email ? LoginType.email : LoginType.phone;
-    AppNavigator.startRegister();
+    FocusManager.instance.primaryFocus?.unfocus();
+    AppNavigator.startRegister(arguments: {
+      'registrationEmail': operateType == LoginType.email,
+      'registrationAccount':
+          loginType.value == LoginType.account ? '' : phoneCtrl.text.trim(),
+      'registrationAreaCode': areaCode.value,
+    });
   }
 
   void forgetPassword() {

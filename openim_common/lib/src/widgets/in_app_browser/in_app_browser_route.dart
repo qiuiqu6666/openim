@@ -10,7 +10,10 @@ import 'in_app_browser_page.dart';
 class InAppBrowserRoute extends PageRoute<void>
     with CupertinoRouteTransitionMixin<void> {
   InAppBrowserRoute(
-      {required Uri uri, required Color scrim, required bool reduced})
+      {required Uri uri,
+      required Color scrim,
+      required bool reduced,
+      this.externalDock = false})
       : _uri = uri,
         _reduced = reduced,
         _scrim = scrim,
@@ -18,6 +21,7 @@ class InAppBrowserRoute extends PageRoute<void>
           settings: const RouteSettings(name: '/in-app-browser'),
         );
 
+  final bool externalDock;
   final Uri _uri;
   final _minimized = ValueNotifier(false);
   ValueListenable<bool> get minimized => _minimized;
@@ -33,6 +37,7 @@ class InAppBrowserRoute extends PageRoute<void>
       ? animation?.value ?? 0
       : AppTokens.browserBackgroundCurve.transform(animation?.value ?? 0);
   late final _address = ValueNotifier(_uri.host);
+  ValueListenable<String> get pageLabel => _address;
   late String _host = _uri.host;
   final _icon = ValueNotifier<Uri?>(null);
   static const _barHeight = AppTokens.minimumTapSize + AppTokens.s5;
@@ -45,6 +50,7 @@ class InAppBrowserRoute extends PageRoute<void>
         !controller!.isCompleted) {
       return;
     }
+    final epoch = ++_motionEpoch;
     _interactive = true;
     FocusManager.instance.primaryFocus?.unfocus();
     try {
@@ -54,16 +60,22 @@ class InAppBrowserRoute extends PageRoute<void>
                   _reduced ? Duration.zero : AppTokens.browserCloseDuration,
               curve: Curves.easeOutCubic)
           .orCancel;
+      if (epoch != _motionEpoch) return;
       _minimized.value = true;
       changedInternalState();
     } on TickerCanceled {
       // Closing the browser can interrupt settling.
     } finally {
-      _interactive = false;
+      if (epoch == _motionEpoch) _interactive = false;
     }
   }
 
   Future<void> _restore() async {
+    if (!_minimized.value || !isCurrent || controller == null) return;
+    final epoch = ++_motionEpoch;
+    _dragging = false;
+    _dragFromWeb = false;
+    _fromMinimized = false;
     _interactive = true;
     _minimized.value = false;
     changedInternalState();
@@ -77,7 +89,21 @@ class InAppBrowserRoute extends PageRoute<void>
     } on TickerCanceled {
       // Route was closed while restoring.
     } finally {
-      _interactive = false;
+      if (epoch == _motionEpoch) _interactive = false;
+    }
+  }
+
+  /// A newly opened page takes the foreground without destroying this page.
+  void retainInDock() {
+    ++_motionEpoch;
+    _dragging = false;
+    _dragFromWeb = false;
+    _interactive = false;
+    _fromMinimized = false;
+    _minimized.value = true;
+    if (controller != null) {
+      controller!.value = .001;
+      changedInternalState();
     }
   }
 
@@ -87,19 +113,23 @@ class InAppBrowserRoute extends PageRoute<void>
     }
   }
 
+  int _motionEpoch = 0;
   bool _interactive = false;
   bool _dragging = false;
+  bool _dragFromWeb = false;
   bool _fromMinimized = false;
   double _restoreTravel = 1;
   double _dragHeight = 1;
 
-  void _startDrag(BuildContext context) {
-    if (!isCurrent ||
+  void _startDrag(BuildContext context, {bool fromWeb = false}) {
+    if (_dragging ||
+        !isCurrent ||
         controller == null ||
         controller!.isAnimating ||
         (!_minimized.value && !controller!.isCompleted)) {
       return;
     }
+    ++_motionEpoch;
     _dragHeight = MediaQuery.sizeOf(context).height;
     _fromMinimized = _minimized.value;
     if (_fromMinimized) {
@@ -112,22 +142,27 @@ class InAppBrowserRoute extends PageRoute<void>
       _minimized.value = false;
       changedInternalState();
     }
+    _dragFromWeb = fromWeb;
     _interactive = _dragging = true;
-    navigator?.didStartUserGesture();
+    // This resizes the retained sheet; it is not a Navigator back gesture.
+    // Registering it as one makes ModalRoute ignore all page input.
   }
 
   void _updateDrag(DragUpdateDetails details) {
+    if (!_dragFromWeb) _updateDragDelta(details.delta.dy);
+  }
+
+  void _updateDragDelta(double delta) {
     if (!_dragging) return;
     controller!.value = (controller!.value -
-            details.delta.dy /
-                (_dragHeight * (_fromMinimized ? _restoreTravel : 1)))
+            delta / (_dragHeight * (_fromMinimized ? _restoreTravel : 1)))
         .clamp(.001, 1.0);
   }
 
   Future<void> _endDrag({double velocity = 0, bool cancelled = false}) async {
     if (!_dragging) return;
     _dragging = false;
-    final owner = navigator;
+    final epoch = _motionEpoch;
     final dismiss = _fromMinimized
         ? cancelled ||
             !(velocity < -AppTokens.browserDismissVelocity ||
@@ -146,6 +181,7 @@ class InAppBrowserRoute extends PageRoute<void>
                     _reduced ? Duration.zero : AppTokens.browserCloseDuration,
                 curve: Curves.easeOutCubic)
             .orCancel;
+        if (epoch != _motionEpoch) return;
         _minimized.value = true;
         changedInternalState();
       } else {
@@ -159,10 +195,10 @@ class InAppBrowserRoute extends PageRoute<void>
     } on TickerCanceled {
       // The navigator can remove the route while a gesture is settling.
     } finally {
-      _interactive = false;
-      _fromMinimized = false;
-      if (owner?.mounted == true && owner!.userGestureInProgress) {
-        owner.didStopUserGesture();
+      if (epoch == _motionEpoch) {
+        _interactive = false;
+        _dragFromWeb = false;
+        _fromMinimized = false;
       }
     }
   }
@@ -177,9 +213,12 @@ class InAppBrowserRoute extends PageRoute<void>
   Widget buildContent(BuildContext context) => GestureDetector(
       onVerticalDragStart: (_) => _startDrag(context),
       onVerticalDragUpdate: _updateDrag,
-      onVerticalDragEnd: (details) =>
-          _endDrag(velocity: details.primaryVelocity ?? 0),
-      onVerticalDragCancel: () => _endDrag(cancelled: true),
+      onVerticalDragEnd: (details) {
+        if (!_dragFromWeb) _endDrag(velocity: details.primaryVelocity ?? 0);
+      },
+      onVerticalDragCancel: () {
+        if (!_dragFromWeb) _endDrag(cancelled: true);
+      },
       child: ValueListenableBuilder<bool>(
         valueListenable: _minimized,
         child: SafeArea(
@@ -194,6 +233,16 @@ class InAppBrowserRoute extends PageRoute<void>
                     top: Radius.circular(AppTokens.rLg)),
                 child: InAppBrowserPage(
                     uri: _uri,
+                    onEdgeDragStart: () => _startDrag(context, fromWeb: true),
+                    onEdgeDragUpdate: (delta) {
+                      if (_dragFromWeb) _updateDragDelta(delta);
+                    },
+                    onEdgeDragEnd: (velocity) {
+                      if (_dragFromWeb) _endDrag(velocity: velocity);
+                    },
+                    onEdgeDragCancel: () {
+                      if (_dragFromWeb) _endDrag(cancelled: true);
+                    },
                     onLocationChanged: (uri) {
                       _host = uri.host;
                       _address.value = uri.host;
@@ -212,100 +261,7 @@ class InAppBrowserRoute extends PageRoute<void>
             child: page,
             builder: (context, page) => Stack(
                   children: [
-                    if (dockProgress > 0)
-                      Align(
-                        alignment: Alignment.bottomCenter,
-                        child: IgnorePointer(
-                          ignoring: !minimized,
-                          child: ClipRect(
-                              child: Align(
-                            alignment: Alignment.bottomCenter,
-                            heightFactor: dockProgress,
-                            child: Material(
-                              key: const ValueKey('browser-dock-surface'),
-                              color: Theme.of(context).colorScheme.surface,
-                              shape: const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.vertical(
-                                      top: Radius.circular(AppTokens.rLg))),
-                              clipBehavior: Clip.antiAlias,
-                              child: SafeArea(
-                                  top: false,
-                                  child: SizedBox(
-                                    height: _barHeight,
-                                    child: Row(children: [
-                                      IconButton(
-                                          tooltip:
-                                              Localizations.localeOf(context)
-                                                          .languageCode ==
-                                                      'zh'
-                                                  ? '关闭网页'
-                                                  : 'Close page',
-                                          onPressed: () => navigator?.pop(),
-                                          icon: const Icon(Icons.close)),
-                                      Expanded(
-                                          child: TextButton(
-                                              onPressed: _restore,
-                                              child:
-                                                  ValueListenableBuilder<
-                                                          String>(
-                                                      valueListenable: _address,
-                                                      builder:
-                                                          (_, address, __) =>
-                                                              Row(children: [
-                                                                ValueListenableBuilder<
-                                                                    Uri?>(
-                                                                  valueListenable:
-                                                                      _icon,
-                                                                  builder: (_,
-                                                                          icon,
-                                                                          __) =>
-                                                                      ExcludeSemantics(
-                                                                    child:
-                                                                        SizedBox(
-                                                                      width: AppTokens
-                                                                          .chevronSize,
-                                                                      height: AppTokens
-                                                                          .chevronSize,
-                                                                      child: icon ==
-                                                                              null
-                                                                          ? const Icon(Icons
-                                                                              .language)
-                                                                          : Image.network(
-                                                                              icon.toString(),
-                                                                              fit: BoxFit.contain,
-                                                                              errorBuilder: (_, __, ___) => const Icon(Icons.language),
-                                                                              loadingBuilder: (_, child, progress) => progress == null ? child : const Icon(Icons.language)),
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                const SizedBox(
-                                                                    width:
-                                                                        AppTokens
-                                                                            .s3),
-                                                                Expanded(
-                                                                    child: Text(
-                                                                        address,
-                                                                        maxLines:
-                                                                            1,
-                                                                        overflow:
-                                                                            TextOverflow.ellipsis)),
-                                                              ])))),
-                                      IconButton(
-                                          tooltip:
-                                              Localizations.localeOf(context)
-                                                          .languageCode ==
-                                                      'zh'
-                                                  ? '展开网页'
-                                                  : 'Expand page',
-                                          onPressed: _restore,
-                                          icon: const Icon(
-                                              Icons.keyboard_arrow_up)),
-                                    ]),
-                                  )),
-                            ),
-                          )),
-                        ),
-                      ),
+                    if (!externalDock && dockProgress > 0) buildDock(context),
                     Offstage(
                       offstage: minimized,
                       child: FractionalTranslation(
@@ -325,6 +281,133 @@ class InAppBrowserRoute extends PageRoute<void>
                   ],
                 )),
       ));
+
+  /// Reuses the dock controls for the host's scrollable stack of pages.
+  Widget buildDock(BuildContext context,
+          {bool includeBottomInset = true,
+          bool draggable = true,
+          int pageCount = 1,
+          VoidCallback? onShowPages}) =>
+      GestureDetector(
+          onVerticalDragStart: draggable ? (_) => _startDrag(context) : null,
+          onVerticalDragUpdate: draggable ? _updateDrag : null,
+          onVerticalDragEnd: draggable
+              ? (details) => _endDrag(velocity: details.primaryVelocity ?? 0)
+              : null,
+          onVerticalDragCancel:
+              draggable ? () => _endDrag(cancelled: true) : null,
+          child: Align(
+            alignment: Alignment.bottomCenter,
+            child: IgnorePointer(
+              ignoring: !_minimized.value,
+              child: ClipRect(
+                  child: Align(
+                alignment: Alignment.bottomCenter,
+                heightFactor: dockProgress,
+                child: Material(
+                  key: const ValueKey('browser-dock-surface'),
+                  color: Theme.of(context).colorScheme.surface,
+                  shape: const RoundedRectangleBorder(
+                      borderRadius: BorderRadius.vertical(
+                          top: Radius.circular(AppTokens.rLg))),
+                  clipBehavior: Clip.antiAlias,
+                  child: SafeArea(
+                      top: false,
+                      bottom: includeBottomInset,
+                      child: SizedBox(
+                        height: _barHeight,
+                        child: Row(children: [
+                          IconButton(
+                              tooltip: Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'zh'
+                                  ? '关闭网页'
+                                  : 'Close page',
+                              onPressed: () => navigator?.pop(),
+                              icon: const Icon(Icons.close)),
+                          Expanded(
+                              child: TextButton(
+                                  onPressed: _restore,
+                                  child: ValueListenableBuilder<String>(
+                                      valueListenable: _address,
+                                      builder: (_, address, __) =>
+                                          Row(children: [
+                                            ValueListenableBuilder<Uri?>(
+                                              valueListenable: _icon,
+                                              builder: (_, icon, __) =>
+                                                  ExcludeSemantics(
+                                                child: SizedBox(
+                                                  width: AppTokens.chevronSize,
+                                                  height: AppTokens.chevronSize,
+                                                  child: icon == null
+                                                      ? const Icon(
+                                                          Icons.language)
+                                                      : Image.network(
+                                                          icon.toString(),
+                                                          fit: BoxFit.contain,
+                                                          errorBuilder: (_, __,
+                                                                  ___) =>
+                                                              const Icon(Icons
+                                                                  .language),
+                                                          loadingBuilder: (_,
+                                                                  child,
+                                                                  progress) =>
+                                                              progress == null
+                                                                  ? child
+                                                                  : const Icon(Icons
+                                                                      .language)),
+                                                ),
+                                              ),
+                                            ),
+                                            const SizedBox(width: AppTokens.s3),
+                                            Expanded(
+                                                child: Text(address,
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis)),
+                                          ])))),
+                          if (pageCount > 1 && onShowPages != null)
+                            IconButton(
+                              key: const ValueKey('browser-page-count'),
+                              tooltip: Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'zh'
+                                  ? '切换网页（$pageCount）'
+                                  : 'Switch web pages ($pageCount)',
+                              onPressed: onShowPages,
+                              icon: Container(
+                                width: AppTokens.chevronSize,
+                                height: AppTokens.chevronSize,
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  border: Border.all(
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurface),
+                                  borderRadius:
+                                      BorderRadius.circular(AppTokens.rSm),
+                                ),
+                                child: FittedBox(
+                                    child: Text('$pageCount',
+                                        style: Theme.of(context)
+                                            .textTheme
+                                            .labelMedium)),
+                              ),
+                            ),
+                          IconButton(
+                              tooltip: Localizations.localeOf(context)
+                                          .languageCode ==
+                                      'zh'
+                                  ? '展开网页'
+                                  : 'Expand page',
+                              onPressed: _restore,
+                              icon: const Icon(Icons.keyboard_arrow_up)),
+                        ]),
+                      )),
+                ),
+              )),
+            ),
+          ));
 
   @override
   Widget buildModalBarrier() => ValueListenableBuilder<bool>(
@@ -346,6 +429,7 @@ class InAppBrowserRoute extends PageRoute<void>
 
   @override
   void dispose() {
+    ++_motionEpoch;
     _icon.dispose();
     _minimized.dispose();
     _address.dispose();

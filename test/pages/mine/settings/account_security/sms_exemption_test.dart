@@ -93,7 +93,8 @@ void main() {
   });
 
   for (final brightness in Brightness.values) {
-    testWidgets('filled SMS password form explains invalid password and submits correction: $brightness',
+    testWidgets(
+        'filled SMS password form explains invalid password and submits correction: $brightness',
         (tester) async {
       final service = _Security()..exempt = false;
       await tester.pumpWidget(_host(
@@ -167,6 +168,26 @@ void main() {
       await tester.pumpAndSettle();
       expect(service.saves, 1);
       expect(service.code, '');
+      await tester.pump(const Duration(seconds: 3));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('same bound phone is rejected before save: $brightness',
+        (tester) async {
+      final service = _Security();
+      await tester.pumpWidget(_host(
+          ChangePhonePage(
+              service: service, isBound: true, currentPhone: '13800138000'),
+          brightness));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), '13800138000');
+      tester.testTextInput.hide();
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(ElevatedButton));
+      await tester.pumpAndSettle();
+      expect(service.saves, 0);
+      expect(find.text('新手机号与当前绑定手机号相同，无需更换。'), findsOneWidget);
+      expect(find.byType(ChangePhonePage), findsOneWidget);
       await tester.pump(const Duration(seconds: 3));
       await tester.pumpAndSettle();
     });

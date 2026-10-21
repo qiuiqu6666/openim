@@ -11,6 +11,7 @@ class _ComposerHarness {
     this.group = false,
     Future<void> Function(String, String)? persist,
     ComposerMemberPicker? picker,
+    Future<Map<String, String>> Function(List<GroupMembersInfo>)? mentionNames,
     Future<Message> Function(ChatTextComposition)? createText,
     Future<FormattedTextResult?> Function(String)? editor,
     Future<Message> Function(FormattedTextResult, Message?)? createFormatted,
@@ -25,6 +26,7 @@ class _ComposerHarness {
       sendingMuted: () => muted,
       persistDraft: persist ?? (id, draft) async => drafts.add((id, draft)),
       selectMembers: picker ?? (_, __) async => [],
+      mentionNames: mentionNames,
       closeToolbox: () => toolboxClosed++,
       scrollBottom: () {},
       onTypingChanged: typing.add,
@@ -69,6 +71,44 @@ class _ComposerHarness {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  test('selected non-friend nickname survives draft and sent mention metadata',
+      () async {
+    final h = _ComposerHarness(
+      group: true,
+      picker: (_, __) async =>
+          [GroupMembersInfo(userID: 'stranger', nickname: '')],
+      mentionNames: (_) async => {'stranger': '非好友昵称'},
+    );
+    h.composer.initialize('@');
+    await h.composer.selectMentions(0);
+    expect(h.composer.inputCtrl.text, '@非好友昵称 ');
+    await h.composer.pendingDraftWrites;
+    expect(jsonDecode(h.drafts.last.$2)['text'], '@非好友昵称 ');
+    await h.composer.sendTextMsg();
+    expect(h.compositions.single.text, '@非好友昵称 ');
+    expect(h.compositions.single.mentions.single.atUserID, 'stranger');
+    expect(h.compositions.single.mentions.single.groupNickname, '非好友昵称');
+    await h.close();
+  });
+
+  test('late nickname resolution does not overwrite newer input', () async {
+    final names = Completer<Map<String, String>>();
+    final h = _ComposerHarness(
+      group: true,
+      picker: (_, __) async => [GroupMembersInfo(userID: 'stranger')],
+      mentionNames: (_) => names.future,
+    );
+    h.composer.initialize('@');
+    final pending = h.composer.selectMentions(0);
+    await Future<void>.delayed(Duration.zero);
+    h.composer.inputCtrl.text = 'new input';
+    names.complete({'stranger': '非好友昵称'});
+    await pending;
+    expect(h.composer.inputCtrl.text, 'new input');
+    expect(h.composer.mentions, isEmpty);
+    await h.close();
+  });
 
   test('draft writes serialize snapshots and continue after a failed write',
       () async {

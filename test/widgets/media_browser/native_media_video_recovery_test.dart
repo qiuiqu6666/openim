@@ -11,6 +11,9 @@ class _Platform extends VideoPlayerPlatform {
   final sources = <DataSource>[];
   final events = <int, StreamController<VideoEvent>>{};
   final disposed = <int>[];
+  final seeks = <Duration>[];
+  final speeds = <double>[];
+  Completer<void>? speedGate;
   bool failLocal = false;
   bool hang = false;
 
@@ -55,7 +58,13 @@ class _Platform extends VideoPlayerPlatform {
   @override
   Future<void> pause(int id) async {}
   @override
-  Future<void> setPlaybackSpeed(int id, double speed) async {}
+  Future<void> seekTo(int id, Duration position) async => seeks.add(position);
+  @override
+  Future<void> setPlaybackSpeed(int id, double speed) async {
+    speeds.add(speed);
+    if (speed == 2) await speedGate?.future;
+  }
+
   @override
   Future<Duration> getPosition(int id) async => Duration.zero;
   @override
@@ -86,6 +95,139 @@ void main() {
     VideoPlayerPlatform.instance = platform;
   });
   tearDown(() => VideoPlayerPlatform.instance = previous);
+
+  for (final right in [false, true]) {
+    testWidgets('edge hold restores chosen speed (right: $right)',
+        (tester) async {
+      await mount(tester);
+      await tester.tap(find.text('1.0倍'));
+      await tester.pump();
+      final bounds = tester.getRect(find.byType(NativeMediaVideo));
+      final gesture = await tester.startGesture(Offset(
+          right ? bounds.right - 30 : bounds.left + 30, bounds.center.dy));
+      await tester.pump(const Duration(milliseconds: 600));
+      expect(find.text('2倍速播放'), findsOneWidget);
+      expect(platform.speeds.last, 2);
+      if (right) {
+        await gesture.cancel();
+      } else {
+        await gesture.up();
+      }
+      await tester.pump();
+      expect(platform.speeds.last, 1.5);
+      expect(find.text('2倍速播放'), findsNothing);
+      await tester.pumpWidget(const SizedBox());
+      await tester.pump();
+    });
+  }
+
+  testWidgets('release waits for pending native speed change before restoring',
+      (tester) async {
+    await mount(tester);
+    platform.speedGate = Completer<void>();
+    final bounds = tester.getRect(find.byType(NativeMediaVideo));
+    final gesture =
+        await tester.startGesture(Offset(bounds.left + 30, bounds.center.dy));
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.up();
+    await tester.pump();
+    expect(find.text('2倍速播放'), findsNothing);
+    expect(platform.speeds.last, 2);
+    platform.speedGate!.complete();
+    await tester.pump();
+    expect(platform.speeds.last, 1);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('short edge tap and center hold do not change speed',
+      (tester) async {
+    await mount(tester);
+    platform.speeds.clear();
+    final bounds = tester.getRect(find.byType(NativeMediaVideo));
+    await tester.tapAt(Offset(bounds.left + 30, bounds.center.dy));
+    final gesture = await tester.startGesture(bounds.center);
+    await tester.pump(const Duration(milliseconds: 600));
+    await gesture.up();
+    expect(platform.speeds, isEmpty);
+    expect(find.text('2倍速播放'), findsNothing);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('closing during an edge hold safely disposes playback',
+      (tester) async {
+    await mount(tester);
+    final bounds = tester.getRect(find.byType(NativeMediaVideo));
+    final gesture =
+        await tester.startGesture(Offset(bounds.left + 30, bounds.center.dy));
+    await tester.pump(const Duration(milliseconds: 600));
+    await tester.pumpWidget(const SizedBox());
+    await gesture.up();
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 20)));
+    expect(platform.disposed, contains(1));
+  });
+
+  testWidgets('backgrounding restores speed while finger is still held',
+      (tester) async {
+    await mount(tester);
+    final bounds = tester.getRect(find.byType(NativeMediaVideo));
+    final gesture =
+        await tester.startGesture(Offset(bounds.left + 30, bounds.center.dy));
+    await tester.pump(const Duration(milliseconds: 600));
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await tester.pump();
+    expect(platform.speeds.last, 1);
+    expect(find.text('2倍速播放'), findsNothing);
+    await gesture.up();
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('speed button accepts edge taps and displays decimal multiples',
+      (tester) async {
+    await mount(tester);
+    final button = find.widgetWithText(TextButton, '1.0倍');
+    final bounds = tester.getRect(button);
+    expect(bounds.width, greaterThanOrEqualTo(72));
+    expect(bounds.height, greaterThanOrEqualTo(48));
+    for (final speed in [1.5, 2.0, 0.5, 1.0]) {
+      await tester.tapAt(bounds.bottomRight - const Offset(4, 4));
+      await tester.pump();
+      expect(platform.speeds.last, speed);
+      expect(find.text('${speed.toStringAsFixed(1)}倍'), findsOneWidget);
+    }
+    expect(platform.seeks, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('seek accepts taps and drags away from the visible track',
+      (tester) async {
+    await mount(tester);
+    final slider = find.byType(Slider);
+    final bounds = tester.getRect(slider);
+    expect(bounds.height, greaterThanOrEqualTo(48));
+
+    // A finger need not land exactly on the thin painted track.
+    await tester.tapAt(Offset(bounds.center.dx, bounds.center.dy + 24));
+    await tester.pump();
+    expect(platform.seeks.last.inMilliseconds, closeTo(5000, 300));
+
+    await tester.dragFrom(
+      Offset(bounds.center.dx, bounds.center.dy - 24),
+      Offset(bounds.width / 4, 0),
+    );
+    await tester.pump();
+    expect(platform.seeks.last.inMilliseconds, greaterThan(7000));
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
 
   testWidgets('bad local file falls back to remote with original headers',
       (tester) async {

@@ -1,7 +1,7 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
 /// Friend approval is a system message even on the approving (sender) side.
-/// Keep its attention dot separate from the SDK's incoming-message count.
+/// Keep its attention state separate from the SDK's incoming-message count.
 class FriendApprovalNotice {
   FriendApprovalNotice({required this.read, required this.write});
 

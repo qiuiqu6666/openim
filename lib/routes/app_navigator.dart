@@ -534,7 +534,8 @@ class AppNavigator {
         'defaultSearchKey': defaultSearchKey,
       });
 
-  static startRegister() => Get.toNamed(AppRoutes.register);
+  static startRegister({Map<String, dynamic>? arguments}) =>
+      Get.toNamed(AppRoutes.register, arguments: arguments);
 
   static void startVerifyPhone({
     String? phoneNumber,

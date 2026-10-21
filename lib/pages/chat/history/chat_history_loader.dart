@@ -477,7 +477,7 @@ class ChatHistoryLoader {
           current.where((m) => !_isPendingSend(m.status)).lastOrNull;
       if (!latest &&
           (firstPage || refresh) &&
-          (firstPage || preserveReading?.call() == true) &&
+          preserveReading?.call() == true &&
           hasPaintedRows?.call() == true &&
           visibleTail != null &&
           page.isNotEmpty &&
@@ -485,7 +485,7 @@ class ChatHistoryLoader {
           (result.window == null ||
               result.window!.lowerBound > (visibleTail.seq ?? 0) + 1) &&
           holdCurrentWindow()) {
-        // Preserve an initial painted snapshot or an explicit history reader.
+        // Preserve only an explicit history reader, not an initial snapshot.
         // A loaded page following latest must install the new bounded window
         // after resume, rather than becoming stuck buffering every live event.
         loaded = true;

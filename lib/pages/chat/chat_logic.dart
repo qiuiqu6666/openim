@@ -622,7 +622,8 @@ class ChatLogic extends SuperController {
       });
     },
     onFirstLoaded: _getGroupInfoAfterLoadMessage,
-    preserveReading: () => newMessages.awayFromLatest.value,
+    preserveReading: () => !_latestScroll.followingEntry &&
+        newMessages.awayFromLatest.value,
     canTrimHistory: (older) {
       if (_sessionInactive ||
           messageSelection.active ||

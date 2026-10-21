@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 
 import 'package:openim_common/src/widgets/in_app_browser/in_app_browser.dart';
+import 'package:openim_common/src/widgets/in_app_browser/in_app_browser_edge_drag.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
 
 class _Platform extends WebViewPlatform {
@@ -35,6 +36,16 @@ class _Platform extends WebViewPlatform {
 
 class _Controller extends PlatformWebViewController {
   _Controller(super.params) : super.implementation();
+  void Function(ScrollPositionChange)? scrollChanged;
+  @override
+  Future<void> setOnScrollPositionChange(
+      void Function(ScrollPositionChange)? callback) async {
+    scrollChanged = callback;
+  }
+
+  @override
+  Future<Offset> getScrollPosition() async => Offset.zero;
+  int taps = 0;
   Uri? loaded;
   bool back = false;
   bool forward = false;
@@ -114,7 +125,11 @@ class _Delegate extends PlatformNavigationDelegate {
 class _View extends PlatformWebViewWidget {
   _View(super.params) : super.implementation();
   @override
-  Widget build(BuildContext context) => const SizedBox.expand();
+  Widget build(BuildContext context) => GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => (params.controller as _Controller).taps++,
+      onVerticalDragUpdate: (_) {},
+      child: const SizedBox.expand(child: Text('Web content')));
 }
 
 void main() {
@@ -269,6 +284,219 @@ void main() {
     expect(find.text('Another page').hitTestable(), findsOneWidget);
     expect(find.byType(InAppBrowserPage, skipOffstage: false), findsNothing);
   });
+
+  for (final dark in [false, true]) {
+    testWidgets('multiple pages stack and close independently, dark=$dark',
+        (tester) async {
+      await tester.binding.setSurfaceSize(const Size(320, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      await tester.pumpWidget(MaterialApp(
+        theme: dark ? ThemeData.dark() : ThemeData.light(),
+        builder: (_, child) => InAppBrowserHost(child: child!),
+        home: const Scaffold(body: Text('Chat')),
+      ));
+      Future<void> addPage(String host) async {
+        await openInAppBrowser(Uri.parse('https://$host'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        platform.delegates.last.finished('https://$host');
+        await tester.pumpAndSettle();
+        await tester.tapAt(const Offset(10, 10));
+        await tester.pumpAndSettle();
+      }
+
+      await addPage('first.example');
+      final firstState =
+          tester.state(find.byType(InAppBrowserPage, skipOffstage: false));
+      await addPage('second.example');
+      expect(find.byTooltip('Expand page'), findsOneWidget);
+      expect(
+          find.byKey(const ValueKey('browser-dock-surface')), findsOneWidget);
+      expect(find.text('first.example'), findsNothing);
+      expect(find.text('second.example'), findsOneWidget);
+      expect(platform.controllers, hasLength(2));
+      final semantics = tester.ensureSemantics();
+      await expectLater(tester, meetsGuideline(androidTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(iOSTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(labeledTapTargetGuideline));
+      await expectLater(tester, meetsGuideline(textContrastGuideline));
+      semantics.dispose();
+      expect(find.byKey(const ValueKey('browser-rear-card')), findsOneWidget);
+      expect(find.byTooltip('Switch web pages (2)'), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('browser-page-count')));
+      await tester.pumpAndSettle();
+      expect(find.widgetWithText(ListTile, 'first.example'), findsOneWidget);
+      expect(find.widgetWithText(ListTile, 'second.example'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ListTile, 'first.example'));
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(InAppBrowserPage)), same(firstState));
+      await tester.tap(find.byType(InAppBrowserEdgeDrag));
+      await tester.pump();
+      expect(platform.controllers.first.taps, 1);
+      expect(platform.controllers, hasLength(2));
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byKey(const ValueKey('browser-page-count')));
+      await tester.pumpAndSettle();
+      expect(await InAppBrowserHost.active!.handleBack(), isTrue);
+      await tester.pumpAndSettle();
+      expect(find.byType(ListTile), findsNothing);
+      await tester.tap(find.byKey(const ValueKey('browser-page-count')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(ListTile, 'second.example'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byType(InAppBrowserEdgeDrag));
+      await tester.pump();
+      expect(platform.controllers.last.taps, 1);
+      await tester.tapAt(const Offset(10, 10));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('second.example'));
+      await tester.pumpAndSettle();
+      expect(find.text('https://second.example'), findsOneWidget);
+      expect(find.byKey(const ValueKey('browser-dock-surface')), findsNothing);
+      await tester.tap(find.text('Done'));
+      await tester.pumpAndSettle();
+      expect(find.text('second.example'), findsNothing);
+      expect(find.text('first.example'), findsOneWidget);
+      await tester.tap(find.byTooltip('Expand page'));
+      await tester.pumpAndSettle();
+      expect(tester.state(find.byType(InAppBrowserPage)), same(firstState));
+      expect(platform.controllers.first.reloads, 0);
+      expect(platform.controllers, hasLength(2));
+      InAppBrowserHost.close();
+      await tester.pumpAndSettle();
+      expect(find.byType(InAppBrowserPage, skipOffstage: false), findsNothing);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('web scroll reaches top then continues dragging the window',
+      (tester) async {
+    await open(tester);
+    platform.delegates.single.finished('https://example.com');
+    await tester.pumpAndSettle();
+    final controller = platform.controllers.single;
+    final state = tester.state(find.byType(InAppBrowserPage));
+    controller.scrollChanged!(const ScrollPositionChange(0, 200));
+    final gesture = await tester
+        .startGesture(tester.getCenter(find.byType(InAppBrowserEdgeDrag)));
+    await gesture.moveBy(const Offset(0, 80));
+    await tester.pump();
+    expect(find.byTooltip('Expand page'), findsNothing);
+    controller.scrollChanged!(const ScrollPositionChange(0, 0));
+    await gesture.moveBy(const Offset(0, 30));
+    await tester.pump();
+    // Native WebView winning its arena cancels the outer chrome recognizer,
+    // but must not cancel the independent document-edge drag.
+    tester
+        .widget<GestureDetector>(find
+            .ancestor(
+                of: find.byType(InAppBrowserPage),
+                matching: find.byType(GestureDetector))
+            .first)
+        .onVerticalDragCancel!();
+    await gesture.moveBy(const Offset(0, 220));
+    await tester.pump();
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('Expand page'), findsOneWidget);
+    await tester.tap(find.byTooltip('Expand page'));
+    await tester.pumpAndSettle();
+    expect(tester.state(find.byType(InAppBrowserPage)), same(state));
+    expect(platform.controllers.single, same(controller));
+  });
+
+  testWidgets('rapid opens retain every page behind one fixed-height dock',
+      (tester) async {
+    await tester.pumpWidget(MaterialApp(
+      builder: (_, child) => InAppBrowserHost(child: child!),
+      home: const Scaffold(body: Text('Chat')),
+    ));
+    for (var i = 0; i < 8; i++) {
+      await openInAppBrowser(Uri.parse('https://page$i.example'));
+    }
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 500));
+    for (var i = 0; i < 8; i++) {
+      platform.delegates[i].finished('https://page$i.example');
+    }
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(10, 10));
+    await tester.pumpAndSettle();
+    expect(platform.controllers, hasLength(8));
+    expect(find.text('Chat').hitTestable(), findsOneWidget);
+    expect(find.text('page7.example').hitTestable(), findsOneWidget);
+    await tester.tap(find.byKey(const ValueKey('browser-page-count')));
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+        find.widgetWithText(ListTile, 'page0.example'), 100,
+        scrollable: find.byType(Scrollable));
+    expect(find.widgetWithText(ListTile, 'page0.example').hitTestable(),
+        findsOneWidget);
+    expect(await InAppBrowserHost.active!.handleBack(), isTrue);
+    await tester.pumpAndSettle();
+    final dock = find.byKey(const ValueKey('browser-dock-surface'));
+    final height = tester.getSize(dock).height;
+    for (var i = 7; i >= 1; i--) {
+      expect(dock, findsOneWidget);
+      expect(tester.getSize(dock).height, height);
+      expect(find.text('page$i.example').hitTestable(), findsOneWidget);
+      expect(find.text('page${i - 1}.example'), findsNothing);
+      await tester.tap(find.byTooltip('Close page'));
+      await tester.pumpAndSettle();
+      expect(
+          find.byType(InAppBrowserPage, skipOffstage: false), findsNWidgets(i));
+    }
+    expect(find.text('page0.example').hitTestable(), findsOneWidget);
+    expect(tester.getSize(dock).height, height);
+    InAppBrowserHost.close();
+    await tester.pumpAndSettle();
+    expect(find.byType(InAppBrowserPage, skipOffstage: false), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  for (final interruptedByNewPage in [false, true]) {
+    testWidgets(
+        'web taps recover after interrupted drag, newPage=$interruptedByNewPage',
+        (tester) async {
+      await tester.pumpWidget(MaterialApp(
+        builder: (_, child) => InAppBrowserHost(child: child!),
+        home: const Scaffold(body: Text('Chat')),
+      ));
+      await openInAppBrowser(Uri.parse('https://first.example'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 500));
+      platform.delegates.first.finished('https://first.example');
+      await tester.pumpAndSettle();
+      final first =
+          tester.widget<InAppBrowserPage>(find.byType(InAppBrowserPage));
+      final owner = Navigator.of(tester.element(find.byType(InAppBrowserPage)));
+      first.onEdgeDragStart!();
+      if (interruptedByNewPage) {
+        first.onEdgeDragUpdate!(30);
+        await openInAppBrowser(Uri.parse('https://second.example'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
+        platform.delegates.last.finished('https://second.example');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Done'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.byTooltip('Expand page'));
+      } else {
+        // Two drag sources can report start before the first frame advances.
+        first.onEdgeDragStart!();
+        first.onEdgeDragEnd!(0);
+      }
+      await tester.pumpAndSettle();
+      expect(owner.userGestureInProgress, isFalse);
+      await tester.tap(find.byType(InAppBrowserEdgeDrag));
+      await tester.pump();
+      expect(platform.controllers.first.taps, 1);
+      expect(platform.controllers.first.reloads, 0);
+      InAppBrowserHost.close();
+      await tester.pumpAndSettle();
+    });
+  }
 
   testWidgets('host keeps web view while an app share picker is visible',
       (tester) async {

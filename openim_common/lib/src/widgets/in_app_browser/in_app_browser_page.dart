@@ -12,13 +12,22 @@ import '../../res/app_tokens.dart';
 import '../views.dart';
 import 'in_app_browser_share.dart';
 import 'in_app_browser_host.dart';
+import 'in_app_browser_edge_drag.dart';
 
 class InAppBrowserPage extends StatefulWidget {
   const InAppBrowserPage(
       {super.key,
       required this.uri,
       this.onLocationChanged,
-      this.onMetadataChanged});
+      this.onMetadataChanged,
+      this.onEdgeDragStart,
+      this.onEdgeDragUpdate,
+      this.onEdgeDragEnd,
+      this.onEdgeDragCancel});
+  final VoidCallback? onEdgeDragStart;
+  final ValueChanged<double>? onEdgeDragUpdate;
+  final ValueChanged<double>? onEdgeDragEnd;
+  final VoidCallback? onEdgeDragCancel;
   final Uri uri;
   final ValueChanged<Uri>? onLocationChanged;
   final void Function(String? title, Uri? icon)? onMetadataChanged;
@@ -33,6 +42,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
   late Uri _uri = widget.uri;
   int _generation = 0;
   bool _loading = true;
+  bool _atTop = false;
   String? _title;
   int _titleRequest = 0;
   bool _failed = false;
@@ -102,6 +112,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
 
   Future<void> _load() async {
     final generation = ++_generation;
+    _atTop = false;
     _titleRequest++;
     _timeout?.cancel();
     setState(() {
@@ -125,6 +136,9 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
 
     try {
       final controller = WebViewController();
+      await controller.setOnScrollPositionChange((position) {
+        if (active()) _atTop = position.y <= 0;
+      });
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (request) {
@@ -142,6 +156,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
         onPageStarted: (url) {
           if (!active() || _failed) return;
           _titleRequest++;
+          _atTop = false;
           setState(() {
             _title = null;
             _uri = Uri.tryParse(url) ?? _uri;
@@ -153,6 +168,7 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
         onPageFinished: (_) async {
           if (!active() || _failed) return;
           unawaited(_readTitle(controller, generation));
+          unawaited(_readScrollPosition(controller, generation));
           _timeout?.cancel();
           try {
             final back = await controller.canGoBack();
@@ -198,6 +214,16 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
       await controller.loadRequest(_uri);
     } catch (_) {
       fail();
+    }
+  }
+
+  Future<void> _readScrollPosition(
+      WebViewController controller, int generation) async {
+    try {
+      final position = await controller.getScrollPosition();
+      if (mounted && generation == _generation) _atTop = position.dy <= 0;
+    } catch (_) {
+      // Scroll callbacks still work when a platform cannot query its position.
     }
   }
 
@@ -465,15 +491,23 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
                                   ])))
                       : _controller == null
                           ? const SizedBox.expand()
-                          : WebViewWidget(
-                              key: ValueKey(_generation),
-                              // Web content retains scrolling; drag the native
-                              // browser chrome to dismiss the sheet.
-                              gestureRecognizers: {
-                                Factory<VerticalDragGestureRecognizer>(
-                                    VerticalDragGestureRecognizer.new),
-                              },
-                              controller: _controller!)),
+                          : InAppBrowserEdgeDrag(
+                              atTop: () => _atTop,
+                              onStart: () => widget.onEdgeDragStart?.call(),
+                              onUpdate: (delta) =>
+                                  widget.onEdgeDragUpdate?.call(delta),
+                              onEnd: (velocity) =>
+                                  widget.onEdgeDragEnd?.call(velocity),
+                              onCancel: () => widget.onEdgeDragCancel?.call(),
+                              child: WebViewWidget(
+                                  key: ValueKey(_generation),
+                                  // Native scrolling retains its gesture arena; the
+                                  // edge listener only moves the sheet at the top.
+                                  gestureRecognizers: {
+                                    Factory<VerticalDragGestureRecognizer>(
+                                        VerticalDragGestureRecognizer.new),
+                                  },
+                                  controller: _controller!))),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppTokens.s5),
                 child: Row(

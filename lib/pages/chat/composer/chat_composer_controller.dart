@@ -7,6 +7,7 @@ import 'package:openim_common/openim_common.dart';
 
 import 'formatted_message_page.dart';
 import 'chat_draft.dart';
+import 'mention_names.dart';
 
 enum ComposerMemberSelection { mention, directional }
 
@@ -47,11 +48,13 @@ class ChatComposerController {
     Future<Message> Function(FormattedTextResult, Message?)?
         createFormattedMessage,
     this.reportDraftError,
+    Future<Map<String, String>> Function(List<GroupMembersInfo>)? mentionNames,
     bool Function()? isSessionInactive,
   })  : _createTextMessage = createTextMessage ?? _createSdkText,
         _editFormattedText = editFormattedText ?? _openFormattedEditor,
         _createFormattedMessage = createFormattedMessage ?? _createSdkFormatted,
-        _isSessionInactive = isSessionInactive ?? (() => false);
+        _isSessionInactive = isSessionInactive ?? (() => false),
+        _mentionNames = mentionNames ?? resolveMentionNames;
 
   final String Function() conversationID;
   final String Function() currentUserID;
@@ -71,6 +74,8 @@ class ChatComposerController {
   final Future<Message> Function(FormattedTextResult, Message?)
       _createFormattedMessage;
   final bool Function() _isSessionInactive;
+  final Future<Map<String, String>> Function(List<GroupMembersInfo>)
+      _mentionNames;
 
   final inputCtrl = TextEditingController();
   final focusNode = FocusNode();
@@ -200,6 +205,11 @@ class ChatComposerController {
       if (isClosed ||
           selected == null ||
           selected.isEmpty ||
+          revision != _inputRevision) {
+        return;
+      }
+      final names = await _mentionNames(selected);
+      if (isClosed ||
           revision != _inputRevision ||
           (inputCtrl.value.composing.isValid &&
               !inputCtrl.value.composing.isCollapsed)) {
@@ -211,19 +221,13 @@ class ChatComposerController {
           graphemeBoundaryAfter(text, start + 1) != start + 1) {
         return;
       }
-      final inserted = selected
-          .where((member) => member.userID != null)
-          .map((member) => '@${member.nickname ?? member.userID} ')
-          .join();
+      if (names.isEmpty) return;
+      final inserted = names.values.map((name) => '@$name ').join();
       inputCtrl.value = TextEditingValue(
         text: text.replaceRange(start, start + 1, inserted),
         selection: TextSelection.collapsed(offset: start + inserted.length),
       );
-      for (final member in selected) {
-        if (member.userID != null) {
-          _mentions[member.userID!] = member.nickname ?? member.userID!;
-        }
-      }
+      _mentions.addAll(names);
       unawaited(saveDraft());
     } catch (error) {
       if (!_closed) showError(error.toString());

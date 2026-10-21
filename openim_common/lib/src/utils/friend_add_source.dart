@@ -191,6 +191,9 @@ String? friendAddErrorMessage(Object error, {required bool chinese}) {
   final detail = error is (int, String) ? error.$2 : '';
   if (code == '20020') {
     return switch (detail) {
+      'blacklist restriction' => chinese
+          ? '对方将您加入黑名单暂无法添加对方'
+          : 'A blacklist restriction prevents this friend request.',
       'too frequent' =>
         chinese ? '操作过于频繁，请稍后重试' : 'Too many attempts. Please try later.',
       'group protected' => chinese
@@ -211,7 +214,7 @@ String? friendAddErrorMessage(Object error, {required bool chinese}) {
         ? '请先将对方移出黑名单，再添加好友'
         : 'Remove this person from your blacklist before adding them.',
     '1302' => chinese
-        ? '你已被对方拉黑，无法添加好友。'
+        ? '对方将您加入黑名单暂无法添加对方'
         : 'A blacklist restriction prevents this friend request.',
     '20044' => chinese
         ? '对方不允许通过此方式添加'

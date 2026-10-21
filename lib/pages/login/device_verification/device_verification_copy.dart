@@ -15,22 +15,35 @@ class DeviceVerificationCopy {
   }
 
   String get title => _text('设备验证', 'Device Verification', hant: '設備驗證');
-  String get subtitle => _text(
-      '检测到新设备登录，需要验证身份', 'New device login detected. Verification is required.',
-      hant: '檢測到新設備登入，需要驗證身份');
-  String get smsHint => _text('验证码将发送到您账号绑定的手机号，请点击右侧发送',
-      'A code will be sent to your bound phone number. Tap Send on the right',
-      hant: '驗證碼將發送到您帳號綁定的手機號，請點擊右側發送');
+  String get subtitle => _text('检测到新设备登录，为保障账号安全，\n需要验证身份',
+      'New device login detected. Verification is required.',
+      hant: '檢測到新設備登入，為保障帳號安全，\n需要驗證身份');
+  String get smsHint => _text(
+      '验证码将发送到您账号绑定的手机号', 'A code will be sent to your bound phone number',
+      hant: '驗證碼將發送到您帳號綁定的手機號');
   String get phoneMethod => _text('手机号验证', 'Phone verification', hant: '手機號驗證');
   String get emailMethod => _text('邮箱验证', 'Email verification', hant: '郵箱驗證');
-  String get emailHint => _text('验证码将发送到您账号绑定的邮箱，请点击右侧发送',
-      'A code will be sent to your bound email. Tap Send on the right',
-      hant: '驗證碼將發送到您帳號綁定的郵箱，請點擊右側發送');
+  String get emailHint =>
+      _text('验证码将发送到您账号绑定的邮箱', 'A code will be sent to your bound email',
+          hant: '驗證碼將發送到您帳號綁定的郵箱');
   String sentTo(String phoneMasked) => _text('验证码将发送到 $phoneMasked',
       'The verification code will be sent to $phoneMasked',
       hant: '驗證碼將發送到 $phoneMasked');
   String get codeLabel => _text('验证码', 'Verification Code', hant: '驗證碼');
-  String get codeHint => _text('6 位验证码', '6-digit code', hant: '6 位驗證碼');
+  String get codeHint =>
+      _text('请输入 6 位验证码', 'Enter 6-digit code', hant: '請輸入 6 位驗證碼');
+  String get emailInstruction =>
+      _text('请打开邮箱，获取 6 位验证码并输入', 'Open your email and enter the 6-digit code',
+          hant: '請打開郵箱，獲取 6 位驗證碼並輸入');
+  String get phoneInstruction => _text(
+      '请查看短信，获取 6 位验证码并输入', 'Check your messages and enter the 6-digit code',
+      hant: '請查看簡訊，獲取 6 位驗證碼並輸入');
+  String get noCode =>
+      _text('没有收到验证码？', "Didn't receive a code?", hant: '沒有收到驗證碼？');
+  String resend(int seconds) => seconds > 0
+      ? _text('重新发送 (${seconds}s)', 'Resend (${seconds}s)',
+          hant: '重新發送 (${seconds}s)')
+      : _text('重新发送', 'Resend', hant: '重新發送');
   String get send => _text('发送', 'Send', hant: '發送');
   String get sending => _text('发送中…', 'Sending…', hant: '發送中…');
   String get confirm => _text('确认登录', 'Confirm Login', hant: '確認登入');

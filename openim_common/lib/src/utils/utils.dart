@@ -982,7 +982,8 @@ class IMUtils {
   }
 
   static String getAtNickname(String atUserID, String atNickname) {
-    return atUserID == 'atAllTag' ? StrRes.everyone : atNickname;
+    if (atUserID == 'atAllTag') return StrRes.everyone;
+    return atNickname.trim().isEmpty ? atUserID : atNickname;
   }
 
   static void previewUrlPicture(

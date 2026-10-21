@@ -10,6 +10,7 @@ import 'chat_emoji_panel.dart';
 import 'chat_composer_palette.dart';
 import 'toolbox/chat_composer_toolbox_slot.dart';
 import 'composer/chat_composer_panel_viewport.dart';
+import 'composer/chat_composer_keyboard_handoff.dart';
 import '../../res/chat_voice_tokens.dart';
 
 const double kInputBoxMinHeight =
@@ -75,6 +76,11 @@ class _ChatInputBoxState extends State<ChatInputBox>
   FocusNode get _focusNode => widget.focusNode ?? _fallbackFocusNode;
   ui.FlutterView? _view;
   double _keyboardHeight = 0;
+  double _renderedPanelHeight = 0;
+  bool _directPanelSwitch = false;
+  late final _keyboardHandoff = ChatComposerKeyboardHandoff(() {
+    if (mounted) setState(() {});
+  });
   bool _panelTakingOverKeyboard = false;
   bool get _keyboardVisible => _keyboardHeight > 0;
 
@@ -102,6 +108,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
     if (mounted && height != _keyboardHeight) {
       setState(() {
         _keyboardHeight = height;
+        _keyboardHandoff.updateKeyboard(height);
         if (!_keyboardVisible) _panelTakingOverKeyboard = false;
       });
     }
@@ -110,11 +117,14 @@ class _ChatInputBoxState extends State<ChatInputBox>
   void _focusChanged() {
     if (mounted && _focusNode.hasFocus) {
       setState(() {
+        _keyboardHandoff.begin(_renderedPanelHeight);
         _toolsVisible = false;
         _emojiVisible = false;
         _leftKeyboardButton = false;
         _panelTakingOverKeyboard = false;
       });
+    } else if (mounted && _keyboardHandoff.height > 0) {
+      setState(_keyboardHandoff.cancel);
     }
   }
 
@@ -140,6 +150,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
     _toolSubscription = widget.forceCloseToolboxSub?.listen((value) {
       if (!mounted) return;
       setState(() {
+        _keyboardHandoff.cancel();
         _toolsVisible = false;
         _emojiVisible = false;
         _leftKeyboardButton = false;
@@ -153,6 +164,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
   void didUpdateWidget(covariant ChatInputBox oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (_inputBlocked) {
+      _keyboardHandoff.cancel();
       _toolsVisible = false;
       _emojiVisible = false;
       _leftKeyboardButton = false;
@@ -185,6 +197,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
 
   @override
   void dispose() {
+    _keyboardHandoff.dispose();
     WidgetsBinding.instance.removeObserver(this);
     _focusNode.removeListener(_focusChanged);
     _fallbackFocusNode.dispose();
@@ -207,6 +220,13 @@ class _ChatInputBoxState extends State<ChatInputBox>
     final emojiVisible = _emojiVisible && showPanel;
     final voiceVisible = _leftKeyboardButton && showPanel;
     final alternatePanelVisible = emojiVisible || voiceVisible;
+    _renderedPanelHeight = toolsVisible
+        ? ChatToolboxTokens.panelHeight + safeBottom
+        : emojiVisible
+            ? ChatEmojiPanel.heightFor(context) + safeBottom
+            : voiceVisible
+                ? ChatVoiceTokens.panelHeight + safeBottom
+                : 0;
     final content = _inputBlocked && !widget.pendingSending
         ? ChatDisableInputBox(
             showWarning: widget.isNotInGroup || widget.showDisabledWarning,
@@ -345,8 +365,13 @@ class _ChatInputBoxState extends State<ChatInputBox>
               ChatComposerToolboxSlot(
                 visible: toolsVisible,
                 safeBottom: safeBottom,
-                collapsedHeight: alternatePanelVisible ? 0 : safeBottom,
-                animate: !alternatePanelVisible && !_keyboardVisible,
+                collapsedHeight: alternatePanelVisible
+                    ? 0
+                    : math.max(safeBottom, _keyboardHandoff.height),
+                animate: !alternatePanelVisible &&
+                    !_keyboardVisible &&
+                    !_directPanelSwitch &&
+                    _keyboardHandoff.height == 0,
                 keyboardHeight: _keyboardHeight,
                 child: _withPanelSafeArea(widget.toolbox, safeBottom),
               ),
@@ -523,6 +548,8 @@ class _ChatInputBoxState extends State<ChatInputBox>
   void toggleToolbox() {
     if (_inputBlocked) return;
     setState(() {
+      _directPanelSwitch = !_toolsVisible &&
+          (_emojiVisible || _leftKeyboardButton || _keyboardHandoff.height > 0);
       _toolsVisible = !_toolsVisible;
       _emojiVisible = false;
       _leftKeyboardButton = false;
@@ -567,10 +594,14 @@ class _ChatInputBoxState extends State<ChatInputBox>
   }
 
   void focus() {
-    if (!_inputBlocked) _focusNode.requestFocus();
+    if (!_inputBlocked) {
+      _keyboardHandoff.begin(_renderedPanelHeight);
+      _focusNode.requestFocus();
+    }
   }
 
   void unfocus() {
+    _keyboardHandoff.cancel();
     _panelTakingOverKeyboard = _keyboardVisible &&
         (_toolsVisible || _emojiVisible || _leftKeyboardButton);
     FocusScope.of(context).unfocus();

@@ -153,8 +153,8 @@ void main() {
               source: entry.key,
               groupID: 'group',
               fields: entry.value),
-          throwsA(isA<PlatformException>().having(
-              (error) => error.code, 'code', 'FriendBlacklisted')));
+          throwsA(isA<PlatformException>()
+              .having((error) => error.code, 'code', 'FriendBlacklisted')));
       expect(requests, isEmpty);
     });
   }
@@ -378,6 +378,14 @@ void main() {
         'The friend invitation is invalid or expired. Reopen the entry.');
   });
   test('rejection never submits an application and is translated', () async {
+    expect(
+        friendAddErrorMessage((20020, 'blacklist restriction'), chinese: true),
+        '对方将您加入黑名单暂无法添加对方');
+      expect(friendAddErrorMessage(PlatformException(code: '1302'), chinese: true),
+          '对方将您加入黑名单暂无法添加对方');
+    expect(
+        friendAddErrorMessage((20020, 'blacklist restriction'), chinese: false),
+        'A blacklist restriction prevents this friend request.');
     reject = true;
     await expectLater(
         FriendAddRequest.send(

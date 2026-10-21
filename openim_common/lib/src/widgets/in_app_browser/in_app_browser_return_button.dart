@@ -24,19 +24,18 @@ class InAppBrowserReturnButton extends StatelessWidget {
               height: ChatScrollHintTokens.minHeight,
             ),
           ),
-          Semantics(
-            label: Localizations.localeOf(context).languageCode == 'zh'
-                ? '返回网页'
-                : 'Return to web page',
-            child: IconButton(
-              onPressed: onPressed,
-              color: AppTokens.onAccent,
-              iconSize: ChatScrollHintTokens.iconSize,
-              constraints: const BoxConstraints(
-                  minWidth: AppTokens.minimumTapSize,
-                  minHeight: AppTokens.minimumTapSize),
-              icon: const Icon(Icons.language),
-            ),
+          IconButton(
+            onPressed: onPressed,
+            color: AppTokens.onAccent,
+            iconSize: ChatScrollHintTokens.iconSize,
+            constraints: const BoxConstraints(
+                minWidth: AppTokens.minimumTapSize,
+                minHeight: AppTokens.minimumTapSize),
+            icon: Icon(Icons.language,
+                semanticLabel:
+                    Localizations.localeOf(context).languageCode == 'zh'
+                        ? '返回网页'
+                        : 'Return to web page'),
           ),
         ],
       );

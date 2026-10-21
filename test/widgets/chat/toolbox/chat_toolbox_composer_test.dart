@@ -101,6 +101,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(focus.hasFocus, isTrue);
       expect(find.byType(ChatToolBox).hitTestable(), findsNothing);
+      expect(tester.getSize(slot).height, closeTo(282, .1));
+      // Hardware keyboard fallback releases the reserved IME footprint.
+      await tester.pump(const Duration(milliseconds: 800));
+      await tester.pumpAndSettle();
       expect(tester.getSize(slot).height, closeTo(34, .1));
       expect(controller.value, draft);
 

@@ -227,9 +227,7 @@ class ConversationFeedRow extends StatelessWidget {
                           archivedLayout && logic.isNotDisturb(info)
                               ? 2.5
                               : 4.5),
-                      child: logic.isNotDisturb(info) ||
-                              (logic.hasFriendApprovalNotice(info) &&
-                                  logic.getUnreadCount(info) <= 1)
+                      child: logic.isNotDisturb(info)
                           ? Semantics(
                               label: logic.hasFriendApprovalNotice(info)
                                   ? StrRes.friendAddedNtf
@@ -244,7 +242,9 @@ class ConversationFeedRow extends StatelessWidget {
                               ),
                             )
                           : UnreadCountView(
-                              count: logic.getUnreadCount(info),
+                              count: logic.getUnreadCount(info) > 0
+                                  ? logic.getUnreadCount(info)
+                                  : 1,
                               pill: true,
                               size: _spacing(18),
                               fontSize: 10,

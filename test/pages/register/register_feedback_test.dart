@@ -8,6 +8,7 @@ import 'package:openim/pages/login/login_logic.dart';
 import 'package:openim/pages/register/register_logic.dart';
 import 'package:openim/pages/register/set_password/set_password_logic.dart';
 import 'package:openim/pages/register/register_view.dart';
+import 'package:openim/routes/app_pages.dart';
 import 'package:openim/pages/register/rules/registration_field.dart';
 import 'package:openim/pages/register/widgets/register_reference_widgets.dart';
 import 'package:openim/services/auth_credentials/auth_credentials_store.dart';
@@ -74,6 +75,7 @@ Finder _field(TextEditingController controller) => find.byWidgetPredicate(
     (widget) => widget is EditableText && widget.controller == controller);
 
 void _fillValid(_Register logic) {
+  logic.nicknameCtrl.text = '  测试昵称  ';
   logic.phoneCtrl.text = '13800138000';
   logic.verificationCodeCtrl.text = '123456';
   logic.pwdCtrl.text = 'password1';
@@ -99,6 +101,72 @@ void main() {
     Get.reset();
   });
 
+  for (final email in [false, true]) {
+    testWidgets('registration receives login identity: email=$email',
+        (tester) async {
+      await Get.delete<RegisterLogic>();
+      await tester.pumpWidget(GetMaterialApp(
+        home: const Scaffold(),
+        getPages: [
+          GetPage(
+              name: AppRoutes.register,
+              page: () {
+                Get.put<RegisterLogic>(_Register());
+                return RegisterPage();
+              }),
+        ],
+      ));
+      final login = Get.find<LoginLogic>();
+      login.selectLoginType(email ? LoginType.email : LoginType.phone);
+      login.phoneCtrl.text = email ? 'new@example.com' : '966464014';
+      login.areaCode.value = '+855';
+      login.registerNow();
+      await tester.pumpAndSettle();
+      final registration = Get.find<RegisterLogic>();
+      expect(registration.emailMode.value, email);
+      expect(registration.phoneCtrl.text, login.phoneCtrl.text);
+      expect(registration.areaCode.value, '+855');
+      expect(registration.pwdCtrl.text, isEmpty);
+      expect(registration.verificationCodeCtrl.text, isEmpty);
+      expect(
+          find.text(email ? 'new@example.com' : '966464014'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final brightness in Brightness.values) {
+    testWidgets('nickname validates and locks in $brightness', (tester) async {
+      await tester.pumpWidget(GetMaterialApp(
+        theme: ThemeData(brightness: brightness),
+        home: RegisterPage(),
+      ));
+      _fillValid(logic);
+      await tester.enterText(_field(logic.nicknameCtrl), ' ');
+      expect(logic.enabled.value, isFalse);
+      await logic.next();
+      await tester.pump();
+      expect(logic.checks, 0);
+      expect(find.text('昵称至少 2 位'), findsOneWidget);
+      await tester.enterText(_field(logic.nicknameCtrl), '小');
+      expect(logic.enabled.value, isFalse);
+      await tester.enterText(_field(logic.nicknameCtrl), '小明');
+      await tester.pump();
+      expect(logic.enabled.value, isTrue);
+      expect(find.text('昵称至少 2 位'), findsNothing);
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+      expect(logic.pwdFocus.hasFocus, isTrue);
+      logic.selectEmail(true);
+      expect(logic.nicknameCtrl.text, '小明');
+      logic.submitting.value = true;
+      await tester.pump();
+      expect(tester.widget<EditableText>(_field(logic.nicknameCtrl)).readOnly,
+          isTrue);
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
   testWidgets('one-step registration submits without a profile or avatar page',
       (tester) async {
     await tester.pumpWidget(GetMaterialApp(home: RegisterPage()));
@@ -107,7 +175,7 @@ void main() {
     await logic.next();
     await tester.pump();
     final submission = logic.submitted!;
-    expect(submission.nicknameCtrl.text, '99Chat用户');
+    expect(submission.nicknameCtrl.text, '测试昵称');
     expect(submission.avatar.value, isNull);
     expect(submission.pwdCtrl.text, 'password1');
     expect(submission.verificationCode, logic.verificationCodeCtrl.text);

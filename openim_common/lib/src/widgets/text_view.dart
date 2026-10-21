@@ -138,7 +138,9 @@ class MatchTextView extends StatelessWidget {
   _getUrl(String text, PatternType type) {
     switch (type) {
       case PatternType.url:
-        return text.startsWith('http') ? text : 'http://$text';
+        return RegExp(r'^https?://', caseSensitive: false).hasMatch(text)
+            ? text
+            : 'https://$text';
       case PatternType.email:
         return text.startsWith('mailto:') ? text : 'mailto:$text';
       case PatternType.tel:
@@ -171,8 +173,14 @@ enum PatternType { email, mobile, tel, url, emoji, custom }
 
 const regexEmail = r"\b[\w\.-]+@[\w\.-]+\.\w{2,4}\b";
 
-const regexUrl =
-    r"((http|https):\/\/)(([a-zA-Z0-9@:._\+-~#=]{2,256}\.[a-z]{2,6})|(\d{1,3}(\.\d{1,3}){3}))(:\d+)?(\/[-a-zA-Z0-9@:%_\+.~#?&//=]*)?";
+const regexUrl = r'(?<![A-Za-z0-9_@./-])'
+    r'(?:(?:[hH][tT][tT][pP][sS]?://)?'
+    r'(?:[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+'
+    r'[A-Za-z]{2,63}(?![A-Za-z0-9_-]|\.[A-Za-z0-9])'
+    r'|[hH][tT][tT][pP][sS]?://\d{1,3}(?:\.\d{1,3}){3})'
+    r'(?::\d+)?'
+    r'(?:[/?#](?:[A-Za-z0-9@:%_+~#?&/=.!,;()-]*'
+    r'[A-Za-z0-9@%_+~#&/=\-])?)?';
 
 const String regexMobile =
     '^(\\+?86)?((13[0-9])|(14[57])|(15[0-35-9])|(16[2567])|(17[01235-8])|(18[0-9])|(19[1589]))\\d{8}\$';

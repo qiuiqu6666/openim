@@ -7,6 +7,7 @@ import 'package:openim/pages/mine/settings/account_security/email/email_account_
 import 'package:openim/pages/mine/settings/verification_code_result.dart';
 import 'package:openim/pages/mine/settings/account_security/email/email_input_cell.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim/widgets/auth/auth_reference.dart';
 
 class _Service implements EmailAccountService {
   String email = '';
@@ -70,6 +71,33 @@ Future<void> _mount(WidgetTester tester, _Service service,
 
 void main() {
   tearDown(Get.reset);
+  for (final dark in [false, true]) {
+    testWidgets('unchanged email blocks captcha and save ($dark)',
+        (tester) async {
+      final service = _Service()..email = 'Old@Example.test';
+      await _mount(tester, service, dark: dark);
+      await tester.enterText(field('New email'), ' old@example.test ');
+      final action =
+          tester.widget<AuthCodeAction>(find.byType(AuthCodeAction).last);
+      expect(await action.onSend(), false);
+      await tester.pumpAndSettle();
+      expect(find.byType(Dialog), findsNothing);
+      expect(find.text('The new email must differ from the current email.'),
+          findsOneWidget);
+      await tester.enterText(code('Email code'), '123456');
+      await tester.enterText(code('Current email code'), '654321');
+      await tester.ensureVisible(find.byType(ElevatedButton));
+      await tester.tap(find.byType(ElevatedButton));
+      await tester.pumpAndSettle();
+      expect(service.saves, 0);
+      expect(find.text('The new email must differ from the current email.'),
+          findsOneWidget);
+      await tester.enterText(field('New email'), 'next@example.test');
+      await tester.pumpAndSettle();
+      expect(find.text('The new email must differ from the current email.'),
+          findsNothing);
+    });
+  }
   testWidgets(
       'binding requires password and destination code and retains failure',
       (tester) async {

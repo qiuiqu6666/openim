@@ -33,6 +33,37 @@ void main() {
   });
   tearDown(Get.reset);
 
+  for (final nickname in ['', '   ', '非好友昵称']) {
+    for (final dark in [false, true]) {
+      testWidgets(
+          'non-friend mention stays readable (name=$nickname dark=$dark)',
+          (tester) async {
+        final message =
+            markdownMessage('@stranger 消息', type: MessageType.atText, extra: {
+          'groupID': 'group',
+          'sessionType': ConversationType.superGroup,
+          'atTextElem': {
+            'text': '@stranger 消息',
+            'atUserList': ['stranger'],
+            'atUsersInfo': [
+              {'atUserID': 'stranger', 'groupNickname': nickname},
+            ],
+          },
+        });
+        final original = message.toJson();
+        await mountMarkdown(
+            tester, ChatItemView(message: message, onTapUserProfile: (_) {}),
+            brightness: dark ? Brightness.dark : Brightness.light);
+        final expected =
+            '@${nickname.trim().isEmpty ? 'stranger' : nickname} 消息';
+        expect(_body(tester).text.toPlainText(), expected);
+        expect(IMUtils.parseMsg(message), expected);
+        expect(message.toJson(), original);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   for (final dark in [false, true]) {
     for (final outgoing in [false, true]) {
       for (final preview in [false, true]) {

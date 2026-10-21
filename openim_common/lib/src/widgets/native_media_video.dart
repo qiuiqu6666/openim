@@ -8,6 +8,8 @@ import 'package:get/get.dart';
 import 'package:video_player/video_player.dart';
 
 import 'video_media_cache.dart';
+import 'media_browser/video_hold_speed.dart';
+import '../res/app_tokens.dart';
 import '../utils/media/native_media_file.dart';
 
 /// Mobile playback uses platform players rather than the mpv FFI lifecycle.
@@ -41,6 +43,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   bool _failed = false;
   double? _seekSeconds;
   bool _changingSpeed = false;
+  bool _holdingSpeed = false;
   @override
   void initState() {
     super.initState();
@@ -182,6 +185,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
     _controller = null;
     if (controller != null) unawaited(_disposeController(controller));
     setState(() => _failed = false);
+    _holdingSpeed = false;
     unawaited(_initialize());
   }
 
@@ -230,6 +234,17 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
             ),
           ),
           if (widget.showControls)
+            Positioned.fill(
+              child: VideoHoldSpeed(
+                key: ObjectKey(controller),
+                controller: controller,
+                blocked: _changingSpeed || _seekSeconds != null,
+                onBusyChanged: (busy) {
+                  if (mounted) setState(() => _holdingSpeed = busy);
+                },
+              ),
+            ),
+          if (widget.showControls)
             Positioned(
               left: 16,
               right: 16,
@@ -276,87 +291,87 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Transform.translate(
-                                  offset: const Offset(0, 14),
-                                  child: Row(
-                                    children: [
-                                      Expanded(
-                                        child: Text(
-                                          '${_time(Duration(milliseconds: ((_seekSeconds ?? value.position.inMilliseconds / 1000) * 1000).round()))} / ${_time(value.duration)}',
-                                          style: const TextStyle(
-                                              color: Colors.white70,
-                                              fontSize: 13,
-                                              fontFeatures: [
-                                                FontFeature.tabularFigures()
-                                              ]),
-                                        ),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        '${_time(Duration(milliseconds: ((_seekSeconds ?? value.position.inMilliseconds / 1000) * 1000).round()))} / ${_time(value.duration)}',
+                                        style: const TextStyle(
+                                            color: Colors.white70,
+                                            fontSize: 13,
+                                            fontFeatures: [
+                                              FontFeature.tabularFigures()
+                                            ]),
                                       ),
-                                      TextButton(
-                                        style: TextButton.styleFrom(
-                                          foregroundColor: Colors.white70,
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 8, vertical: 2),
-                                          minimumSize: const Size(48, 24),
-                                          tapTargetSize:
-                                              MaterialTapTargetSize.shrinkWrap,
-                                        ),
-                                        onPressed: _changingSpeed
-                                            ? null
-                                            : () async {
-                                                const speeds = [
-                                                  1.0,
-                                                  1.5,
-                                                  2.0,
-                                                  0.5
-                                                ];
-                                                final index = speeds.indexOf(
-                                                    controller
-                                                        .value.playbackSpeed);
-                                                final speed = speeds[
-                                                    (index + 1) %
-                                                        speeds.length];
-                                                setState(() =>
-                                                    _changingSpeed = true);
-                                                try {
-                                                  await controller
-                                                      .setPlaybackSpeed(speed);
-                                                } catch (_) {
-                                                  if (context.mounted) {
-                                                    ScaffoldMessenger.maybeOf(
-                                                            context)
-                                                        ?.showSnackBar(SnackBar(
-                                                            content: Text(
-                                                                AppCopy.text(
-                                                                    '倍速设置失败，请重试'))));
-                                                  }
-                                                } finally {
-                                                  if (mounted) {
-                                                    setState(() =>
-                                                        _changingSpeed = false);
-                                                  }
+                                    ),
+                                    TextButton(
+                                      style: TextButton.styleFrom(
+                                        foregroundColor: Colors.white70,
+                                        padding: AppTokens.videoSpeedPadding,
+                                        alignment: Alignment.bottomCenter,
+                                        minimumSize:
+                                            AppTokens.videoSpeedMinimumSize,
+                                        visualDensity: VisualDensity.standard,
+                                        tapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                      onPressed: _changingSpeed || _holdingSpeed
+                                          ? null
+                                          : () async {
+                                              const speeds = [
+                                                1.0,
+                                                1.5,
+                                                2.0,
+                                                0.5
+                                              ];
+                                              final index = speeds.indexOf(
+                                                  controller
+                                                      .value.playbackSpeed);
+                                              final speed = speeds[
+                                                  (index + 1) % speeds.length];
+                                              setState(
+                                                  () => _changingSpeed = true);
+                                              try {
+                                                await controller
+                                                    .setPlaybackSpeed(speed);
+                                              } catch (_) {
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.maybeOf(
+                                                          context)
+                                                      ?.showSnackBar(SnackBar(
+                                                          content: Text(
+                                                              AppCopy.text(
+                                                                  '倍速设置失败，请重试'))));
                                                 }
-                                              },
-                                        child: Text(
-                                            '${value.playbackSpeed.toString().replaceAll('.0', '')}×',
-                                            style:
-                                                const TextStyle(fontSize: 13)),
-                                      ),
-                                    ],
-                                  ),
+                                              } finally {
+                                                if (mounted) {
+                                                  setState(() =>
+                                                      _changingSpeed = false);
+                                                }
+                                              }
+                                            },
+                                      child: Text(
+                                          '${value.playbackSpeed.toStringAsFixed(1)}倍',
+                                          style: AppTokens.videoSpeedTextStyle),
+                                    ),
+                                  ],
                                 ),
                                 SizedBox(
-                                  height: 48,
+                                  height: AppTokens.videoSeekTouchHeight,
                                   child: SliderTheme(
                                     data: SliderTheme.of(context).copyWith(
-                                      trackHeight: 3,
+                                      trackHeight:
+                                          AppTokens.videoSeekTrackHeight,
                                       activeTrackColor: Colors.white,
                                       inactiveTrackColor: Colors.white30,
                                       thumbColor: Colors.white,
                                       thumbShape: const RoundSliderThumbShape(
-                                          enabledThumbRadius: 4),
+                                          enabledThumbRadius:
+                                              AppTokens.videoSeekThumbRadius),
                                       overlayShape:
                                           const RoundSliderOverlayShape(
-                                              overlayRadius: 14),
+                                              overlayRadius: AppTokens
+                                                  .videoSeekOverlayRadius),
                                     ),
                                     child: Slider(
                                       min: 0,

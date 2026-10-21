@@ -55,6 +55,29 @@ class _ChangePhonePageState extends State<ChangePhonePage>
       !busy;
   bool get _canConfirm => _canBindConfirm;
 
+  bool _rejectUnchangedPhone() {
+    String digits(String value) => value.replaceAll(RegExp(r'[\s()-]'), '');
+    final current = digits(widget.currentPhone);
+    final next = digits(newPhoneController.text);
+    final area =
+        digits(areaCodeController.text).replaceFirst(RegExp(r'^\+'), '');
+    final currentArea = digits(widget.service.securityAreaCode)
+        .replaceFirst(RegExp(r'^\+'), '');
+    if (_isBindMode ||
+        current.isEmpty ||
+        next.isEmpty ||
+        area != currentArea ||
+        current != next) {
+      return false;
+    }
+    showSettingsMessage(
+        context,
+        settingsText(context,
+            zh: '新手机号与当前绑定手机号相同，无需更换。',
+            en: 'This phone number is already linked. No change is needed.'));
+    return true;
+  }
+
   String get _currentPhoneDisplay {
     final phone = widget.currentPhone.trim();
     if (phone.isEmpty) return '';
@@ -91,6 +114,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
 
   Future<void> _sendCode(String phone) async {
     FocusManager.instance.primaryFocus?.unfocus();
+    if ((_isBindMode || step != 1) && _rejectUnchangedPhone()) return;
     if (!widget.service.isSecurityBackendAvailable) {
       showUnavailableSettingsAction(
         context,
@@ -153,6 +177,7 @@ class _ChangePhonePageState extends State<ChangePhonePage>
 
   Future<void> _confirm() async {
     if (!_canConfirm) return;
+    if (_rejectUnchangedPhone()) return;
     if (!await refreshSmsPolicy() || !mounted || !_canConfirm) return;
     FocusManager.instance.primaryFocus?.unfocus();
     if (!widget.service.isSecurityBackendAvailable) {

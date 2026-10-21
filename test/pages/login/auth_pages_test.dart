@@ -392,11 +392,11 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('registration validates four fields and offers direct registration',
+  testWidgets('registration validates five fields and offers direct registration',
       (tester) async {
     addTearDown(() => _unmount(tester));
     await _mount(tester, RegisterPage());
-    expect(find.byType(EditableText), findsNWidgets(4));
+    expect(find.byType(EditableText), findsNWidgets(5));
     expect(find.text('手机注册'), findsOneWidget);
     expect(find.byType(CircleAvatar), findsNothing);
     expect(find.byType(AuthFormMessage), findsNothing);
@@ -405,6 +405,7 @@ void main() {
     expect(tester.widget<EditableText>(_field(register.phoneCtrl)).keyboardType,
         TextInputType.phone);
     await _enter(tester, register.phoneCtrl, '13800138000');
+    await _enter(tester, register.nicknameCtrl, '测试昵称');
     await _enter(tester, register.verificationCodeCtrl, '123456');
     await _enter(tester, register.pwdCtrl, 'short1');
     await _enter(tester, register.pwdAgainCtrl, 'short1');

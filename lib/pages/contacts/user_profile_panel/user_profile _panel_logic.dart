@@ -837,7 +837,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         if (!active()) return;
         userInfo.update((value) => value?.isBlacklist = enabled);
         UserCacheManager().addOrUpdateUserInfo(peer, userInfo.value);
-        if (enabled) await conversationLogic.hidePeerConversation(peer);
+        conversationLogic.setPeerBlacklisted(peer, enabled);
       });
     } catch (_) {
       if (active()) {

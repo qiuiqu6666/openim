@@ -15,12 +15,18 @@ import '../../../support/conversation_live_fixture.dart';
 class _FeedLogic extends GetxController
     with ConversationLiveFixture
     implements ConversationLogic {
+  bool approvalPending = false;
+  @override
+  bool hasFriendApprovalNotice(ConversationInfo info) => approvalPending;
+  @override
+  bool existUnreadMsg(ConversationInfo info) =>
+      approvalPending || info.unreadCount > 0;
   @override
   bool isGroupChat(ConversationInfo info) => info.isGroupChat;
   @override
   bool isNotDisturb(ConversationInfo info) => info.recvMsgOpt == 2;
   @override
-  int getUnreadCount(ConversationInfo info) => 0;
+  int getUnreadCount(ConversationInfo info) => info.unreadCount;
   @override
   String getShowName(ConversationInfo info) => info.showName ?? '';
   @override
@@ -96,6 +102,29 @@ void main() {
 
   for (final dark in [false, true]) {
     for (final archived in [false, true]) {
+      testWidgets('approval uses a number unless muted ($dark/$archived)',
+          (tester) async {
+        final logic = _FeedLogic()..approvalPending = true;
+        addTearDown(logic.onDelete.call);
+        for (final count in [0, 1, 3]) {
+          final info = _conversation('peer')..unreadCount = count;
+          await _mount(tester, logic, [info], dark: dark, archived: archived);
+          expect(
+              tester
+                  .widget<UnreadCountView>(find.byType(UnreadCountView))
+                  .count,
+              count == 0 ? 1 : count);
+          expect(info.unreadCount, count);
+          info.recvMsgOpt = 2;
+          await _mount(tester, logic, [info], dark: dark, archived: archived);
+          expect(find.byType(UnreadCountView), findsNothing);
+        }
+        logic.approvalPending = false;
+        await _mount(tester, logic, [_conversation('peer')],
+            dark: dark, archived: archived);
+        expect(find.byType(UnreadCountView), findsNothing);
+      });
+
       testWidgets(
           'main/archive conversation identities show badges ($dark/$archived)',
           (tester) async {

@@ -159,7 +159,8 @@ void main() {
     });
   }
 
-  for (final code in [20001, 20002, 20082, 20083]) {
+  // Missing accounts (20002) are covered by missing_account_registration_test.
+  for (final code in [20001, 20082, 20083]) {
     testWidgets('initial login error $code cannot open the challenge or home',
         (tester) async {
       final f = DeviceLoginFixture();

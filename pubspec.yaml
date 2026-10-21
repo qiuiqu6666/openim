@@ -195,6 +195,7 @@ flutter:
   assets:
     - tool/youmeng/youmeng.local.json
     - lib/pages/login/desktop_authorization/assets/
+    - lib/pages/login/device_verification/assets/
     - assets/images/
     - assets/ai/
     - assets/img/

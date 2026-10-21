@@ -137,7 +137,8 @@ class DeviceLoginFixture {
   bool _closed = false;
   int captchaCalls = 0;
 
-  Future<void> initialize(WidgetTester tester) async {
+  Future<void> initialize(WidgetTester tester,
+      {List<GetPage<dynamic>> additionalPages = const []}) async {
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({'deviceID': fixtureDeviceID});
     FlutterSecureStorage.setMockInitialValues({});
@@ -158,6 +159,7 @@ class DeviceLoginFixture {
       tester,
       const Scaffold(body: Text('password entry')),
       getPages: [
+        ...additionalPages,
         GetPage(
           name: AppRoutes.home,
           page: () => const Scaffold(body: Text('main ready')),

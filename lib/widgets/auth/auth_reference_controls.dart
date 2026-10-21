@@ -31,6 +31,7 @@ class AuthPrimaryButton extends StatelessWidget {
       this.loading = false,
       this.pill = false,
       this.compact = false,
+      this.disabledBackgroundColor,
       this.disabledForegroundColor = AuthReferenceTokens.ink400,
       this.textStyle,
       this.onPressed});
@@ -40,6 +41,7 @@ class AuthPrimaryButton extends StatelessWidget {
   final bool pill;
   final bool compact;
   final Color disabledForegroundColor;
+  final Color? disabledBackgroundColor;
   final TextStyle? textStyle;
   final VoidCallback? onPressed;
   @override
@@ -48,7 +50,7 @@ class AuthPrimaryButton extends StatelessWidget {
         child: FilledButton(
           style: FilledButton.styleFrom(
             backgroundColor: AuthReferenceTokens.brand500,
-            disabledBackgroundColor:
+            disabledBackgroundColor: disabledBackgroundColor ??
                 AuthReferenceTokens.color(context, AuthReferenceTokens.ink100),
             foregroundColor: Colors.white,
             disabledForegroundColor: disabledForegroundColor ==

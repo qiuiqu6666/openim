@@ -74,8 +74,8 @@ String securityErrorMessage(Object error,
         'Incorrect current login password. Please try again.');
   }
   if (lower.contains('phone number is unchanged')) {
-    return text(AppCopy.text('新手机号不能与当前手机号相同'),
-        'The new phone number must differ from the current one.');
+    return text(AppCopy.text('新手机号与当前绑定手机号相同，无需更换。'),
+        'This phone number is already linked. No change is needed.');
   }
   if (lower.contains('invitation') || reason.contains('邀请码')) {
     return text(AppCopy.text('邀请码为空或无效，请检查后重试'),

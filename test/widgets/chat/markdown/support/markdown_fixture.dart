@@ -192,6 +192,8 @@ class MarkdownTileLogic extends GetxController implements ChatLogic {
   @override
   Map<String, String> getAtMapping(Message message) => {};
   @override
+  Message resolveGroupNotice(Message message) => message;
+  @override
   String? getShowTime(Message message) => null;
   @override
   String? getNewestNickname(Message message) => message.senderNickname;

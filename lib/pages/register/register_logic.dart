@@ -10,6 +10,7 @@ import '../../core/controller/im_controller.dart';
 import '../../widgets/auth/auth_form_rules.dart';
 import 'set_password/set_password_logic.dart';
 import 'rules/register_password_rules.dart';
+import 'rules/register_nickname_rules.dart';
 import 'rules/registration_field.dart';
 import 'session/registration_session.dart';
 
@@ -18,6 +19,8 @@ class RegisterLogic extends GetxController {
   SetPasswordLogic? _registration;
   bool get accountCreated => _registration?.accountCreated.value ?? false;
   final phoneCtrl = TextEditingController();
+  final nicknameCtrl = TextEditingController();
+  final nicknameFocus = FocusNode();
   final verificationCodeCtrl = TextEditingController();
   final pwdCtrl = TextEditingController();
   final pwdAgainCtrl = TextEditingController();
@@ -71,7 +74,8 @@ class RegisterLogic extends GetxController {
       RegistrationField.invitation => AuthFormRules.invitationCode(
           invitationCode,
           isRequired: needInvitationCodeRegister),
-      RegistrationField.nickname => null,
+      RegistrationField.nickname =>
+        RegisterNicknameRules.validate(nicknameCtrl.text),
     };
   }
 
@@ -86,6 +90,8 @@ class RegisterLogic extends GetxController {
     _areaCodeWorker?.dispose();
     _registration?.onClose();
     phoneCtrl.dispose();
+    nicknameCtrl.dispose();
+    nicknameFocus.dispose();
     verificationCodeCtrl.dispose();
     pwdCtrl.dispose();
     pwdAgainCtrl.dispose();
@@ -99,8 +105,19 @@ class RegisterLogic extends GetxController {
 
   @override
   void onInit() {
+    final arguments = Get.arguments;
+    if (arguments is Map && arguments['registrationAccount'] is String) {
+      loginController.operateType = arguments['registrationEmail'] == true
+          ? LoginType.email
+          : LoginType.phone;
+      phoneCtrl.text = arguments['registrationAccount'] as String;
+      if (arguments['registrationAreaCode'] is String) {
+        areaCode.value = arguments['registrationAreaCode'] as String;
+      }
+    }
     emailMode.value = loginController.operateType == LoginType.email;
     phoneCtrl.addListener(_onChanged);
+    nicknameCtrl.addListener(_onChanged);
     verificationCodeCtrl.addListener(_onChanged);
     pwdCtrl.addListener(_onChanged);
     pwdAgainCtrl.addListener(_onChanged);
@@ -113,6 +130,7 @@ class RegisterLogic extends GetxController {
     if (_closed || isClosed) return;
     _touchedFields.refresh();
     enabled.value = _accountError() == null &&
+        RegisterNicknameRules.validate(nicknameCtrl.text) == null &&
         AuthFormRules.verificationCode(verificationCodeCtrl.text,
                 sixDigits: true) ==
             null &&
@@ -161,6 +179,7 @@ class RegisterLogic extends GetxController {
       RegistrationField.account,
       RegistrationField.invitation,
       if (includeCredentials) ...[
+        RegistrationField.nickname,
         RegistrationField.code,
         RegistrationField.password,
         RegistrationField.confirmation,
@@ -170,7 +189,8 @@ class RegisterLogic extends GetxController {
         AuthFormRules.invitationCode(invitationCode,
             isRequired: needInvitationCodeRegister) ??
         (includeCredentials
-            ? AuthFormRules.verificationCode(verificationCodeCtrl.text,
+            ? RegisterNicknameRules.validate(nicknameCtrl.text) ??
+                AuthFormRules.verificationCode(verificationCodeCtrl.text,
                     sixDigits: true) ??
                 RegisterPasswordRules.validate(pwdCtrl.text) ??
                 AuthFormRules.confirmPassword(pwdAgainCtrl.text, pwdCtrl.text)
@@ -187,6 +207,7 @@ class RegisterLogic extends GetxController {
     final requestedInvitation = invitationCode;
     final requestedCode = verificationCodeCtrl.text.trim();
     final requestedPassword = pwdCtrl.text;
+    final requestedNickname = graphemeTrim(nicknameCtrl.text);
     final session = RegistrationSession(
       imLogic: Get.find<IMController>(),
       isActive: () => !_closed && !isClosed,
@@ -204,7 +225,7 @@ class RegisterLogic extends GetxController {
       if (!session.isCurrent) return;
       if (_registration == null) {
         _registration = createRegistration({
-          'nickname': '99Chat用户',
+          'nickname': requestedNickname,
           'areaCode': requestedAreaCode,
           'phoneNumber': requestedPhone,
           'email': requestedEmail,

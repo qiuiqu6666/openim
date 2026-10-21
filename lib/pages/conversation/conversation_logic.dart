@@ -45,6 +45,7 @@ import 'unread/conversation_unread_count.dart';
 import 'unread/conversation_unread_sync.dart';
 import 'unread/friend_approval_notice.dart';
 import 'membership/conversation_membership.dart';
+import 'blacklist/conversation_blacklist_visibility.dart';
 
 class ConversationLogic extends GetxController with WidgetsBindingObserver {
   ConversationLogic({LegacyServiceConversationCleanup? legacyCleanup})
@@ -54,6 +55,14 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   static const int _receiveWithoutNotification = 2;
   final popCtrl = CustomPopupMenuController();
   final list = <ConversationInfo>[].obs;
+  late final _blacklistVisibility = ConversationBlacklistVisibility(
+    load: () => OpenIM.iMManager.friendshipManager.getBlacklist(),
+    isActive: () => _sessionActive,
+    changed: () => list.refresh(),
+  );
+
+  void setPeerBlacklisted(String userID, bool blocked) =>
+      _blacklistVisibility.setBlocked(userID, blocked);
   final folders = <ChatFolder>[].obs;
   final states = <String, ChatConversationState>{}.obs;
   ConversationFeedSnapshotCache? _feedCache;
@@ -73,7 +82,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   ConversationFeedSnapshot get feedSnapshot =>
       (_feedCache ??= ConversationFeedSnapshotCache(list, states,
               order: _pinnedGroupOrder.apply,
-              allows: _membership.allows,
+              allows: (row) =>
+                  _membership.allows(row) && _blacklistVisibility.allows(row),
               membershipRevision: _membership.revision))
           .read();
   final organizerLoading = false.obs;
@@ -192,6 +202,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void onInit() {
+    _subscriptions.add(imLogic.blacklistChangedSubject
+        .listen((_) => unawaited(_blacklistVisibility.refresh())));
+    unawaited(_blacklistVisibility.refresh());
     _subscriptions.add(imLogic.joinedGroupAddedSubject
         .listen((group) => _membership.changed(group.groupID, true)));
     _subscriptions.add(imLogic.joinedGroupDeletedSubject
@@ -216,6 +229,9 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         ({IMSdkStatus status, bool reInstall, int? progress}) value) {
       if (!_sessionActive) return;
       final status = value.status;
+      if (status == IMSdkStatus.syncEnded) {
+        unawaited(_blacklistVisibility.refresh());
+      }
       final previousStatus = imStatus.value;
       final appReInstall = value.reInstall;
       final progress = value.progress;

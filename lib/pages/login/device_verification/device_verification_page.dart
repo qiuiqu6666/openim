@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 import '../../../widgets/auth/auth_reference.dart';
 import '../../mine/settings/verification_code_result.dart';
 import 'device_verification_copy.dart';
+import 'widgets/device_verification_banner.dart';
 
 /// 99chat's post-password device challenge. The login flow owns both requests;
 /// this page never creates a login session or assumes verification succeeded.
@@ -80,11 +81,6 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
     _areaCode = widget.initialAreaCode;
     _phone.addListener(_phoneChanged);
     _code.addListener(_codeChanged);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!_active) return;
-      final node = widget.requiresPhoneInput ? _phoneFocus : _codeFocus;
-      if (node.canRequestFocus) node.requestFocus();
-    });
   }
 
   @override
@@ -199,7 +195,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
       final strings = DeviceVerificationCopy(context);
       if (result.sent) {
         IMViews.showToast(strings.sent);
-      } else if (result.captchaVerified) {
+      } else {
         IMViews.showToast(strings.sendFailed);
       }
     } catch (error) {
@@ -256,8 +252,9 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
     final masked = _maskedPhone;
     return AuthFormScaffold(
       title: strings.title,
-      titleStyle:
-          AuthReferenceTokens.formTitle.copyWith(fontWeight: FontWeight.w500),
+      showDivider: false,
+      contentPadding:
+          const EdgeInsets.symmetric(horizontal: AuthReferenceTokens.fieldGap),
       subtitle: strings.subtitle,
       backLabel: strings.back,
       child: Column(
@@ -285,9 +282,12 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
             ),
             const SizedBox(height: AuthReferenceTokens.fieldGap),
           ],
-          AuthInfoBanner(
-            icon: Icons.shield_outlined,
-            text: _method == 'email'
+          DeviceVerificationBanner(
+            email: _method == 'email',
+            subtitle: _method == 'email'
+                ? strings.emailInstruction
+                : strings.phoneInstruction,
+            title: _method == 'email'
                 ? strings.emailHint
                 : masked.isEmpty
                     ? strings.smsHint
@@ -303,7 +303,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
               key: const ValueKey('device-verification-phone'),
               controller: _phone,
               focusNode: _phoneFocus,
-              autofocus: true,
+              autofocus: false,
               enabled: !_busy,
               hint: strings.phoneHint,
               keyboardType: TextInputType.phone,
@@ -330,7 +330,7 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
             key: const ValueKey('device-verification-code'),
             controller: _code,
             focusNode: _codeFocus,
-            autofocus: !widget.requiresPhoneInput,
+            autofocus: false,
             enabled: !_busy,
             hint: strings.codeHint,
             keyboardType: TextInputType.number,
@@ -339,10 +339,19 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
             maxLength: 6,
             textInputAction: TextInputAction.done,
             onFieldSubmitted: (_) => _verify(),
-            showBorder: false,
-            inputStyle: AuthReferenceTokens.plainFieldInput,
-            hintStyle: AuthReferenceTokens.plainFieldHint,
-            trailingWidth: AuthReferenceTokens.codeActionWidth,
+            showBorder: true,
+            showClearButton: false,
+            leadingWidth: AuthReferenceTokens.tapTarget,
+            leading: Icon(Icons.mail_outline_rounded,
+                size: AuthReferenceTokens.toolbarIcon,
+                color: AuthReferenceTokens.color(
+                    context, AuthReferenceTokens.ink400)),
+            inputStyle: AuthReferenceTokens.plainFieldInput
+                .copyWith(fontSize: AuthReferenceTokens.inputFontSize),
+            hintStyle: AuthReferenceTokens.plainFieldHint
+                .copyWith(fontSize: AuthReferenceTokens.inputFontSize),
+            trailingWidth: AuthReferenceTokens.codeActionWidth -
+                AuthReferenceTokens.fieldGap,
             trailing: TextButton(
               key: const ValueKey('device-verification-send'),
               onPressed: _canSend ? _sendCode : null,
@@ -380,9 +389,37 @@ class _DeviceVerificationPageState extends State<DeviceVerificationPage> {
               loading: _verifying,
               pill: true,
               disabledForegroundColor: AuthReferenceTokens.surface,
+              disabledBackgroundColor: AuthReferenceTokens.color(
+                      context, AuthReferenceTokens.brand500)
+                  .withValues(alpha: .48),
               textStyle: AuthReferenceTokens.plainFormButton
-                  .copyWith(fontWeight: FontWeight.w500),
+                  .copyWith(fontWeight: FontWeight.w700),
               onPressed: _canVerify ? _verify : null,
+            ),
+          ),
+          const SizedBox(height: AuthReferenceTokens.labelGap),
+          Center(
+            child: Wrap(
+              crossAxisAlignment: WrapCrossAlignment.center,
+              alignment: WrapAlignment.center,
+              children: [
+                Text(strings.noCode,
+                    style: AuthReferenceTokens.style(
+                        context, AuthReferenceTokens.formSubtitle)),
+                TextButton(
+                  key: const ValueKey('device-verification-resend'),
+                  onPressed: _canSend ? _sendCode : null,
+                  style: TextButton.styleFrom(
+                    minimumSize: const Size(AuthReferenceTokens.tapTarget,
+                        AuthReferenceTokens.tapTarget),
+                    foregroundColor: AuthReferenceTokens.color(
+                        context, AuthReferenceTokens.link),
+                    disabledForegroundColor: AuthReferenceTokens.color(
+                        context, AuthReferenceTokens.ink400),
+                  ),
+                  child: Text(strings.resend(_remaining)),
+                ),
+              ],
             ),
           ),
         ],

@@ -130,6 +130,128 @@ void main() {
     }
   }
 
+  for (final mode in ['tools', 'emoji', 'voice']) {
+    testWidgets('$mode holds its footprint until the keyboard arrives',
+        (tester) async {
+      final controller = TextEditingController();
+      addTearDown(controller.dispose);
+      await mountToolbox(
+          tester,
+          ChatInputBox(
+            controller: controller,
+            onTapVoice: () {},
+            toolbox: ToolboxFixture().full(),
+            voiceRecordBar: const SizedBox(key: _voice, height: 248),
+          ),
+          safeBottom: 34,
+          bottom: true);
+      final tooltip = switch (mode) {
+        'tools' => StrRes.add,
+        'emoji' => 'sdkEmojiPanel'.tr,
+        _ => StrRes.voiceCapture,
+      };
+      await tester.tap(find.byTooltip(tooltip));
+      await tester.pumpAndSettle();
+      final panelTop = tester.getTopLeft(find.byType(ChatInputBox)).dy;
+      final extent = mode == 'emoji' ? 314.0 : 282.0;
+      controller.text = 'draft';
+      await tester.pump();
+      await tester.tap(mode == 'tools'
+          ? find.byKey(const ValueKey('chat-composer-input-fill'))
+          : find.byTooltip(mode == 'emoji' ? 'sdkSwitchKeyboard'.tr : tooltip));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 80));
+      // The voice placeholder and text input differ by one logical pixel.
+      expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+          closeTo(panelTop, 1.1),
+          reason:
+              'focus must not collapse the panel before the first IME frame');
+      for (final inset in [20.0, 140.0, 240.0, 320.0]) {
+        await _keyboard(tester, inset);
+        expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+            closeTo(panelTop + extent - math.max(extent, inset), 1.1));
+      }
+      await tester.pumpAndSettle();
+      _expectNoPanels(tester);
+      expect(controller.text, 'draft');
+      await tester.pumpWidget(const SizedBox());
+    });
+  }
+
+  for (final from in ['emoji', 'voice', 'tools']) {
+    for (final to in ['emoji', 'voice', 'tools']) {
+      if (from == to) continue;
+      testWidgets('$from switches directly to $to without a collapsed frame',
+          (tester) async {
+        await mountToolbox(
+            tester,
+            ChatInputBox(
+              onTapVoice: () {},
+              toolbox: ToolboxFixture().full(),
+              voiceRecordBar: const SizedBox(key: _voice, height: 248),
+            ),
+            safeBottom: 34,
+            bottom: true);
+        String tooltip(String mode) => switch (mode) {
+              'tools' => StrRes.add,
+              'emoji' => 'sdkEmojiPanel'.tr,
+              _ => StrRes.voiceCapture,
+            };
+        await tester.tap(find.byTooltip(tooltip(from)));
+        await tester.pumpAndSettle();
+        final before = tester.getTopLeft(find.byType(ChatInputBox)).dy;
+        await tester.tap(find.byTooltip(tooltip(to)));
+        await tester.pump();
+        final expected = before +
+            (from == 'emoji' ? 314 : 282) -
+            (to == 'emoji' ? 314 : 282);
+        expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+            closeTo(expected, 1.1));
+        await tester.pump(const Duration(milliseconds: 80));
+        expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+            closeTo(expected, 1.1));
+        await tester.pumpAndSettle();
+        expect(tester.getTopLeft(find.byType(ChatInputBox)).dy,
+            closeTo(expected, 1.1));
+        await tester.pumpWidget(const SizedBox());
+      });
+    }
+  }
+
+  testWidgets('short keyboard releases bridge and a new panel cancels it',
+      (tester) async {
+    await mountToolbox(
+        tester,
+        ChatInputBox(
+          toolbox: ToolboxFixture().full(),
+          voiceRecordBar: const SizedBox(),
+        ),
+        bottom: true,
+        safeBottom: 34);
+    await tester.tap(find.byTooltip(StrRes.add));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chat-composer-input-fill')));
+    await tester.pump();
+    await _keyboard(tester, 180);
+    expect(tester.getSize(find.byKey(_slot)).height, 102);
+    await tester.pump(const Duration(milliseconds: 120));
+    expect(tester.getSize(find.byKey(_slot)).height, 0);
+    await tester.tap(find.byTooltip(StrRes.add));
+    await tester.pump();
+    await _keyboard(tester, 0);
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('chat-composer-input-fill')));
+    await tester.pump();
+    await tester.tap(find.byTooltip('sdkEmojiPanel'.tr));
+    await tester.pump();
+    final top = tester.getTopLeft(find.byType(ChatInputBox)).dy;
+    await tester.pump(const Duration(seconds: 1));
+    expect(find.byType(ChatEmojiPanel), findsOneWidget);
+    expect(tester.getTopLeft(find.byType(ChatInputBox)).dy, top);
+    expect(tester.takeException(), isNull);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   for (final ratio in [1.0, 3.0]) {
     testWidgets('keyboard dismissal has no safe-area rebound at DPR $ratio',
         (tester) async {
@@ -207,6 +329,10 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('chat-composer-input-fill')));
     await tester.pumpAndSettle();
     expect(find.byType(ChatToolBox), findsNothing);
+    expect(tester.getSize(find.byKey(_slot)).height, 248);
+    // No IME metrics arrive for a hardware keyboard: release the bridge.
+    await tester.pump(const Duration(milliseconds: 800));
+    await tester.pumpAndSettle();
     expect(tester.getSize(find.byKey(_slot)).height, 0);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());

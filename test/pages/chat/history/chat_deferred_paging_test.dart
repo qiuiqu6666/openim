@@ -16,6 +16,35 @@ void main() {
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
 
+  test('entry replaces painted old preview with newest page across a gap',
+      () async {
+    final latest = Completer<AdvancedMessage>();
+    var positioned = 0;
+    final timeline = ChatTimelineController(
+        accountID: 'me',
+        currentAccountID: () => 'me',
+        conversation: () => ConversationInfo(conversationID: 'chat'),
+        fetchLocalSnapshot: () async => [row(10), row(11)],
+        fetch: ({required count, startMsg}) => latest.future,
+        preserveReading: () => false,
+        isClosed: () => false,
+        onFirstPage: () => positioned++,
+        captureOffset: () => 700,
+        restoreOffset: (_) => fail('Entry must not restore an old offset'),
+        onFirstLoaded: () {});
+    addTearDown(timeline.close);
+    timeline.initialize();
+    await Future<void>.delayed(Duration.zero);
+    timeline.recordPaintedRows(['m10', 'm11']);
+    latest.complete(AdvancedMessage(
+        messageList: [row(100), row(101)], isEnd: false));
+    await Future<void>.delayed(Duration.zero);
+    expect(timeline.messageList.map((m) => m.seq), [100, 101]);
+    expect(timeline.latestDeferred.value, isFalse);
+    expect(timeline.viewingHistory.value, isFalse);
+    expect(positioned, 1);
+  });
+
   test(
       'deferred disjoint latest keeps both paging anchors until explicit return',
       () async {
@@ -27,6 +56,7 @@ void main() {
         currentAccountID: () => 'me',
         conversation: () => ConversationInfo(conversationID: 'chat'),
         fetchLocalSnapshot: () async => [row(10), row(11)],
+        preserveReading: () => true,
         fetch: ({required count, startMsg}) async {
           cursors.add(startMsg?.clientMsgID);
           if (firstRead) {
