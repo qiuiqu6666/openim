@@ -119,8 +119,8 @@ class _ToolbarAction extends StatelessWidget {
 
 /// Support and installed version remain reachable without signing in.
 class AuthEntryFooter extends StatelessWidget {
-  const AuthEntryFooter({super.key, this.version = '3.8.3'});
-  final String version;
+  const AuthEntryFooter({super.key, this.version});
+  final String? version;
   @override
   Widget build(BuildContext context) => Column(children: [
         TextButton.icon(

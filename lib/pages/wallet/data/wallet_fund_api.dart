@@ -211,6 +211,8 @@ class WalletFundApi {
     required FundCurrency toCurrency,
     required String payPassword,
     String? quoteID,
+    String? verifyChallengeID,
+    String? verifyCode,
   }) async {
     _validateWrite(clientOrderID, amount, payPassword);
     _validateSwapClientID(clientOrderID);
@@ -230,6 +232,8 @@ class WalletFundApi {
         'amount': amount.decimal,
         'payPassword': payPassword,
         if (quoteID != null) 'quoteID': quoteID,
+        if (verifyChallengeID != null) 'verifyChallengeID': verifyChallengeID,
+        if (verifyCode != null) 'verifyCode': verifyCode,
       });
     } on FundApiException catch (error) {
       // These responses cannot prove this client's original swap did not settle.

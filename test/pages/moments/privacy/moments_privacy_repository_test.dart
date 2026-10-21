@@ -99,17 +99,17 @@ void main() {
         userIdProvider: () => account,
         environmentProvider: () => server,
         privacySelectionStore: store,
-        friendLoader: () async => [],
+        friendLoader: () async => [const MomentUser(userId: 'friend')],
         subscribeToSdk: false);
   });
   tearDown(() => repository.dispose());
 
-  test('empty local selection loads without requesting settings', () async {
+  test('privacy selection load checks server settings', () async {
     await repository.loadPrivacySelections();
     expect(repository.privacySelectionsLoaded, isTrue);
     expect(repository.privacySelections.blockedViewerIds, isEmpty);
     expect(repository.privacySelections.hiddenAuthorIds, isEmpty);
-    expect(api.settingsCalls, 0);
+    expect(api.settingsCalls, 1);
   });
 
   test('minimal acknowledgements preserve range, cover and settings version',
@@ -230,7 +230,8 @@ void main() {
       () async {
     const post = MomentPost(
         momentId: 'old-content', author: MomentUser(userId: 'friend'));
-    await repository.loadPrivacySelections();
+    await repository.loadPrivacySelections(refreshRemote: false);
+    await repository.loadFriends();
     repository.feedState.items = [post];
     repository.applyPost(post);
     expect(repository.postById('old-content'), isNotNull);

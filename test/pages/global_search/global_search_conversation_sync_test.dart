@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
+import 'package:openim/pages/conversation/blacklist/conversation_blacklist_visibility.dart';
 
 class _UpdatingSource extends GlobalSearchSource {
   final updates =
@@ -12,6 +13,19 @@ class _UpdatingSource extends GlobalSearchSource {
   List<ConversationInfo> initial = [];
   bool delayedConversations = false;
   final calls = <String, int>{};
+  List<FriendInfo> contactResults = [];
+  Completer<List<FriendInfo>>? pendingContacts;
+  late final visibility = ConversationBlacklistVisibility(
+    load: () async => [],
+    isActive: () => true,
+    changed: () => updates.add(initial),
+  );
+
+  @override
+  bool allowsContact(FriendInfo friend) => visibility.allowsUser(friend.userID);
+
+  @override
+  bool allowsConversation(ConversationInfo item) => visibility.allows(item);
 
   void _count(String section) =>
       calls.update(section, (count) => count + 1, ifAbsent: () => 1);
@@ -22,7 +36,9 @@ class _UpdatingSource extends GlobalSearchSource {
   @override
   Future<List<FriendInfo>> friends(String query) async {
     _count('contacts');
-    return [];
+    return pendingContacts == null
+        ? contactResults
+        : await pendingContacts!.future;
   }
 
   @override
@@ -71,6 +87,67 @@ void main() {
   tearDown(() async {
     Get.reset();
     await source.updates.close();
+  });
+
+  test('blocked contacts and singles stay hidden while matching groups remain',
+      () async {
+    source.contactResults = [
+      FriendInfo(userID: 'blocked'),
+      FriendInfo(userID: 'ok')
+    ];
+    source.initial = [
+      ConversationInfo(
+          conversationID: 'single',
+          userID: 'blocked',
+          conversationType: ConversationType.single,
+          showName: 'match'),
+      ConversationInfo(
+          conversationID: 'group',
+          groupID: 'blocked',
+          conversationType: ConversationType.superGroup,
+          showName: 'match'),
+    ];
+    source.visibility.setBlocked('blocked', true);
+    logic.searchCtrl.text = 'match';
+    await logic.search();
+    expect(logic.contactsList.map((e) => e.userID), ['ok']);
+    expect(logic.conversations.map((e) => e.conversationID), ['group']);
+
+    source.visibility.setBlocked('blocked', false);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(logic.contactsList.map((e) => e.userID), ['blocked', 'ok']);
+    expect(
+        logic.conversations.map((e) => e.conversationID), ['single', 'group']);
+
+    source.visibility.setBlocked('blocked', true);
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(logic.contactsList.map((e) => e.userID), ['ok']);
+    expect(logic.conversations.map((e) => e.conversationID), ['group']);
+    expect(source.calls.values.every((count) => count == 1), isTrue);
+  });
+
+  test('late contact and conversation results cannot restore a blocked user',
+      () async {
+    source.pendingContacts = Completer<List<FriendInfo>>();
+    source.delayedConversations = true;
+    source.initial = [
+      ConversationInfo(
+          conversationID: 'single',
+          userID: 'blocked',
+          conversationType: ConversationType.single,
+          showName: 'match')
+    ];
+    logic.searchCtrl.text = 'match';
+    final search = logic.search();
+    source.visibility.setBlocked('blocked', true);
+    source.pendingContacts!.complete([FriendInfo(userID: 'blocked')]);
+    source.pending['match']!.complete(source.initial);
+    await search;
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(logic.contactsList, isEmpty);
+    expect(logic.conversations, isEmpty);
+    expect(logic.pendingSections, isEmpty);
+    expect(logic.loading.value, isFalse);
   });
 
   test(

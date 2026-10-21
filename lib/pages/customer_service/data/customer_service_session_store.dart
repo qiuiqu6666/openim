@@ -28,6 +28,7 @@ class CustomerServiceSessionStore {
   final Future<SharedPreferences> Function() _preferences;
   final String Function() _identifierFactory;
   Future<CustomerServiceSession>? _pending;
+  Future<CustomerServiceSession>? _recovering;
   CustomerServiceSession? _ready;
   int _generation = 0;
   bool _disposed = false;
@@ -47,6 +48,7 @@ class CustomerServiceSessionStore {
   }) async {
     final generation = _generation;
     _check(generation);
+    if (_recovering != null) return _recovering!;
     final ready = _ready;
     if (ready != null) return ready;
     final pending = _pending;
@@ -97,7 +99,11 @@ class CustomerServiceSessionStore {
 
     if (record.conversationId.isEmpty) {
       _check(generation);
-      final conversationId = await api.createConversation(record.sourceId);
+      final existing = await api.listConversations(record.sourceId);
+      _check(generation);
+      final conversationId = existing.isNotEmpty
+          ? existing.first
+          : await api.createConversation(record.sourceId);
       _check(generation);
       record = _Record(
         identifier: record.identifier,
@@ -114,6 +120,46 @@ class CustomerServiceSessionStore {
       pubsubToken: record.pubsubToken,
       conversationId: record.conversationId,
     );
+  }
+
+  /// Called only after a confirmed 404 for this exact visitor/conversation.
+  Future<CustomerServiceSession> recover(CustomerServiceSession failed,
+      {required String name, String avatarUrl = ''}) async {
+    _check(_generation);
+    if (_recovering != null) return _recovering!;
+    if (_ready != null && _ready!.conversationId != failed.conversationId) {
+      return _ready!;
+    }
+    final generation = _generation;
+    final work = _recover(failed, generation, name, avatarUrl);
+    _recovering = work;
+    try {
+      return await work;
+    } finally {
+      if (identical(_recovering, work)) _recovering = null;
+    }
+  }
+
+  Future<CustomerServiceSession> _recover(CustomerServiceSession failed,
+      int generation, String name, String avatarUrl) async {
+    final prefs = await _preferences();
+    _check(generation);
+    final record = _read(prefs.getString(storageKey));
+    if (record.sourceId != failed.sourceId ||
+        record.identifier != failed.identifier) {
+      throw const CustomerServiceSessionCancelled();
+    }
+    _ready = null;
+    // Save invalidation before network work, so reopening cannot reuse the 404.
+    await _save(
+        prefs,
+        storageKey,
+        _Record(
+            identifier: record.identifier,
+            sourceId: record.sourceId,
+            pubsubToken: record.pubsubToken),
+        generation);
+    return _loadOrCreate(generation, name, avatarUrl);
   }
 
   Future<void> _save(SharedPreferences prefs, String key, _Record record,

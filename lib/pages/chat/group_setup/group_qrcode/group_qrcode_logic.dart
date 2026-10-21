@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -38,7 +39,10 @@ class GroupQrcodeLogic extends GetxController {
       await precacheImage(groupQrcodeWatermarkImage, context);
       await WidgetsBinding.instance.endOfFrame;
       final boundary = cardKey.currentContext?.findRenderObject();
-      if (boundary is! RenderRepaintBoundary || boundary.debugNeedsPaint) {
+      // debugNeedsPaint is assert-backed and throws in release builds.
+      // endOfFrame above ensures painting has completed in every build mode.
+      if (boundary is! RenderRepaintBoundary ||
+          (kDebugMode && boundary.debugNeedsPaint)) {
         throw StateError('QR card not ready');
       }
       image = await boundary.toImage(pixelRatio: 3);
@@ -49,7 +53,8 @@ class GroupQrcodeLogic extends GetxController {
       await file.parent.create(recursive: true);
       await file.writeAsBytes(bytes.buffer.asUint8List());
       await HttpUtil.saveFileToGallerySaver(file);
-    } catch (_) {
+    } catch (error) {
+      Logger.print('Group QR capture/save failed: ${error.runtimeType}');
       if (!isClosed) IMViews.showToast(StrRes.saveFailed);
     } finally {
       image?.dispose();

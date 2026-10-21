@@ -15,6 +15,7 @@ import '../../../core/session/local_session_exit.dart';
 import '../../../services/fund/diagnostics/wallet_load_log.dart';
 import '../../group_features/data/group_feature_runtime.dart';
 import 'settings_service.dart';
+import 'friend_permissions/friend_auto_accept_api.dart';
 import 'verification_code_result.dart';
 import 'feedback/upload_failure_report.dart';
 
@@ -31,6 +32,8 @@ class OpenIMProfileService extends StubSettingsService {
     final info = await Apis.queryMyFullInfo();
     if (info == null) throw StateError('Friend permissions unavailable');
     return {
+      if (info.autoAcceptFriend != null)
+        'autoAcceptFriend': info.autoAcceptFriend! ? 1 : 0,
       'allowAddFriend': info.allowAddFriend ?? 1,
       'allowAddByQRCode': info.allowAddByQRCode ?? 1,
       'allowAddByCard': info.allowAddByCard ?? 1,
@@ -41,6 +44,10 @@ class OpenIMProfileService extends StubSettingsService {
       'allowAddByEmail': info.allowAddByEmail ?? 1,
     };
   }
+
+  @override
+  Future<void> updateFriendVerification(bool requireVerification) =>
+      FriendAutoAcceptApi.setEnabled(!requireVerification);
 
   @override
   Future<void> updateAllowAddFriend(bool allowed) async {

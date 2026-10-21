@@ -6,6 +6,11 @@ class WalletFundTestTransport {
   WalletFundTestTransport() {
     client.interceptors.add(InterceptorsWrapper(onRequest: (request, handler) {
       requests.add(request);
+      if (securityCheck != null && request.path.endsWith('/withdrawal-security/check')) {
+        handler.resolve(Response<dynamic>(requestOptions: request, statusCode: 200,
+          data: {'errCode': 0, 'data': securityCheck!(request.data as Map)}));
+        return;
+      }
       final response = Response<dynamic>(
           requestOptions: request, statusCode: statusCode, data: body);
       if (failure != null) {
@@ -25,6 +30,7 @@ class WalletFundTestTransport {
     wallet = WalletFundApi(api: fund);
   }
 
+  Map<String, dynamic> Function(Map)? securityCheck;
   final Dio client = Dio();
   final List<RequestOptions> requests = [];
   late final FundApi fund;

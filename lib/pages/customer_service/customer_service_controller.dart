@@ -77,6 +77,7 @@ class CustomerServiceController extends ChangeNotifier {
   final _posting = <String>{};
   CustomerServiceSession? _session;
   Future<void>? _initializing, _refreshing;
+  Future<CustomerServiceSession>? _recoveringSession;
   Timer? _typingExpiry, _historyPolling;
   static const historyPollingInterval = Duration(seconds: 15);
   bool _disposed = false, _foreground = true, _cableAttached = false;
@@ -145,8 +146,11 @@ class CustomerServiceController extends ChangeNotifier {
 
   Future<CustomerServiceSession> _ensureSession() async {
     if (!_live) throw StateError('Customer service account ended');
-    final session =
-        _session ?? await sessionStore.ensure(name: name, avatarUrl: avatarUrl);
+    final recovery = _recoveringSession;
+    final session = recovery != null
+        ? await recovery
+        : _session ??
+            await sessionStore.ensure(name: name, avatarUrl: avatarUrl);
     if (!_live) throw StateError('Customer service account ended');
     _session = session;
     return session;
@@ -169,9 +173,40 @@ class CustomerServiceController extends ChangeNotifier {
 
   Future<void> _refresh() async {
     final generation = _generation;
-    final session = await _ensureSession();
-    final messages = await api.listMessages(
-        contactId: session.sourceId, conversationId: session.conversationId);
+    var session = await _ensureSession();
+    List<CustomerServiceMessage> messages;
+    try {
+      messages = await api.listMessages(
+          contactId: session.sourceId, conversationId: session.conversationId);
+    } catch (failure) {
+      if (!CustomerServiceApi.isNotFound(failure) || !_current(generation)) {
+        rethrow;
+      }
+      _cable.suspend();
+      _cableAttached = false;
+      _connectionRevision++;
+      _historyPolling?.cancel();
+      _historyPolling = null;
+      _session = null;
+      final work =
+          sessionStore.recover(session, name: name, avatarUrl: avatarUrl);
+      _recoveringSession = work;
+      try {
+        session = await work;
+      } finally {
+        if (identical(_recoveringSession, work)) _recoveringSession = null;
+      }
+      if (!_current(generation)) return;
+      _session = session;
+      // Old server history belongs to the rejected conversation. Keep drafts
+      // and unsent entries, but do not automatically replay user messages.
+      _entries.removeWhere((entry) => entry.message != null);
+      notifyListeners();
+      messages = await api.listMessages(
+          contactId: session.sourceId, conversationId: session.conversationId);
+      if (!_current(generation)) return;
+      _attachCable(session);
+    }
     if (!_current(generation)) return;
     final changed = _mergeBatch(messages);
     final hadError = error != null;
@@ -229,6 +264,7 @@ class CustomerServiceController extends ChangeNotifier {
       suspend();
       return;
     }
+    if (_recoveringSession != null || _session == null) return;
     if (_merge(message)) notifyListeners();
   }
 
@@ -354,8 +390,14 @@ class CustomerServiceController extends ChangeNotifier {
       final hadError = error != null;
       error = null;
       if (changed || hadError) notifyListeners();
-    } catch (_) {
+    } catch (failure) {
       if (!_current(generation)) return;
+      if (CustomerServiceApi.isNotFound(failure)) {
+        try {
+          await refresh();
+        } catch (_) {}
+        if (!_current(generation)) return;
+      }
       _changeState(entry.echoId, CustomerServiceSendState.failed);
     } finally {
       _posting.remove(entry.echoId);

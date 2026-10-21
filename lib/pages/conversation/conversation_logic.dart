@@ -63,6 +63,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   void setPeerBlacklisted(String userID, bool blocked) =>
       _blacklistVisibility.setBlocked(userID, blocked);
+
+  bool allowsSearchUser(String? userID) =>
+      _blacklistVisibility.allowsUser(userID);
+
+  bool allowsSearchConversation(ConversationInfo row) =>
+      _blacklistVisibility.allows(row);
   final folders = <ChatFolder>[].obs;
   final states = <String, ChatConversationState>{}.obs;
   ConversationFeedSnapshotCache? _feedCache;

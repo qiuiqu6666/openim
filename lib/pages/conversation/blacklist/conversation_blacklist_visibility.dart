@@ -14,8 +14,10 @@ class ConversationBlacklistVisibility {
   Set<String> _blocked = {};
   int _generation = 0;
 
+  bool allowsUser(String? userID) => !_blocked.contains(userID);
+
   bool allows(ConversationInfo row) =>
-      !row.isSingleChat || !_blocked.contains(row.userID);
+      !row.isSingleChat || allowsUser(row.userID);
 
   void setBlocked(String userID, bool blocked) {
     if (!isActive()) return;

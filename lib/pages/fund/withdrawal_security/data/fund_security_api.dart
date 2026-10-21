@@ -11,7 +11,7 @@ class FundWithdrawalSecurityApi {
     final data = await api.requestData('/chat/fund/withdrawal-security/check',
         data: request.toJson());
     final result = FundSecurityCheck.fromJson(data);
-    if (result.currency != request.fields['currency']) {
+    if (result.currency != request.currency) {
       throw const FormatException('安全验证币种不一致');
     }
     return result;

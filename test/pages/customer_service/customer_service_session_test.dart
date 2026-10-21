@@ -30,6 +30,45 @@ void main() {
   });
 
   test(
+      '404 recovery is single flight and restores an existing scoped conversation',
+      () async {
+    final old = await store.ensure(name: 'Alice');
+    api.existing = ['restored'];
+    final result = await Future.wait(
+        [store.recover(old, name: 'Alice'), store.recover(old, name: 'Alice')]);
+    expect(result.first.conversationId, 'restored');
+    expect(result.first, same(result.last));
+    expect(api.conversations, 1);
+    expect(api.contacts, 1);
+    expect(prefs.getString(store.storageKey), contains('restored'));
+  });
+
+  test('404 recovery creates only when scoped list is empty', () async {
+    final old = await store.ensure(name: 'Alice');
+    final fresh = await store.recover(old, name: 'Alice');
+    expect(fresh.conversationId, 'conversation-2');
+    expect(api.conversations, 2);
+    expect(api.contacts, 1);
+  });
+
+  test(
+      'failed lookup invalidates stale ID but does not create or replace visitor',
+      () async {
+    final old = await store.ensure(name: 'Alice');
+    api.listFailure = StateError('offline');
+    await expectLater(store.recover(old, name: 'Alice'), throwsStateError);
+    expect(api.conversations, 1);
+    expect(api.contacts, 1);
+    expect(
+        prefs.getString(store.storageKey), isNot(contains('conversation-1')));
+    api.listFailure = null;
+    api.existing = ['restored-after-timeout'];
+    expect((await store.ensure(name: 'Alice')).conversationId,
+        'restored-after-timeout');
+    expect(api.conversations, 1);
+  });
+
+  test(
       'serializes simultaneous ensures and reuses persisted contact/conversation',
       () async {
     api.contactGate = Completer<CustomerServiceContact>();
@@ -152,6 +191,14 @@ class _FakeApi extends CustomerServiceApi {
           baseUrl: 'https://support.example/kefu', inboxIdentifier: 'inbox')});
   int contacts = 0, conversations = 0;
   bool failConversation = false;
+  List<String> existing = [];
+  Object? listFailure;
+  @override
+  Future<List<String>> listConversations(String sourceId) async {
+    if (listFailure != null) throw listFailure!;
+    return existing;
+  }
+
   String updatedName = '';
   Completer<CustomerServiceContact>? contactGate;
 

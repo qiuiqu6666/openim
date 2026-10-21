@@ -250,8 +250,9 @@ Future<void> _selectType(
       type) {
     return;
   }
-  await tester.ensureVisible(_key('internal-transfer-account-type'));
-  await tester.tap(_key('internal-transfer-account-type'));
+  tester
+      .widget<FundInternalTransferForm>(find.byType(FundInternalTransferForm))
+      .onChooseAccountType();
   await tester.pumpAndSettle();
   await tester.tap(_key('internal-transfer-type-${type.name}'));
   await tester.pumpAndSettle();
@@ -343,26 +344,8 @@ void main() {
     expect(find.text('请填写收款人99号'), findsOneWidget);
     expect(_key('internal-transfer-area-code'), findsNothing);
 
-    await tester.tap(_key('internal-transfer-account-type'));
-    await tester.pumpAndSettle();
-    final sheet =
-        tester.widget<CupertinoActionSheet>(find.byType(CupertinoActionSheet));
-    expect(sheet.actions, hasLength(3));
-    expect(find.text('选择账号类型'), findsOneWidget);
-    expect(tester.getTopLeft(_key('internal-transfer-type-account')).dy,
-        lessThan(tester.getTopLeft(_key('internal-transfer-type-email')).dy));
-    expect(tester.getTopLeft(_key('internal-transfer-type-email')).dy,
-        lessThan(tester.getTopLeft(_key('internal-transfer-type-phone')).dy));
-    expect(_key('internal-transfer-type-uid'), findsNothing);
-    expect(
-        tester
-            .widget<Semantics>(_key('internal-transfer-type-account'))
-            .properties
-            .selected,
-        isTrue);
-    expect(find.text('当前选择'), findsOneWidget);
-    await tester.tap(_key('internal-transfer-type-account'));
-    await tester.pumpAndSettle();
+    expect(_key('internal-transfer-account-type'), findsNothing);
+    expect(find.text('账号类型'), findsNothing);
 
     await tester.tap(_key('internal-transfer-help'));
     await tester.pumpAndSettle();
@@ -567,8 +550,9 @@ void main() {
     await tester.enterText(_amount, '1.23');
     FocusManager.instance.primaryFocus?.unfocus();
     await tester.pumpAndSettle();
-    final onTap =
-        tester.widget<InkWell>(_key('internal-transfer-account-type')).onTap!;
+    final onTap = tester
+        .widget<FundInternalTransferForm>(find.byType(FundInternalTransferForm))
+        .onChooseAccountType;
     onTap();
     onTap();
     await tester.pumpAndSettle();
@@ -655,7 +639,9 @@ void main() {
     await tester.enterText(_recipient, '@otheruser1');
     await tester.pump();
     expect(find.text('收款人：Alice'), findsNothing);
-    await tester.tap(_key('internal-transfer-account-type'));
+    tester
+        .widget<FundInternalTransferForm>(find.byType(FundInternalTransferForm))
+        .onChooseAccountType();
     await tester.pumpAndSettle();
     await tester.tap(_key('internal-transfer-type-email'));
     await tester.pumpAndSettle();

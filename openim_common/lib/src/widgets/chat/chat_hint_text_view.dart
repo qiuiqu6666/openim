@@ -422,6 +422,42 @@ class ChatHintTextView extends StatelessWidget {
             return (ntf.isPrivate == true ? StrRes.openPrivateChatNtf : StrRes.closePrivateChatNtf).toText
               ..style = Styles.ts_8E9AB0_12sp;
           }
+        case MessageType.groupMemberSetToAdminNotification:
+        case MessageType.groupMemberSetToOrdinaryUserNotification:
+          final ntf = GroupMemberInfoChangedNotification.fromJson(map);
+          final template = sprintf(
+            message.contentType == MessageType.groupMemberSetToAdminNotification
+                ? StrRes.groupAdminAddedNtf
+                : StrRes.groupAdminRemovedNtf,
+            ['{operator}', '{member}'],
+          );
+          final children = <InlineSpan>[];
+          template.splitMapJoin(
+            RegExp(r'\{operator\}|\{member\}'),
+            onMatch: (match) {
+              final info = match[0] == '{operator}' ? ntf.opUser! : ntf.changedUser!;
+              children.add(TextSpan(
+                text: IMUtils.getGroupMemberShowName(info),
+                style: Styles.ts_0089FF_12sp,
+                recognizer: TapGestureRecognizer()
+                  ..onTap = () => onTapUserProfile((
+                    userID: info.userID!,
+                    name: info.nickname ?? '',
+                    faceURL: info.faceURL,
+                    groupID: groupID,
+                  )),
+              ));
+              return '';
+            },
+            onNonMatch: (text) {
+              children.add(TextSpan(text: text, style: Styles.ts_8E9AB0_12sp));
+              return '';
+            },
+          );
+          return RichText(
+            textAlign: TextAlign.center,
+            text: TextSpan(children: children),
+          );
         case MessageType.groupMemberInfoChangedNotification:
           final ntf = GroupMemberInfoChangedNotification.fromJson(map);
 

@@ -3,11 +3,11 @@ import 'dart:async';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
-import 'package:openim_common/openim_common.dart';
 
 import '../../services/moments_repository.dart';
 import 'moments_widgets.dart';
 import 'presentation/moments_secondary_layout.dart';
+import 'notifications/widgets/moments_notification_row.dart';
 
 /// Interactions are projected for the current account by [MomentsRepository].
 class MomentsNotificationsPage extends StatefulWidget {
@@ -33,12 +33,14 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
   int _requestGeneration = 0;
   late String _scope;
   bool _opening = false;
+  late VoidCallback _releaseContent;
   final Set<String> _readingItems = {};
 
   @override
   void initState() {
     super.initState();
     _scope = widget.repository.sessionScope;
+    _releaseContent = widget.repository.retainNotificationContent();
     widget.repository.addListener(_repositoryChanged);
     unawaited(_load());
   }
@@ -47,6 +49,8 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
   void didUpdateWidget(covariant MomentsNotificationsPage oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.repository != widget.repository) {
+      _releaseContent();
+      _releaseContent = widget.repository.retainNotificationContent();
       oldWidget.repository.removeListener(_repositoryChanged);
       widget.repository.addListener(_repositoryChanged);
       _scope = widget.repository.sessionScope;
@@ -60,6 +64,7 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
   @override
   void dispose() {
     ++_requestGeneration;
+    _releaseContent();
     widget.repository.removeListener(_repositoryChanged);
     super.dispose();
   }
@@ -83,9 +88,27 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
 
   Future<void> _load({bool refresh = true}) async {
     final request = ++_requestGeneration;
+    final repository = widget.repository;
+    final scope = _scope;
     if (mounted) setState(() => _error = null);
     try {
-      await widget.repository.loadNotifications(refresh: refresh);
+      final page = await repository.loadNotifications(refresh: refresh);
+      // Entering/refreshing the inbox acknowledges its server snapshot, not
+      // interactions arriving later. Never acknowledge a covered/disposed page
+      // or a newer refresh that replaced this response.
+      if (refresh &&
+          mounted &&
+          request == _requestGeneration &&
+          widget.repository == repository &&
+          repository.isSessionCurrent(scope) &&
+          ModalRoute.of(context)?.isCurrent != false &&
+          page.seenWatermark != null &&
+          page.readThroughSeq != null &&
+          page.seenWatermark == repository.seenWatermark &&
+          page.readThroughSeq == repository.readThroughSeq &&
+          repository.unreadCount > 0) {
+        await _readAll();
+      }
     } catch (error) {
       if (mounted && request == _requestGeneration) {
         setState(() {
@@ -108,7 +131,11 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
   }
 
   Future<void> _readAll() async {
-    if (_markingRead || widget.repository.seenWatermark == null) return;
+    if (_markingRead ||
+        widget.repository.seenWatermark == null ||
+        widget.repository.readThroughSeq == null) {
+      return;
+    }
     final scope = _scope;
     final repository = widget.repository;
     setState(() => _markingRead = true);
@@ -233,7 +260,8 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
             }
             final rowIndex = index - (error != null ? 1 : 0);
             if (rowIndex < items.length) {
-              return _NotificationRow(
+              return MomentsNotificationRow(
+                repository: repository,
                 item: items[rowIndex],
                 text: _interactionText(items[rowIndex]),
                 onTap: () => unawaited(_open(items[rowIndex])),
@@ -328,140 +356,5 @@ class _MomentsNotificationsPageState extends State<MomentsNotificationsPage> {
         ),
       ),
     );
-  }
-}
-
-class _NotificationRow extends StatelessWidget {
-  const _NotificationRow({
-    required this.item,
-    required this.text,
-    required this.onTap,
-    required this.showDivider,
-  });
-
-  final MomentNotification item;
-  final String text;
-  final VoidCallback onTap;
-  final bool showDivider;
-
-  Widget _message(BuildContext context, bool dark, String comment) {
-    final style = TextStyle(
-        color: MomentsTheme.text(dark),
-        fontSize: MomentsSecondaryLayout.messageSize,
-        height: 1.25);
-    final target = item.replyToUser;
-    if (item.type.toUpperCase().contains('REPLY') && target != null) {
-      return Text.rich(
-          TextSpan(style: style, children: [
-            TextSpan(text: momentsText(context, zh: '回复了 ', en: 'Replied to ')),
-            TextSpan(
-                text: target.displayName,
-                style: TextStyle(
-                    color: MomentsTheme.name(dark),
-                    fontWeight: FontWeight.w600)),
-            if (comment.isNotEmpty) TextSpan(text: '：$comment'),
-          ]),
-          maxLines: 2,
-          overflow: TextOverflow.ellipsis);
-    }
-    return Text(comment.isEmpty ? text : comment,
-        maxLines: 2, overflow: TextOverflow.ellipsis, style: style);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final dark = momentsDark(context);
-    if (!item.available) {
-      return Padding(
-          padding: MomentsSecondaryLayout.notificationInset,
-          child: Text(
-              momentsText(context,
-                  zh: '内容已不可用', en: 'Content is no longer available'),
-              style: TextStyle(color: MomentsTheme.secondary(dark))));
-    }
-    final local = item.createdAt > 0
-        ? DateTime.fromMillisecondsSinceEpoch(item.createdAt).toLocal()
-        : null;
-    final timestamp = local == null
-        ? null
-        : momentsText(context,
-            zh: '${local.month}月${local.day}日 ${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}',
-            en: '${MaterialLocalizations.of(context).formatShortDate(local)} ${MaterialLocalizations.of(context).formatTimeOfDay(TimeOfDay.fromDateTime(local))}');
-    final liked = item.type.toUpperCase().contains('LIKE');
-    final comment = item.comment?.text.trim() ?? '';
-    return Column(children: [
-      Material(
-          color: Colors.transparent,
-          child: InkWell(
-              onTap: onTap,
-              child: Padding(
-                padding: MomentsSecondaryLayout.notificationInset,
-                child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      AvatarView(
-                          width: MomentsSecondaryLayout.notificationAvatar,
-                          height: MomentsSecondaryLayout.notificationAvatar,
-                          url: item.actor.avatarUrl,
-                          text: item.actor.displayName),
-                      const SizedBox(width: MomentsSecondaryLayout.avatarGap),
-                      Expanded(
-                          child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                            Text(item.actor.displayName,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                    color: MomentsTheme.name(dark),
-                                    fontSize: MomentsSecondaryLayout.nameSize,
-                                    fontWeight: FontWeight.w600)),
-                            const SizedBox(height: 4),
-                            liked
-                                ? Semantics(
-                                    label: text,
-                                    child: Icon(Icons.favorite_border_rounded,
-                                        color: MomentsTheme.name(dark),
-                                        size: 24))
-                                : _message(context, dark, comment),
-                            if (timestamp != null) ...[
-                              const SizedBox(height: 5),
-                              Text(timestamp,
-                                  style: TextStyle(
-                                      color: MomentsTheme.secondary(dark),
-                                      fontSize:
-                                          MomentsSecondaryLayout.captionSize)),
-                            ],
-                          ])),
-                      const SizedBox(width: MomentsSecondaryLayout.avatarGap),
-                      Container(
-                        width: MomentsSecondaryLayout.notificationPreview,
-                        height: MomentsSecondaryLayout.notificationPreview,
-                        padding: const EdgeInsets.all(6),
-                        decoration: BoxDecoration(
-                            color: MomentsTheme.panel(dark),
-                            borderRadius: BorderRadius.circular(
-                                MomentsSecondaryLayout
-                                    .notificationPreviewRadius)),
-                        child: Text(
-                            item.momentText.trim().isEmpty
-                                ? momentsText(context, zh: '动态', en: 'Moment')
-                                : item.momentText.trim(),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                color: MomentsTheme.secondary(dark),
-                                fontSize: MomentsSecondaryLayout.draftSize,
-                                height: 1.2)),
-                      ),
-                    ]),
-              ))),
-      if (showDivider)
-        Divider(
-            height: 1,
-            thickness: MomentsSecondaryLayout.notificationDividerWidth,
-            indent: MomentsSecondaryLayout.notificationDividerIndent,
-            color: MomentsTheme.border(dark)),
-    ]);
   }
 }

@@ -214,6 +214,29 @@ void main() {
     await tester.pumpWidget(const SizedBox.shrink());
   });
 
+  testWidgets('updated preview prevents old ready cache from flashing on entry',
+      (tester) async {
+    final old = _entryMessage('previous-message', time: 1);
+    final latest = _entryMessage('new-preview-message', time: 2);
+    ChatHistoryCache.write('self', 'chat', [old],
+        readySession: ('self', OpenIM.iMManager.token));
+    localSnapshot = [old];
+    final logic = open(_entryConversation(latest: latest));
+    await tester.pumpWidget(buildChatEntryList(logic));
+    await tester.pump();
+    expect(logic.initialWindowReady.value, isFalse);
+    expect(find.text('previous-message'), findsNothing);
+    calls.single.complete([old, latest]);
+    await tester.pump();
+    await tester.pump();
+    expect(logic.initialWindowReady.value, isTrue);
+    expect(find.text('new-preview-message'), findsOneWidget);
+    expect(logic.messageList.map((m) => m.clientMsgID),
+        ['previous-message', 'new-preview-message']);
+    logic.onDelete();
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+
   testWidgets(
       'live delivery during entry is painted together with initial history',
       (tester) async {

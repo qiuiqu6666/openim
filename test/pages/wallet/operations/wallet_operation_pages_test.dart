@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:openim/services/fund_currency_visibility/fund_currency_visibility.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/wallet/data/wallet_fund_api.dart';
 import 'package:openim/pages/wallet/data/wallet_operation_pending_store.dart';
@@ -84,8 +85,8 @@ void main() {
     });
   }
 
-  for (final from in FundCurrency.values) {
-    for (final to in FundCurrency.values.where((coin) => coin != from)) {
+  for (final from in FundCurrency.values.where(isFundCurrencyVisible)) {
+    for (final to in FundCurrency.values.where((coin) => isFundCurrencyVisible(coin) && coin != from)) {
       testWidgets(
           'currency pickers expose ${from.code} -> ${to.code} and submit exact wire currency',
           (tester) async {
@@ -107,9 +108,9 @@ void main() {
         final toPicker = tester.widget<DropdownButton<FundCurrency>>(
             find.byKey(const ValueKey('wallet-swap-to')));
         expect(fromPicker.items!.map((item) => item.value).toList(),
-            FundCurrency.values);
+            FundCurrency.values.where(isFundCurrencyVisible).toList());
         expect(toPicker.items!.map((item) => item.value).toList(),
-            FundCurrency.values);
+            FundCurrency.values.where(isFundCurrencyVisible).toList());
         final amount = from == FundCurrency.bi99 ? '1.23' : '1.234567';
         await enterWalletSwapAmount(tester, amount);
         expect(form.amountController.text, amount);
@@ -162,17 +163,17 @@ void main() {
             coordinator: testWalletOperation(WalletOperationKind.swap, api)));
     await tester.tap(find.byKey(const ValueKey('wallet-swap-available')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text(FundCurrency.trx.displayName).last);
+    await tester.tap(find.text(FundCurrency.bi99.displayName).last);
     await tester.pumpAndSettle();
     expect(
         tester
             .widget<DropdownButton<FundCurrency>>(
                 find.byKey(const ValueKey('wallet-swap-from')))
             .value,
-        FundCurrency.trx);
+        FundCurrency.bi99);
     for (final entry in [
       ('wallet-swap-from', FundCurrency.usdt),
-      ('wallet-swap-to', FundCurrency.trx)
+      ('wallet-swap-to', FundCurrency.bi99)
     ]) {
       final picker = find.byKey(ValueKey(entry.$1));
       await tester.tap(find

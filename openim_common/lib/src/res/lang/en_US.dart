@@ -405,6 +405,8 @@ const Map<String, String> en_US = {
   "friendAddedNtf": "You are now friends and can start chatting",
   "openPrivateChatNtf": "Enable self-destructing messages",
   "closePrivateChatNtf": "Disable self-destructing messages",
+  "groupAdminAddedNtf": "%s appointed %s as an administrator",
+  "groupAdminRemovedNtf": "%s removed %s as an administrator",
   "memberInfoChangedNtf": "%s edited their group member profile",
   "unsupportedMessage": "Unsupported message type",
   "picture": "Picture",

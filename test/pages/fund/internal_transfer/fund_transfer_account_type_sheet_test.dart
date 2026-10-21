@@ -161,9 +161,14 @@ class _Fixture {
       ),
     ));
     await tester.pumpAndSettle();
-    await tester.tap(previewForm
-        ? find.byKey(const ValueKey('internal-transfer-account-type'))
-        : find.text('Open'));
+    if (previewForm) {
+      tester
+          .widget<FundInternalTransferForm>(
+              find.byType(FundInternalTransferForm))
+          .onChooseAccountType();
+    } else {
+      await tester.tap(find.text('Open'));
+    }
     await tester.pumpAndSettle();
   }
 }

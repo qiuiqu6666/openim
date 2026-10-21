@@ -80,22 +80,39 @@ class MomentsPrivacySelectionStore {
       final previous = await _read(key, owner, server);
       if (captured.isEmpty) return previous;
       final updated = previous.apply(captured);
-      final encoded = jsonEncode({
-        'version': 1,
-        'ownerUserId': owner,
-        'baseUrl': server,
-        'blockedViewerIds': updated.blockedViewerIds,
-        'hiddenAuthorIds': updated.hiddenAuthorIds,
-      });
-      final success = _writeSnapshot != null
-          ? await _writeSnapshot(key, encoded)
-          : await (await SharedPreferences.getInstance())
-              .setString(key, encoded);
-      if (!success) {
-        throw StateError('Could not persist confirmed privacy selections');
-      }
+      await _save(key, owner, server, updated);
       return updated;
     });
+  }
+
+  Future<MomentsPrivacySelections> replace(
+      {required String ownerUserId,
+      required String baseUrl,
+      required MomentsPrivacySelections snapshot}) {
+    final owner = ownerUserId.trim();
+    final server = canonicalBaseUrl(baseUrl);
+    final key = storageKey(ownerUserId: owner, baseUrl: server);
+    return (_locks[key] ??= Lock()).synchronized(() async {
+      await _save(key, owner, server, snapshot);
+      return snapshot;
+    });
+  }
+
+  Future<void> _save(String key, String owner, String server,
+      MomentsPrivacySelections updated) async {
+    final encoded = jsonEncode({
+      'version': 1,
+      'ownerUserId': owner,
+      'baseUrl': server,
+      'blockedViewerIds': updated.blockedViewerIds,
+      'hiddenAuthorIds': updated.hiddenAuthorIds,
+    });
+    final success = _writeSnapshot != null
+        ? await _writeSnapshot(key, encoded)
+        : await (await SharedPreferences.getInstance()).setString(key, encoded);
+    if (!success) {
+      throw StateError('Could not persist confirmed privacy selections');
+    }
   }
 
   Future<MomentsPrivacySelections> _read(

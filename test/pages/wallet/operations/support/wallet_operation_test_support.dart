@@ -8,7 +8,7 @@ import 'package:openim/pages/wallet/data/wallet_operation_coordinator.dart';
 import 'package:openim/pages/wallet/data/wallet_operation_pending_store.dart';
 import 'package:openim/pages/mine/settings/settings_service.dart';
 import 'package:openim/pages/wallet/wallet_repository.dart';
-import 'package:openim/services/fund_api.dart' show FundApiException;
+import 'package:openim/services/fund_api.dart' show FundApi, FundApiException;
 import 'package:openim/pages/fund/withdrawal_security/withdrawal_security.dart';
 import '../../data/wallet_fund_test_api.dart' show depositAddressFixture;
 
@@ -53,7 +53,21 @@ class WalletOperationTestSettings extends StubSettingsService {
 }
 
 /// Fixtures only: no endpoint or real account is contacted by these tests.
+class _OperationSecurityApi extends FundApi {
+  @override
+  Future<Map<String, dynamic>> requestData(String path, {
+    String method = 'POST', Map<String, dynamic>? data,
+    Map<String, dynamic>? queryParameters, bool mutation = false,
+  }) async {
+    if (!path.endsWith('/withdrawal-security/check')) throw StateError(path);
+    final request = data!['swap'] as Map;
+    return {'smsRequired': false, 'reasons': <String>[], 'blockedUntil': 0,
+      'phoneMasked': '', 'currency': request['fromCurrency'], 'smsThreshold': '5', 'cooldownHours': 2};
+  }
+}
+
 class WalletOperationTestApi extends WalletFundApi {
+  WalletOperationTestApi() : super(api: _OperationSecurityApi());
   int depositAddressCalls = 0;
   WalletDepositAddress? depositAddress;
   Future<WalletDepositAddress> Function()? onDepositAddress;
@@ -145,7 +159,9 @@ class WalletOperationTestApi extends WalletFundApi {
       required FundAmount amount,
       required FundCurrency toCurrency,
       required String payPassword,
-      String? quoteID}) async {
+      String? quoteID,
+      String? verifyChallengeID,
+      String? verifyCode}) async {
     final write = <String, dynamic>{
       'clientOrderID': clientOrderID,
       'currency': amount.currency.code,

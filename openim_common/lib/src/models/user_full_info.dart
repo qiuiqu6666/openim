@@ -47,6 +47,7 @@ class UserFullInfo {
   int? order;
   int? status;
   int? allowAddFriend;
+  bool? autoAcceptFriend;
   int? allowAddByUserID;
   int? allowAddByAccount;
   int? allowAddByPhone;
@@ -95,6 +96,7 @@ class UserFullInfo {
     this.order,
     this.status,
     this.allowAddFriend,
+    this.autoAcceptFriend,
     this.allowAddByUserID,
     this.allowAddByAccount,
     this.allowAddByPhone,
@@ -139,6 +141,9 @@ class UserFullInfo {
     order = json['order'];
     status = json['status'];
     allowAddFriend = json['allowAddFriend'];
+    autoAcceptFriend = json['autoAcceptFriend'] is bool
+        ? json['autoAcceptFriend'] as bool
+        : null;
     allowAddByUserID = json['allowAddByUserID'] ?? 1;
     allowAddByAccount = json['allowAddByAccount'] ?? 1;
     allowAddByPhone = json['allowAddByPhone'] ?? 1;
@@ -186,6 +191,7 @@ class UserFullInfo {
     data['order'] = order;
     data['status'] = status;
     data['allowAddFriend'] = allowAddFriend;
+    if (autoAcceptFriend != null) data['autoAcceptFriend'] = autoAcceptFriend;
     data['allowAddByUserID'] = allowAddByUserID;
     data['allowAddByAccount'] = allowAddByAccount;
     data['allowAddByPhone'] = allowAddByPhone;

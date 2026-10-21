@@ -95,9 +95,12 @@ class SettingsDraftStore extends ChangeNotifier {
   String profileSignature = '';
 
   bool requireFriendVerification = true;
+  bool autoAcceptFriendSupported = false;
   bool allowAddFriend = true;
   bool friendPermissionsLoaded = false;
   void syncFriendPermissions(Map<String, int> data) {
+    autoAcceptFriendSupported = data.containsKey('autoAcceptFriend');
+    requireFriendVerification = data['autoAcceptFriend'] != 1;
     allowAddFriend = data['allowAddFriend'] == 1;
     allowQrCode = data['allowAddByQRCode'] != 2;
     allowBusinessCard = data['allowAddByCard'] != 2;

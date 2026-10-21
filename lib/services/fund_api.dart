@@ -165,6 +165,8 @@ class FundApi {
     String? groupID,
     required String payPassword,
     String? remark,
+    String? verifyChallengeID,
+    String? verifyCode,
   }) async {
     _validateWrite(clientOrderID, payPassword);
     if (scene == FundScene.internal) {
@@ -217,6 +219,8 @@ class FundApi {
       if (!groupNormal && !groupLucky) 'recvID': recvID!,
       if (scene == FundScene.group) 'groupID': groupID!,
       'payPassword': payPassword,
+      if (verifyChallengeID != null) 'verifyChallengeID': verifyChallengeID,
+      if (verifyCode != null) 'verifyCode': verifyCode,
       if (remark != null) 'remark': FundRemark.normalize(remark),
     });
   }

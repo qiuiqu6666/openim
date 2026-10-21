@@ -54,6 +54,25 @@ class ChatHistorySearchController extends ChangeNotifier {
   bool _disposed = false;
 
   List<Message> get results => UnmodifiableListView(_results);
+
+  void _sortMediaNewestFirst() {
+    if (_query.messageTypes.isEmpty ||
+        !_query.messageTypes.every((type) =>
+            type == MessageType.picture || type == MessageType.video)) {
+      return;
+    }
+    final originalOrder = {for (var i = 0; i < _results.length; i++) _results[i]: i};
+    _results.sort((a, b) {
+      final time = (b.sendTime ?? b.createTime ?? 0)
+          .compareTo(a.sendTime ?? a.createTime ?? 0);
+      if (time != 0) return time;
+      final sequence = (b.seq ?? 0).compareTo(a.seq ?? 0);
+      return sequence != 0
+          ? sequence
+          : originalOrder[a]!.compareTo(originalOrder[b]!);
+    });
+  }
+
   ChatHistorySearchQuery get query => _query;
   bool get loading => _loading;
   bool get failed => _failed;
@@ -190,6 +209,7 @@ class ChatHistorySearchController extends ChangeNotifier {
         if (!_isCurrent(generation)) return;
       } while (true);
       _results.addAll(collected.take(pageSize));
+      _sortMediaNewestFirst();
       _pending = collected.skip(pageSize).toList();
       _nextRawPage = rawPage;
       _rawHasMore = rawHasMore;
@@ -249,6 +269,7 @@ class ChatHistorySearchController extends ChangeNotifier {
         }
         final ids = _results.map((m) => m.clientMsgID).toSet();
         _results.addAll(matches.where((m) => ids.add(m.clientMsgID)));
+        _sortMediaNewestFirst();
         unawaited(_resolveSenders(matches, generation));
         _beforeSeq = before;
         _snapshotSeq = snapshot;

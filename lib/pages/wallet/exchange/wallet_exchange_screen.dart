@@ -3,6 +3,7 @@ import 'package:openim/services/fund_currency_visibility/fund_currency_visibilit
 import 'package:flutter/material.dart';
 
 import '../../mine/settings/settings_service.dart';
+import '../../fund/withdrawal_security/withdrawal_security.dart';
 
 import '../data/wallet_fund_api.dart';
 import '../data/wallet_operation_coordinator.dart';
@@ -272,6 +273,20 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
         WalletTip.show(context, AppCopy.text('报价已过期，请重新预览'));
         return;
       }
+      final securedDraft = await _operation.prepareSwap(
+          amount: amount, toCurrency: target, quote: quote);
+      if (!mounted || !_operation.sameAccount) return;
+      final proof = await authorizeFundSecurity(context,
+          request: FundSecurityRequest.swap({
+            'clientOrderID': securedDraft.clientOrderID,
+            'fromCurrency': amount.currency.code,
+            'toCurrency': target.code,
+            'amount': amount.decimal,
+            'quoteID': quote.quoteID,
+          }),
+          api: _operation.api.transport,
+          isCurrent: () => mounted && _operation.sameAccount);
+      if (proof == null || !mounted || !_operation.sameAccount) return;
       var expiredDuringPayment = false;
       String? quoteRefusal;
       var paymentSheetActive = true;
@@ -302,9 +317,12 @@ class _WalletExchangeScreenState extends State<WalletExchangeScreen>
                   amount: amount,
                   toCurrency: target,
                   payPassword: password,
-                  quote: quote);
-              if (!mounted || !_operation.sameAccount)
+                  quote: quote,
+                  verifyChallengeID: proof.challengeID,
+                  verifyCode: proof.code);
+              if (!mounted || !_operation.sameAccount) {
                 return AppCopy.text('账号已变化，请重新打开钱包');
+              }
               // Dismissing the PIN does not cancel a write already sent. A
               // late success still refreshes real balances in this page.
               if (!paymentSheetActive) {

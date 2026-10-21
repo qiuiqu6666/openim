@@ -7,6 +7,8 @@ class _OwnerSelections {
   final int generation;
   MomentsPrivacySelections value = MomentsPrivacySelections.empty;
   bool loaded = false;
+  int snapshotRevision = 0;
+  MomentsPrivacySelections? pendingSnapshot;
   Object? persistenceError;
   final dirty = <MomentsPrivacyChange>[];
   List<MomentsPrivacyChange>? readOverlay;
@@ -62,18 +64,25 @@ class MomentsPrivacySelectionController {
 
   Future<MomentsPrivacySelections> _load(
       _OwnerSelections owner, List<MomentsPrivacyChange> overlay) async {
+    final revision = owner.snapshotRevision;
     try {
       final saved = await _store.load(
           ownerUserId: owner.ownerUserId, baseUrl: owner.baseUrl);
-      if (!_current(owner)) return owner.value;
+      if (!_current(owner) || revision != owner.snapshotRevision) {
+        return owner.value;
+      }
       // A stale read cannot overwrite acknowledgements made while it awaited,
       // even if their writes have already completed and cleared dirty records.
-      owner.value = saved.apply([...owner.dirty, ...overlay]);
+      owner.value =
+          (owner.pendingSnapshot ?? saved).apply([...owner.dirty, ...overlay]);
       owner.loaded = true;
       if (owner.dirty.isEmpty) owner.persistenceError = null;
       return owner.value;
     } catch (error) {
-      if (_current(owner)) owner.persistenceError = error;
+      if (!_current(owner) || revision != owner.snapshotRevision) {
+        return owner.value;
+      }
+      owner.persistenceError = error;
       rethrow;
     }
   }
@@ -90,6 +99,20 @@ class MomentsPrivacySelectionController {
     await _persist(owner);
   }
 
+  Future<void> synchronize(
+      {required String ownerUserId,
+      required String baseUrl,
+      required MomentsPrivacySelections snapshot}) {
+    final owner = _activate(ownerUserId, baseUrl);
+    owner.snapshotRevision++;
+    owner.value = snapshot;
+    owner.loaded = true;
+    owner.dirty.clear();
+    owner.pendingSnapshot = snapshot;
+    owner.persistenceError = null;
+    return _persist(owner);
+  }
+
   Future<void> persistPending(
           {required String ownerUserId, required String baseUrl}) =>
       _persist(_activate(ownerUserId, baseUrl));
@@ -98,14 +121,19 @@ class MomentsPrivacySelectionController {
     final existing = owner.writing;
     if (existing != null) {
       return existing.then((_) async {
-        if (owner.dirty.isEmpty || owner.persistenceError != null) return;
+        if ((owner.dirty.isEmpty && owner.pendingSnapshot == null) ||
+            owner.persistenceError != null) {
+          return;
+        }
         // A confirmation may arrive after the old worker finishes but before
         // its completion callback clears writing. Drain that trailing change.
         if (identical(owner.writing, existing)) owner.writing = null;
         await _persist(owner);
       });
     }
-    if (owner.dirty.isEmpty) return Future.value();
+    if (owner.dirty.isEmpty && owner.pendingSnapshot == null) {
+      return Future.value();
+    }
     final work = _write(owner);
     owner.writing = work;
     return work.whenComplete(() {
@@ -116,18 +144,28 @@ class MomentsPrivacySelectionController {
   Future<void> _write(_OwnerSelections owner) async {
     // An already-captured old owner's disk write may finish after reset. Its
     // immutable key and state can never update the new owner's public snapshot.
-    while (owner.dirty.isNotEmpty) {
+    while (owner.dirty.isNotEmpty || owner.pendingSnapshot != null) {
+      final revision = owner.snapshotRevision;
+      final snapshot = owner.pendingSnapshot;
       final batch = List<MomentsPrivacyChange>.of(owner.dirty);
       try {
-        final saved = await _store.apply(
-            ownerUserId: owner.ownerUserId,
-            baseUrl: owner.baseUrl,
-            changes: batch);
+        final saved = snapshot != null
+            ? await _store.replace(
+                ownerUserId: owner.ownerUserId,
+                baseUrl: owner.baseUrl,
+                snapshot: snapshot.apply(batch))
+            : await _store.apply(
+                ownerUserId: owner.ownerUserId,
+                baseUrl: owner.baseUrl,
+                changes: batch);
+        if (revision != owner.snapshotRevision) continue;
+        owner.pendingSnapshot = null;
         owner.dirty.removeRange(0, batch.length);
         owner.value = saved.apply(owner.dirty);
         owner.loaded = true;
         owner.persistenceError = null;
       } catch (error) {
+        if (revision != owner.snapshotRevision) continue;
         owner.persistenceError = error;
         // The server success is retained; retry only this device's persistence.
         return;

@@ -1,3 +1,4 @@
+import '../../favorites/feedback/favorite_send_feedback.dart';
 import 'package:openim_common/media_localization.dart';
 import 'package:openim_common/localization.dart';
 import '../../favorites/media/favorite_item_thumbnail.dart';
@@ -905,13 +906,15 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
           await widget.repository.refresh();
         }
         if (mounted && _current && result.errorCode != 'CANCELLED') {
-          showSettingsMessage(
-              context,
-              result.status == FavoriteSendStatus.success
-                  ? _text(AppCopy.text('已发送'), 'Sent')
-                  : result.errorMessage ??
-                      _text(AppCopy.text('发送未完成，请重试'),
-                          'Could not send. Please retry.'));
+          if (result.status == FavoriteSendStatus.success) {
+            showFavoriteSendSuccess();
+          } else {
+            showSettingsMessage(
+                context,
+                result.errorMessage ??
+                    _text(AppCopy.text('发送未完成，请重试'),
+                        'Could not send. Please retry.'));
+          }
         }
       } catch (error) {
         if (mounted && _current) {
@@ -1089,7 +1092,7 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
           _selectedItems.clear();
           _editing = false;
         });
-        showSettingsMessage(context, _text(AppCopy.text('已发送'), 'Sent'));
+        showFavoriteSendSuccess();
       } else {
         setState(() => _batchMessage = result.status ==
                 FavoriteSendStatus.unknown
@@ -1160,18 +1163,22 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
           actions: [
             SettingsAction(
                 _text(AppCopy.text('笔记'), 'Note'), _FavoriteCreateAction.note),
-            SettingsAction(_text(AppCopy.text('图片'), 'Image'),
-                _FavoriteCreateAction.image,
-                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.image)),
-            SettingsAction(_text(AppCopy.text('视频'), 'Video'),
-                _FavoriteCreateAction.video,
-                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.video)),
-            SettingsAction(_text(AppCopy.text('音频'), 'Audio'),
-                _FavoriteCreateAction.audio,
-                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.audio)),
+            SettingsAction(
+                _text(AppCopy.text('图片'), 'Image'), _FavoriteCreateAction.image,
+                subtitle: FavoriteMediaFeedback.limitHint(
+                    context, FavoriteKind.image)),
+            SettingsAction(
+                _text(AppCopy.text('视频'), 'Video'), _FavoriteCreateAction.video,
+                subtitle: FavoriteMediaFeedback.limitHint(
+                    context, FavoriteKind.video)),
+            SettingsAction(
+                _text(AppCopy.text('音频'), 'Audio'), _FavoriteCreateAction.audio,
+                subtitle: FavoriteMediaFeedback.limitHint(
+                    context, FavoriteKind.audio)),
             SettingsAction(
                 _text(AppCopy.text('文件'), 'File'), _FavoriteCreateAction.file,
-                subtitle: FavoriteMediaFeedback.limitHint(context, FavoriteKind.file)),
+                subtitle: FavoriteMediaFeedback.limitHint(
+                    context, FavoriteKind.file)),
             SettingsAction(
                 _text(AppCopy.text('链接'), 'Link'), _FavoriteCreateAction.link),
           ]);
@@ -1313,8 +1320,10 @@ class _CloudFavoritesPageState extends State<_CloudFavoritesPage> {
                   AnimatedBuilder(
                       animation: widget.repository,
                       builder: (context, _) => _creatingMedia != null
-                          ? FavoriteMediaProgress(progress: widget.repository.uploadProgress)
-                          : LinearProgressIndicator(value: widget.repository.uploadProgress)),
+                          ? FavoriteMediaProgress(
+                              progress: widget.repository.uploadProgress)
+                          : LinearProgressIndicator(
+                              value: widget.repository.uploadProgress)),
                 if (_batchMessage != null)
                   Padding(
                       padding: const EdgeInsets.all(AppTokens.s4),

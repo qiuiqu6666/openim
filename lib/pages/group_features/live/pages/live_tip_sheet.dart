@@ -13,6 +13,7 @@ import '../../../../services/fund_api.dart';
 import '../../../../services/fund_pending_store.dart';
 import '../../../../widgets/payment/password_payment_sheet.dart';
 import '../../../wallet/data/wallet_fund_api.dart';
+import '../../../fund/withdrawal_security/withdrawal_security.dart';
 import '../../data/group_feature_api.dart';
 import '../../models/group_feature_context.dart';
 import '../data/live_api.dart';
@@ -169,8 +170,9 @@ class _LiveTipFormState extends State<_LiveTipForm>
   void _permissionsChanged() {
     if (!mounted) return;
     _syncCurrencies();
-    if (!canTip && !_loading)
+    if (!canTip && !_loading) {
       _error = StateError(AppCopy.text('当前场次或打赏权限已变化，请稍后重试'));
+    }
     setState(() {});
   }
 
@@ -323,6 +325,17 @@ class _LiveTipFormState extends State<_LiveTipForm>
       if (!_currencies.any((value) => value.code == draft['currency'])) {
         throw const FormatException('该打赏币种当前不可用，请核对原交易');
       }
+      if (!mounted) throw StateError('页面已关闭');
+      final proof = await authorizeFundSecurity(context,
+          request: FundSecurityRequest.tip(draft),
+          api: (widget.walletApi ??
+                  WalletFundApi(
+                      api: FundApi(baseUrl: widget.featureContext.api.baseUrl)))
+              .transport,
+          isCurrent: () => canTip);
+      if (proof == null || !canTip) {
+        throw const PasswordPaymentException('安全验证未完成，请重试');
+      }
       await _store.save(scope, draft);
       if (!canTip) throw StateError('当前场次未在直播中或没有打赏权限');
       setState(() => _pending = draft);
@@ -333,7 +346,9 @@ class _LiveTipFormState extends State<_LiveTipForm>
           amount: draft['amount'],
           password: pin,
           orderID: draft['clientOrderID'],
-          memo: draft['memo']);
+          memo: draft['memo'],
+          verifyChallengeID: proof.challengeID,
+          verifyCode: proof.code);
       // Cleanup cannot turn a confirmed transaction into a second payment.
       try {
         await _store.clear(scope, clientOrderID: draft['clientOrderID']);

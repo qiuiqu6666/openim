@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:dio/dio.dart';
 import 'package:openim/pages/customer_service/customer_service_controller.dart';
 import 'package:openim/pages/customer_service/data/data.dart';
 import 'package:openim/pages/customer_service/models/customer_service_chat_entry.dart';
@@ -15,6 +16,63 @@ Future<void> _flush() async {
 }
 
 void main() {
+  for (final status in [404, 502]) {
+    test('history failure $status only recovers a missing conversation',
+        () async {
+      final h = CustomerServiceTestHarness();
+      addTearDown(h.controller.dispose);
+      h.api.onList = () async {
+        if (h.api.listCalls == 1 || status == 502) {
+          final request = RequestOptions(path: '/messages');
+          throw DioException(
+              requestOptions: request,
+              response: Response(requestOptions: request, statusCode: status));
+        }
+        return [
+          customerServiceTestMessage('new', 'restored', conversationId: '43')
+        ];
+      };
+      h.store.onRecover = () async {
+        h.api.expectedConversation = '43';
+        return const CustomerServiceSession(
+            identifier: 'test-visitor',
+            sourceId: 'test-contact',
+            pubsubToken: 'test-public-room',
+            conversationId: '43');
+      };
+      await h.controller.initialize();
+      expect(h.store.recoveryCalls, status == 404 ? 1 : 0);
+      if (status == 404) {
+        expect(h.api.listCalls, 2);
+        expect(h.controller.entries.single.message!.content, 'restored');
+        expect(h.cable.connections.last.conversationId, '43');
+        expect(h.controller.error, isNull);
+      } else {
+        expect(h.controller.error, 'connection');
+      }
+    });
+  }
+  test('account switch during recovery ignores returned conversation',
+      () async {
+    final h = CustomerServiceTestHarness();
+    addTearDown(h.controller.dispose);
+    final gate = Completer<CustomerServiceSession>();
+    h.store.onRecover = () => gate.future;
+    h.api.onList = () async {
+      final request = RequestOptions(path: '/messages');
+      throw DioException(
+          requestOptions: request,
+          response: Response(requestOptions: request, statusCode: 404));
+    };
+    final work = h.controller.initialize();
+    await _flush();
+    h.active = false;
+    gate.complete(customerServiceTestSession);
+    await work;
+    expect(h.api.listCalls, 1);
+    expect(h.controller.entries, isEmpty);
+  });
+
   test('guest construction is independent of an uninitialized OpenIM profile',
       () {
     final controller = CustomerServiceController.forCurrentAccount(guest: true);

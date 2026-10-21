@@ -223,8 +223,9 @@ class LiveApi {
     if (!context.capabilities.live.canConfigure) throw StateError('没有配置直播的权限');
     final roomName = _name(name);
     final details = graphemeTrim(description);
-    if (details.characters.length > 30)
+    if (details.characters.length > 30) {
       throw const FormatException('直播描述最多 30 个字');
+    }
     if (anchorID.trim().isEmpty) throw const FormatException('请选择主播');
     if (scheduledAt != null &&
         scheduledAt.isBefore(DateTime.now().add(const Duration(minutes: 1)))) {
@@ -268,7 +269,9 @@ class LiveApi {
       required int amount,
       required String password,
       required String orderID,
-      required String memo}) async {
+      required String memo,
+      String? verifyChallengeID,
+      String? verifyCode}) async {
     checkPermissionSession();
     if (!context.capabilities.live.canTip) throw StateError('没有打赏权限');
     _id(id);
@@ -294,7 +297,9 @@ class LiveApi {
       'amount': amount,
       'payPin': password,
       'clientOrderId': orderID,
-      'memo': remark
+      'memo': remark,
+      if (verifyChallengeID != null) 'verifyChallengeID': verifyChallengeID,
+      if (verifyCode != null) 'verifyCode': verifyCode,
     });
     checkSession();
     if ((int.tryParse('${json['tipId']}') ?? 0) <= 0 ||

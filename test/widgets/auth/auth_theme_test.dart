@@ -34,7 +34,7 @@ void main() {
         home: AuthEntryScaffold(
           greeting: 'Hello,',
           accent: 'Welcome',
-          footer: const AuthVersionFooter(),
+          footer: const AuthVersionFooter(version: '3.8.3'),
           child: Column(children: [
             AuthTextField(controller: controller, hint: 'Account'),
             const AuthFieldMessage(text: 'Please check your account'),

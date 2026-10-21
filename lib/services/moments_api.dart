@@ -358,16 +358,16 @@ class MomentsApi {
         }));
   }
 
-  /// A command acknowledgement, with a legacy return type for callers/fakes.
-  /// An empty/minimal response does not describe global settings or list state.
+  /// New servers return a complete settings snapshot; legacy servers may
+  /// acknowledge only this operation. Presence flags distinguish the two.
   Future<MomentsSettings> setBlockedViewer(String userId, bool blocked) async =>
       MomentsSettings.fromJson(await _request(
           '/moments/settings/blocked-viewers/${_id(userId)}',
           method: blocked ? 'PUT' : 'DELETE',
           mutation: true));
 
-  /// Await success to confirm this one operation; do not apply this return
-  /// value over cached global settings or infer a full server-side list.
+  /// A complete response includes both lists. Missing list fields remain
+  /// unknown and must not erase previously confirmed choices.
   Future<MomentsSettings> setHiddenAuthor(String userId, bool hidden) async =>
       MomentsSettings.fromJson(await _request(
           '/moments/settings/hidden-authors/${_id(userId)}',

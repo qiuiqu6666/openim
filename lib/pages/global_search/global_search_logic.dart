@@ -10,6 +10,14 @@ import 'cloud/global_keyword_search_api.dart';
 import '../chat/history_search/cloud/chat_keyword_search_api.dart';
 
 class GlobalSearchSource {
+  bool allowsContact(FriendInfo friend) =>
+      !Get.isRegistered<ConversationLogic>() ||
+      Get.find<ConversationLogic>().allowsSearchUser(friend.userID);
+
+  bool allowsConversation(ConversationInfo conversation) =>
+      !Get.isRegistered<ConversationLogic>() ||
+      Get.find<ConversationLogic>().allowsSearchConversation(conversation);
+
   Iterable<ConversationInfo> get currentConversations =>
       Get.isRegistered<ConversationLogic>()
           ? Get.find<ConversationLogic>().list
@@ -99,6 +107,7 @@ class GlobalSearchLogic extends GetxController {
   final searchCtrl = TextEditingController();
   final focusNode = FocusNode();
   final contactsList = <FriendInfo>[].obs;
+  final _contactCandidates = <FriendInfo>[];
   final groupList = <GroupInfo>[].obs;
   final conversations = <ConversationInfo>[].obs;
   final textSearchResultItems = <SearchResultItems>[].obs;
@@ -128,6 +137,8 @@ class GlobalSearchLogic extends GetxController {
     if (_closed) return;
     ++_conversationRevision;
     if (query.value.isEmpty) return;
+    // The conversation owner also publishes confirmed blacklist changes.
+    contactsList.assignAll(_contactCandidates.where(source.allowsContact));
     _latestConversations = items;
     _conversationTimer ??= Timer(const Duration(milliseconds: 80), () {
       _conversationTimer = null;
@@ -135,7 +146,8 @@ class GlobalSearchLogic extends GetxController {
       _latestConversations = null;
       if (_closed || query.value.isEmpty || latest == null) return;
       conversations.assignAll(
-          GlobalSearchSource.matchConversations(latest, query.value));
+          GlobalSearchSource.matchConversations(latest, query.value)
+              .where(source.allowsConversation));
       failures.remove(3);
     });
   }
@@ -164,6 +176,7 @@ class GlobalSearchLogic extends GetxController {
     cloudLoading.value = false;
     cloudHasMore.value = false;
     contactsList.clear();
+    _contactCandidates.clear();
     groupList.clear();
     conversations.clear();
     textSearchResultItems.clear();
@@ -195,7 +208,21 @@ class GlobalSearchLogic extends GetxController {
           (id != 3 || conversationRevision == _conversationRevision);
       try {
         final results = await fetch();
-        if (applicable()) output.assignAll(results);
+        if (applicable()) {
+          if (id == 1) {
+            _contactCandidates
+              ..clear()
+              ..addAll(results.cast<FriendInfo>());
+            contactsList
+                .assignAll(_contactCandidates.where(source.allowsContact));
+          } else if (id == 3) {
+            conversations.assignAll(results
+                .cast<ConversationInfo>()
+                .where(source.allowsConversation));
+          } else {
+            output.assignAll(results);
+          }
+        }
       } catch (_) {
         if (applicable()) failures.add(id);
       } finally {

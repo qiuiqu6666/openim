@@ -765,7 +765,7 @@ class _FundSendPageState extends State<FundSendPage>
       _error = null;
     });
     try {
-      if (!widget.isRedPacket) {
+      {
         if (_pending != null) {
           final recovered = await _recoverTransfer(draft.request);
           if (recovered != null) {
@@ -892,7 +892,7 @@ class _FundSendPageState extends State<FundSendPage>
             _text('请输入六位支付密码', 'Enter a six-digit payment password'));
       }
       FundSecurityProof? proof;
-      if (!widget.isRedPacket) {
+      {
         if (hadPending) {
           final recovered = await _recoverTransfer(request);
           if (recovered != null) {
@@ -934,6 +934,8 @@ class _FundSendPageState extends State<FundSendPage>
               groupID: request['groupID'],
               payPassword: pin,
               remark: request['remark'] as String?,
+              verifyChallengeID: proof.challengeID,
+              verifyCode: proof.code,
             )
           : await _api.sendTransfer(
               clientOrderID: request['clientOrderID'],
@@ -946,8 +948,8 @@ class _FundSendPageState extends State<FundSendPage>
               recipientType: request['recipientType'] as String?,
               recipient: request['recipient'] as String?,
               areaCode: request['areaCode'] as String?,
-              verifyChallengeID: proof?.challengeID,
-              verifyCode: proof?.code,
+              verifyChallengeID: proof.challengeID,
+              verifyCode: proof.code,
             );
       // Delivery has been confirmed. Local cleanup cannot turn success into
       // another payment attempt. Failed cleanup retains the same durable ID.

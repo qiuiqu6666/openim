@@ -14,7 +14,7 @@ import 'presentation/moments_secondary_layout.dart';
 
 enum MomentsPrivacyKind { blockedViewer, hiddenAuthor }
 
-/// Shows device-confirmed choices and writes individual relationships.
+/// Shows synchronized privacy choices and writes individual relationships.
 class MomentsPrivacyListPage extends StatefulWidget {
   const MomentsPrivacyListPage(
       {super.key, required this.repository, required this.kind});
@@ -356,18 +356,6 @@ class _MomentsPrivacyListPageState extends State<MomentsPrivacyListPage> {
           Padding(
               padding: const EdgeInsets.fromLTRB(16, 24, 16, 12),
               child: _addButton(canEdit, compact: true)),
-        Align(
-            alignment: Alignment.center,
-            child: TextButton(
-              onPressed: canEdit
-                  ? () => unawaited(_pickFriends(enabled: false))
-                  : null,
-              child: Text(momentsText(context,
-                  zh: '选择朋友移除', en: 'Choose friends to remove')),
-            )),
-        SettingsSectionText(momentsText(context,
-            zh: '名单记录在此设备。其他设备设置的朋友也可重新选择并取消。',
-            en: 'Shows choices saved on this device. Select a friend to cancel a choice made on another device.')),
       ],
     );
   }

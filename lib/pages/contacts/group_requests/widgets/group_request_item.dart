@@ -8,6 +8,9 @@ import '../../request_history/presentation/request_history_time.dart';
 import '../../request_history/widgets/request_history_row.dart';
 import '../../request_history/widgets/request_history_status.dart';
 import 'group_request_handler_label.dart';
+import 'group_request_people.dart';
+import '../../../group_features/identity/group_name_label.dart';
+import '../../../group_features/data/group_feature_store.dart';
 
 class GroupRequestItem extends StatelessWidget {
   const GroupRequestItem(
@@ -18,6 +21,8 @@ class GroupRequestItem extends StatelessWidget {
       required this.outgoing,
       required this.onReview,
       this.onOpenChat,
+      this.onViewUser,
+      this.groupFeatures,
       this.inviter,
       this.handler});
 
@@ -29,6 +34,13 @@ class GroupRequestItem extends StatelessWidget {
   final String? handler;
   final VoidCallback onReview;
   final VoidCallback? onOpenChat;
+  final ValueChanged<String>? onViewUser;
+  final GroupFeatureStore? groupFeatures;
+
+  VoidCallback? _profile(String? id) =>
+      onViewUser == null || id == null || id.trim().isEmpty
+          ? null
+          : () => onViewUser!(id);
 
   @override
   Widget build(BuildContext context) {
@@ -53,7 +65,10 @@ class GroupRequestItem extends StatelessWidget {
           builder: (context, constraints) =>
               Row(crossAxisAlignment: CrossAxisAlignment.end, children: [
                 Flexible(
-                    child: Text(groupName,
+                    child: GroupNameLabel(
+                        name: groupName,
+                        groupID: application.groupID,
+                        store: groupFeatures,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: RequestHistoryStyle.title(context))),
@@ -72,14 +87,26 @@ class GroupRequestItem extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-              RequestHistoryLabels.groupContent(
-                  application.nickname ?? '', groupName, inviter),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: RequestHistoryStyle.subtitle(context)),
+          if (onViewUser != null)
+            GroupRequestPeople(
+              applicant: application.nickname ?? '',
+              groupName: groupName,
+              inviter: inviter,
+              onApplicant: _profile(application.userID),
+              onInviter: _profile(application.inviterUserID),
+            )
+          else
+            Text(
+                RequestHistoryLabels.groupContent(
+                    application.nickname ?? '', groupName, inviter),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: RequestHistoryStyle.subtitle(context)),
           if (handled)
-            GroupRequestHandlerLabel(nickname: handler, compact: true),
+            GroupRequestHandlerLabel(
+                nickname: handler,
+                compact: true,
+                onTap: _profile(application.handleUserID)),
         ],
       ),
       trailing: !handled && !outgoing

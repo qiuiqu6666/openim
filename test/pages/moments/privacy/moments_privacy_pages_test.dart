@@ -17,6 +17,7 @@ const _other = MomentUser(userId: 'other', nickname: 'Other');
 class _Api extends MomentsApi {
   final commands = <String>[];
   int settingsReads = 0;
+  MomentsSettings? remoteSettings;
   String? failUserId;
   int failuresRemaining = 0;
   Completer<void>? waitForCommand;
@@ -31,6 +32,7 @@ class _Api extends MomentsApi {
   @override
   Future<MomentsSettings> settings() async {
     ++settingsReads;
+    if (remoteSettings != null) return remoteSettings!;
     return MomentsSettings.fromJson({
       'visibleRangeDays': 90,
       'coverMediaID': '',
@@ -125,6 +127,27 @@ Future<void> _choose(
 }
 
 void main() {
+  testWidgets('server lists and server timestamp appear in privacy settings',
+      (tester) async {
+    final api = _Api()
+      ..remoteSettings = MomentsSettings.fromJson({
+        'privacyListsLoaded': true,
+        'blockedViewerIDs': ['friend', 'other'],
+        'hiddenAuthorIDs': ['friend'],
+        'updatedAt': 1700000000123,
+        'version': 2,
+      });
+    final repository = _repository(api, MemoryPrivacySelectionStore());
+    addTearDown(repository.dispose);
+    await tester.pumpWidget(_host(MomentsSettingsPage(repository: repository)));
+    await tester.pumpAndSettle();
+    expect(find.text('2 friends'), findsOneWidget);
+    expect(find.text('1 friend'), findsOneWidget);
+    expect(find.text('Privacy choices synced from the server.'), findsNothing);
+    expect(find.textContaining('Last server update:'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
   for (final kind in MomentsPrivacyKind.values) {
     final command = kind == MomentsPrivacyKind.blockedViewer ? 'block' : 'hide';
     testWidgets('${kind.name} can add friends without GET settings lists',
@@ -142,7 +165,7 @@ void main() {
               widget.properties.label == 'None selected'),
           findsOneWidget);
       expect(find.text('Could not load this privacy list'), findsNothing);
-      expect(api.settingsReads, 0);
+      expect(api.settingsReads, greaterThanOrEqualTo(1));
       expect(
           tester
               .widget<InkWell>(
@@ -164,15 +187,27 @@ void main() {
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('${kind.name} can cancel a friend absent from this device list',
+    testWidgets(
+        '${kind.name} can remove a listed friend without the extra footer',
         (tester) async {
       final api = _Api();
-      final repository = _repository(api, MemoryPrivacySelectionStore());
+      final repository = _repository(
+          api,
+          MemoryPrivacySelectionStore(
+              initial: MomentsPrivacySelections(
+                  blockedViewerIds:
+                      kind == MomentsPrivacyKind.blockedViewer ? ['other'] : [],
+                  hiddenAuthorIds: kind == MomentsPrivacyKind.hiddenAuthor
+                      ? ['other']
+                      : [])));
       addTearDown(repository.dispose);
       await tester.pumpWidget(
           _host(MomentsPrivacyListPage(repository: repository, kind: kind)));
       await tester.pumpAndSettle();
-      await _choose(tester, 'Choose friends to remove', ['Other']);
+      expect(find.text('Choose friends to remove'), findsNothing);
+      expect(find.textContaining('Privacy choices sync when'), findsNothing);
+      await tester.tap(find.byTooltip('Remove'));
+      await tester.pumpAndSettle();
       expect(api.commands, ['$command:remove:other']);
       expect(repository.privacySelections.blockedViewerIds, isEmpty);
       expect(repository.privacySelections.hiddenAuthorIds, isEmpty);
@@ -280,7 +315,7 @@ void main() {
         find.byWidgetPredicate((widget) =>
             widget is Semantics && widget.properties.label == 'None selected'),
         findsOneWidget);
-    expect(api.settingsReads, 0);
+    expect(api.settingsReads, greaterThanOrEqualTo(1));
   });
 
   for (final changeServer in [false, true]) {

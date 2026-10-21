@@ -571,8 +571,8 @@ void main() {
     });
     test('settings distinguish missing lists from explicit empty lists', () {
       const constructed = MomentsSettings();
-      expect(constructed.blockedViewersLoaded, true);
-      expect(constructed.hiddenAuthorsLoaded, true);
+      expect(constructed.blockedViewersLoaded, false);
+      expect(constructed.hiddenAuthorsLoaded, false);
       final missing = MomentsSettings.fromJson({'visibleRangeDays': 0});
       expect(missing.blockedViewersLoaded, false);
       expect(missing.hiddenAuthorsLoaded, false);

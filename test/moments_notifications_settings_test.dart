@@ -5,6 +5,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/moments/moments_notifications_page.dart';
+import 'package:openim/pages/moments/presentation/moments_selected_builder.dart';
 import 'package:openim/pages/moments/moments_privacy_friend_picker.dart';
 import 'package:openim/pages/moments/moments_privacy_list_page.dart';
 import 'package:openim/pages/moments/moments_settings_page.dart';
@@ -20,6 +21,8 @@ class _Api extends MomentsApi {
   Completer<void>? readGate;
   bool enabled = true;
   bool failNotifications = false;
+  bool failRead = false;
+  Completer<void>? notificationGate;
   bool failSettingsSave = false;
   bool failRemove = false;
   MomentsSettings remoteSettings = const MomentsSettings(
@@ -66,6 +69,7 @@ class _Api extends MomentsApi {
   Future<MomentsPageResult<MomentNotification>> notifications(
       {String? cursor, int pageSize = 20}) async {
     notificationCursors.add(cursor);
+    if (notificationGate != null) await notificationGate!.future;
     if (failNotifications) throw const MomentsException('网络连接失败');
     return pages[cursor ?? '']!;
   }
@@ -79,6 +83,7 @@ class _Api extends MomentsApi {
     readSequences.add(readThroughSeq);
     watermarks.add(seenWatermark);
     if (readGate != null) await readGate!.future;
+    if (failRead) throw const MomentsException('read failed');
     return readResult;
   }
 
@@ -162,10 +167,76 @@ Widget _host(Widget child, {bool dark = false, double textScale = 1}) =>
     );
 
 void main() {
+  testWidgets('returning from inbox updates the parent unread indicator',
+      (tester) async {
+    final api = _Api();
+    final repository = _repository(api);
+    addTearDown(repository.dispose);
+    await repository.loadNotifications();
+    await tester.pumpWidget(_host(Scaffold(
+        body: Builder(
+            builder: (context) => MomentsSelectedBuilder(
+                listenable: repository,
+                select: () => [repository.unreadCount],
+                builder: (_) => TextButton(
+                    onPressed: () => Navigator.of(context).push(
+                        MaterialPageRoute<void>(
+                            builder: (_) => MomentsNotificationsPage(
+                                repository: repository, onOpenMoment: (_) {}))),
+                    child: Text('Activity ${repository.unreadCount}')))))));
+    expect(find.text('Activity 1'), findsOneWidget);
+    await tester.tap(find.text('Activity 1'));
+    await tester.pumpAndSettle();
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Activity 0'), findsOneWidget);
+    expect(api.readSequences, [100]);
+  });
+
+  testWidgets(
+      'failed automatic read keeps unread count and allows manual retry',
+      (tester) async {
+    final api = _Api()..failRead = true;
+    final repository = _repository(api);
+    addTearDown(repository.dispose);
+    await tester.pumpWidget(_host(MomentsNotificationsPage(
+        repository: repository, onOpenMoment: (_) {})));
+    await tester.pumpAndSettle();
+    expect(repository.unreadCount, 1);
+    expect(repository.notifications.single.read, isFalse);
+    expect(find.text('Friend'), findsOneWidget);
+    api.failRead = false;
+    await tester.tap(find.byKey(const ValueKey('moments_notifications_menu')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Read all'));
+    await tester.pumpAndSettle();
+    expect(repository.unreadCount, 0);
+  });
+
+  testWidgets(
+      'leaving before inbox response does not acknowledge unseen snapshot',
+      (tester) async {
+    final api = _Api()..notificationGate = Completer<void>();
+    final repository = _repository(api);
+    addTearDown(repository.dispose);
+    await tester.pumpWidget(_host(MomentsNotificationsPage(
+        repository: repository, onOpenMoment: (_) {})));
+    await tester.pump();
+    await tester.pumpWidget(_host(const SizedBox()));
+    api.notificationGate!.complete();
+    await tester.pumpAndSettle();
+    expect(api.readIds, isEmpty);
+    expect(tester.takeException(), isNull);
+  });
+
   testWidgets(
       'repeated notification taps open once and submit one read command',
       (tester) async {
     final api = _Api()..readGate = Completer<void>();
+    api.pages[''] = const MomentsPageResult(items: [
+      MomentNotification(
+          notificationId: 'n1', actor: _friend, type: 'LIKE', momentId: 'm1')
+    ]);
     final repository = _repository(api);
     addTearDown(repository.dispose);
     final opened = <String>[];
@@ -215,7 +286,7 @@ void main() {
             .onPressed,
         isNotNull);
   });
-  testWidgets('entering notifications does not mark unseen messages read',
+  testWidgets('entering notifications acknowledges snapshot and clears badge',
       (tester) async {
     final api = _Api();
     final repository = _repository(api);
@@ -224,17 +295,15 @@ void main() {
     await tester.pumpWidget(_host(MomentsNotificationsPage(
         repository: repository, onOpenMoment: (id) => opened = id)));
     await tester.pumpAndSettle();
-    expect(api.readIds, isEmpty);
-    expect(
-        find.byWidgetPredicate((widget) =>
-            widget is Semantics &&
-            widget.properties.label == '1 unread interactions'),
-        findsOneWidget);
+    expect(api.readSequences, [100]);
+    expect(api.watermarks, ['watermark-100']);
+    expect(repository.unreadCount, 0);
+    expect(repository.notifications.single.read, isTrue);
     await tester.tap(find.text('Friend'));
     await tester.pumpAndSettle();
     expect(opened, 'm1');
-    expect(api.readIds.single, ['n1']);
-    expect(api.readSequences.single, isNull);
+    expect(api.readIds.single, isEmpty);
+    expect(api.readSequences.single, 100);
   });
 
   testWidgets(
@@ -271,7 +340,8 @@ void main() {
     await tester.tap(find.textContaining('Replied to a comment'));
     await tester.pumpAndSettle();
     expect(opened, ['moment-reply']);
-    expect(api.readIds.single, ['notification-reply']);
+    expect(api.readIds.single, isEmpty);
+    expect(api.readSequences.single, 100);
     expect(tester.takeException(), isNull);
   });
 
@@ -288,9 +358,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Read all'));
     await tester.pumpAndSettle();
-    expect(api.readSequences.single, 100);
-    expect(api.watermarks.single, 'watermark-100');
-    expect(api.readIds.single, isEmpty);
+    expect(api.readSequences, [100, 100]);
+    expect(api.watermarks, ['watermark-100', 'watermark-100']);
+    expect(api.readIds, [<String>[], <String>[]]);
     expect(
         find.byWidgetPredicate((widget) =>
             widget is Semantics &&

@@ -93,6 +93,31 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
     }
   }
 
+  Future<void> _setAutoAccept(bool value) async {
+    final store = widget.store;
+    if (_saving ||
+        _loading ||
+        !store.isCurrentAccount ||
+        !store.friendPermissionsLoaded ||
+        !store.autoAcceptFriendSupported) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await widget.service.updateFriendVerification(!value);
+      if (!mounted || !store.isCurrentAccount) return;
+      store.setRequireFriendVerification(!value);
+      showSettingsMessage(context, text(AppCopy.text('已保存'), 'Saved'));
+    } catch (error) {
+      if (mounted && store.isCurrentAccount) {
+        showSettingsError(context, error,
+            text(AppCopy.text('保存失败，请重试'), 'Could not save. Retry.'));
+      }
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
   Future<void> _setVisibility(bool value) async {
     final visibility = _visibility!;
     await visibility.setVisible(value);
@@ -139,6 +164,29 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                           'When off, others cannot send you friend requests.'),
                       value: store.allowAddFriend,
                       onChanged: ready ? _setAllowed : null),
+                  MergeSemantics(
+                      child: _ToggleCell(
+                          title: text(AppCopy.text('自动通过好友申请'),
+                              'Automatically Accept Requests'),
+                          subtitle: store.friendPermissionsLoaded &&
+                                  !store.autoAcceptFriendSupported
+                              ? text(AppCopy.text('当前服务暂不支持自动通过好友申请'),
+                                  'Automatic approval is unavailable on this server.')
+                              : !store.allowAddFriend &&
+                                      store.friendPermissionsLoaded
+                                  ? text(AppCopy.text('已禁止别人添加你，自动通过暂不生效。'),
+                                      'Friend requests are disabled. Automatic approval is inactive.')
+                                  : text(
+                                      AppCopy.text(
+                                          '开启后，自动通过新的好友申请，不影响已有申请。'),
+                                      'Accept new friend requests without review. Existing requests are unchanged.'),
+                          value: !store.requireFriendVerification,
+                          onChanged: ready &&
+                                  store.autoAcceptFriendSupported &&
+                                  (store.allowAddFriend ||
+                                      !store.requireFriendVerification)
+                              ? _setAutoAccept
+                              : null)),
                   SettingsCell(
                       title: text(AppCopy.text('添加我的方式'), 'Ways to Find Me'),
                       showDivider: false,
@@ -271,7 +319,9 @@ class _ToggleCell extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          AppSwitch(value: value, onChanged: onChanged),
+          SizedBox(
+              height: kMinInteractiveDimension,
+              child: AppSwitch(value: value, onChanged: onChanged)),
         ],
       ),
     );

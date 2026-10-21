@@ -172,6 +172,50 @@ class WalletOperationCoordinator extends ChangeNotifier {
     }
   }
 
+  Future<WalletOperationDraft> prepareSwap({
+    required FundAmount amount,
+    required FundCurrency toCurrency,
+    required WalletSwapQuote quote,
+  }) async {
+    _requireActive();
+    if (kind != WalletOperationKind.swap ||
+        busy ||
+        _attempts.containsKey(_lockKey) ||
+        _finishing.contains(_lockKey)) {
+      throw StateError('交易正在处理中，请稍后重试');
+    }
+    if (!amount.isPositive ||
+        !quote.matches(amount, toCurrency) ||
+        quote.isExpired(DateTime.now())) {
+      throw const FormatException('报价已过期或与输入不一致，请重新预览');
+    }
+    busy = true;
+    _changed();
+    try {
+      await load();
+      _requireActive();
+      if (draft?.submitted == true || receipt != null) {
+        throw StateError('请先确认原交易状态');
+      }
+      final next = WalletOperationDraft(
+          kind: kind,
+          clientOrderID: draft?.clientOrderID ?? FundApi.createClientOrderID(),
+          amount: amount,
+          toCurrency: toCurrency,
+          quoteID: quote.quoteID,
+          expectedReceived: quote.estimatedReceived.decimal);
+      if (draft != null && !draft!.sameRequest(next)) {
+        throw StateError('原交易参数已冻结，请先创建新交易');
+      }
+      await store.save(next);
+      _requireActive();
+      return draft = next;
+    } finally {
+      busy = false;
+      _changed();
+    }
+  }
+
   Future<WalletOperationReceipt> submit({
     required FundAmount amount,
     required String payPassword,
@@ -272,6 +316,8 @@ class WalletOperationCoordinator extends ChangeNotifier {
           toCurrency: next.toCurrency!,
           payPassword: password,
           quoteID: next.quoteID,
+          verifyChallengeID: verifyChallengeID,
+          verifyCode: verifyCode,
         );
         result = WalletOperationReceipt(
             order: value.order,

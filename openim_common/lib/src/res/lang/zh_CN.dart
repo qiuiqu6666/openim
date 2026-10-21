@@ -376,6 +376,8 @@ const Map<String, String> zh_CN = {
   "friendAddedNtf": "你们已成为好友，可以开始聊天了",
   "openPrivateChatNtf": "已开启阅后即焚",
   "closePrivateChatNtf": "已关闭阅后即焚",
+  "groupAdminAddedNtf": "%s 将 %s 设为管理员",
+  "groupAdminRemovedNtf": "%s 取消了 %s 的管理员身份",
   "memberInfoChangedNtf": "%s 编辑了自己的群成员资料",
   "unsupportedMessage": "暂不支持的消息类型",
   "picture": "图片",

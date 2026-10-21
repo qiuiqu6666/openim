@@ -377,6 +377,8 @@ const Map<String, String> zhTW = {
   "friendAddedNtf": "你們已成為好友，可以開始聊天了",
   "openPrivateChatNtf": "已開啟閱後即焚",
   "closePrivateChatNtf": "已關閉閱後即焚",
+  "groupAdminAddedNtf": "%s 將 %s 設為管理員",
+  "groupAdminRemovedNtf": "%s 取消了 %s 的管理員身分",
   "memberInfoChangedNtf": "%s 編輯了自己的群成員資料",
   "unsupportedMessage": "暫不支援的訊息型別",
   "picture": "圖片",

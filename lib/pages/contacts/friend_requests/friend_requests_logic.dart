@@ -196,7 +196,9 @@ class FriendRequestsLogic extends GetxController with WidgetsBindingObserver {
           Logger.print(
               '[FriendRequests][applicant] elapsedMs=${watch.elapsedMilliseconds} rows=${rows.length}',
               onlyConsole: true);
-          return preview(rows);
+          // Outgoing rows belong below incoming rows. Publishing them first
+          // would move the visible list when the recipient read completes.
+          return rows;
         }),
       ]);
       if (!isSessionActive || version != _loadVersion) return;

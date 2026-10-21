@@ -55,7 +55,7 @@ class _Api extends FundApi {
       Map<String, dynamic>? data,
       Map<String, dynamic>? queryParameters,
       bool mutation = false}) async {
-    final transfer = Map<String, dynamic>.from(data!['transfer'] as Map);
+    final transfer = Map<String, dynamic>.from((data!['transfer'] ?? data['packet']) as Map);
     if (path == '/chat/fund/withdrawal-security/check') {
       securityChecks.add(transfer);
       return {
@@ -167,6 +167,8 @@ class _Api extends FundApi {
     String? groupID,
     String? remark,
     required String payPassword,
+    String? verifyChallengeID,
+    String? verifyCode,
   }) async {
     ids.add(clientOrderID);
     remarks.add(remark);
@@ -556,6 +558,28 @@ void main() {
     expect(api.securityCodes, isEmpty);
     expect(api.ids, isEmpty);
     expect(await store.read('transfer:single:other'), isNull);
+    await tester.tap(find.text('知道了'));
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('fund-payment-sheet')), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('packet cooldown blocks SMS and any financial write',
+      (tester) async {
+    final api = _Api()
+      ..smsRequired = true
+      ..blockedUntil = DateTime.now().millisecondsSinceEpoch + 86400000;
+    final store = FundPendingStore(accountKey: 'test:me');
+    await _open(tester, api, store: store, packet: true);
+    await tester.enterText(find.byKey(const ValueKey('fund-amount')), '1');
+    await _requestPin(tester);
+    await tester.pumpAndSettle();
+    expect(find.text('暂时无法转出'), findsOneWidget);
+    expect(find.textContaining('需等待2小时'), findsOneWidget);
+    expect(api.securityChecks, hasLength(1));
+    expect(api.securityCodes, isEmpty);
+    expect(api.ids, isEmpty);
+    expect(await store.read('packet:single:other'), isNull);
     await tester.tap(find.text('知道了'));
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('fund-payment-sheet')), findsNothing);

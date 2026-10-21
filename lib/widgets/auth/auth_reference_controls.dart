@@ -1,4 +1,5 @@
 import 'dart:async';
+export 'auth_version_footer.dart';
 import 'package:flutter/material.dart';
 import 'auth_copy.dart';
 import 'auth_reference_tokens.dart';
@@ -186,13 +187,4 @@ class _AuthCodeActionState extends State<AuthCodeAction> {
                     : authText('获取验证码', 'Get code'),
                 textAlign: TextAlign.center),
       );
-}
-
-class AuthVersionFooter extends StatelessWidget {
-  const AuthVersionFooter({super.key, this.version = '3.8.3'});
-  final String version;
-  @override
-  Widget build(BuildContext context) => Text('Version $version',
-      textAlign: TextAlign.center,
-      style: AuthReferenceTokens.style(context, AuthReferenceTokens.caption));
 }

@@ -8,6 +8,8 @@ import '../../../core/controller/im_controller.dart';
 import '../../../core/im_callback.dart';
 import '../../../routes/app_navigator.dart';
 import '../../home/home_logic.dart';
+import '../../conversation/conversation_logic.dart';
+import '../../group_features/data/group_feature_store.dart';
 import '../request_history/data/request_load_coordinator.dart';
 import '../request_history/navigation/request_history_chat_opener.dart';
 import 'data/group_notices_api.dart';
@@ -20,6 +22,9 @@ class GroupRequestsLogic extends GetxController with WidgetsBindingObserver {
                 ? Get.find<GroupNoticesApi>()
                 : GroupNoticesApi());
   final GroupNoticesApi api;
+  GroupFeatureStore? get groupFeatures => Get.isRegistered<ConversationLogic>()
+      ? Get.find<ConversationLogic>().groupFeatures
+      : null;
   final Duration syncInterval;
   final imLogic = Get.find<IMController>();
   final homeLogic = Get.find<HomeLogic>();
@@ -199,6 +204,7 @@ class GroupRequestsLogic extends GetxController with WidgetsBindingObserver {
       _snapshot = page.snapshot;
       _revision = page.revision;
       hasMore.value = _cursor.isNotEmpty;
+      groupFeatures?.hydrate(list.map((row) => row.groupID));
       applicationsLoaded.value = true;
       if (!more) refreshController.refreshCompleted(resetFooterState: true);
       if (hasMore.value) {
@@ -262,6 +268,11 @@ class GroupRequestsLogic extends GetxController with WidgetsBindingObserver {
 
   bool isInvite(GroupApplicationInfo r) =>
       r.joinSource == 2 && (r.inviterUserID?.isNotEmpty ?? false);
+
+  void viewUser(String userID) {
+    if (!isSessionActive || userID.trim().isEmpty) return;
+    AppNavigator.startUserProfilePane(userID: userID);
+  }
   String getGroupName(GroupApplicationInfo r) => r.groupName ?? '';
   String? getGroupAvatar(GroupApplicationInfo r) => r.groupFaceURL;
   String getInviterNickname(GroupApplicationInfo r) =>

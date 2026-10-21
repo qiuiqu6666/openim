@@ -1,3 +1,4 @@
+import '../../favorites/feedback/favorite_send_feedback.dart';
 import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
@@ -107,6 +108,7 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
       if (!mounted || !widget.repository.isSessionCurrent(_scope)) return;
       if (result.status == FavoriteSendStatus.success) {
         Navigator.of(context).pop(true);
+        showFavoriteSendSuccess();
       } else if (result.errorCode != 'CANCELLED') {
         setState(() {
           _unknown = result.status == FavoriteSendStatus.unknown;
@@ -151,6 +153,7 @@ class _FavoritePickerSheetState extends State<FavoritePickerSheet> {
       if (!mounted || !widget.repository.isSessionCurrent(_scope)) return;
       if (result.status == FavoriteSendStatus.success) {
         Navigator.of(context).pop(true);
+        showFavoriteSendSuccess();
       } else if (result.errorCode == 'PARTIAL_READY' &&
           result.status == FavoriteSendStatus.failed) {
         setState(() {

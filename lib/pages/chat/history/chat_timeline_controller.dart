@@ -143,6 +143,13 @@ class ChatTimelineController {
           result.window!.conversationID != conversationID) {
         throw StateError('History window belongs to another conversation');
       }
+      if (!initialWindowReady.value &&
+          startMsg == null &&
+          result.window != null &&
+          !_coversConversationLatest([...?result.messageList, ...messageList],
+              window: result.window)) {
+        throw StateError('Initial history window predates conversation latest');
+      }
       if (result.window?.canPublish == true &&
           hasPublishableWindow &&
           result.window!.targetWatermark < _publishedWindow!.targetWatermark) {
@@ -218,7 +225,7 @@ class ChatTimelineController {
         accountID == _currentAccountID()) {
       final cached = ChatHistoryCache.readReady(
           accountID, conversationID, (accountID, OpenIM.iMManager.token));
-      if (cached.isNotEmpty) {
+      if (cached.isNotEmpty && _coversConversationLatest(cached)) {
         _restoredReadySnapshot = true;
         _snapshotIDs.addAll(cached.map((m) => m.clientMsgID));
         messageList.value = ChatHistoryLoader.merge(cached);
@@ -311,15 +318,8 @@ class ChatTimelineController {
               !ChatHistoryCache.isRemoved(accountID, m.clientMsgID))
           .toList();
       if (safe.isEmpty && window?.emptyConfirmed != true) return;
-      final latest = conversation().latestMsg;
-      if (!displayOnly &&
-          latest?.clientMsgID?.isNotEmpty == true &&
-          !safe.any((m) => m.clientMsgID == latest!.clientMsgID) &&
-          !messageList.any((m) => m.clientMsgID == latest!.clientMsgID) &&
-          !ChatHistoryCache.isRemoved(accountID, latest!.clientMsgID) &&
-          !((latest.seq ?? 0) > 0 &&
-              window != null &&
-              latest.seq! <= window.targetWatermark)) {
+      if (!_coversConversationLatest([...safe, ...messageList],
+          window: window)) {
         return;
       }
       final liveSeqs =
@@ -388,6 +388,29 @@ class ChatTimelineController {
         'elapsedMs': watch.elapsedMilliseconds,
       });
     }
+  }
+
+  // A safe snapshot can still predate the preview the user just tapped.
+  // Do not paint that older tail and then jump when the latest page arrives.
+  // Only native coverage may account for a latest row omitted by filtering.
+  bool _coversConversationLatest(Iterable<Message> rows,
+      {MessageWindow? window}) {
+    final latest = conversation().latestMsg;
+    final id = latest?.clientMsgID;
+    if (id == null ||
+        id.isEmpty ||
+        latest!.contentType == MessageType.typing ||
+        latest.status == MessageStatus.sending ||
+        latest.status == MessageStatus.failed ||
+        removedIDs.contains(id) ||
+        ChatHistoryCache.isRemoved(accountID, id)) {
+      return true;
+    }
+    return rows.any((m) => m.clientMsgID == id) ||
+        (window?.canPublish == true &&
+            window!.conversationID == conversationID &&
+            (latest.seq ?? 0) > 0 &&
+            latest.seq! <= window.targetWatermark);
   }
 
   void _syncHistoryState() {

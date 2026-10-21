@@ -37,6 +37,7 @@ class CustomerServiceTestApi extends CustomerServiceApi {
       onSend;
   Future<CustomerServiceMessage> Function(String echoId)? onAttachment;
   final sends = <CustomerServiceTestSend>[];
+  String expectedConversation = '42';
   int listCalls = 0;
   bool disposed = false;
 
@@ -44,7 +45,7 @@ class CustomerServiceTestApi extends CustomerServiceApi {
   Future<List<CustomerServiceMessage>> listMessages(
       {required String contactId, required String conversationId}) async {
     assert(contactId == customerServiceTestSession.sourceId);
-    assert(conversationId == customerServiceTestSession.conversationId);
+    assert(conversationId == expectedConversation);
     listCalls++;
     if (onList != null) return onList!();
     return history;
@@ -57,7 +58,7 @@ class CustomerServiceTestApi extends CustomerServiceApi {
       required String content,
       required String echoId}) async {
     assert(contactId == customerServiceTestSession.sourceId);
-    assert(conversationId == customerServiceTestSession.conversationId);
+    assert(conversationId == expectedConversation);
     final request = CustomerServiceTestSend(content, echoId);
     sends.add(request);
     if (onSend != null) return onSend!(request);
@@ -96,6 +97,15 @@ class CustomerServiceTestStore extends CustomerServiceSessionStore {
       : super(accountId: 'test-account');
   Future<CustomerServiceSession> Function()? onEnsure;
   int ensureCalls = 0;
+  int recoveryCalls = 0;
+  Future<CustomerServiceSession> Function()? onRecover;
+  @override
+  Future<CustomerServiceSession> recover(CustomerServiceSession failed,
+      {required String name, String avatarUrl = ''}) async {
+    recoveryCalls++;
+    return onRecover == null ? customerServiceTestSession : await onRecover!();
+  }
+
   bool disposed = false;
 
   @override

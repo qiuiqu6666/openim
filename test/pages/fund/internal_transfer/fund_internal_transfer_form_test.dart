@@ -204,8 +204,8 @@ void main() {
             find.descendant(
                 of: find.text('提现 USDT'), matching: find.byType(RichText)));
         expect(titleParagraph.didExceedMaxLines, isFalse);
-        expect(tester.getSize(_key('fund-close')).width,
-            greaterThanOrEqualTo(48));
+        expect(
+            tester.getSize(_key('fund-close')).width, greaterThanOrEqualTo(48));
         expect(tester.getSize(_key('fund-close')).height,
             greaterThanOrEqualTo(48));
         for (final action in ['help', 'history']) {
@@ -273,17 +273,20 @@ void main() {
     });
   }
 
-  testWidgets('type contact all help and history actions call their owner',
+  testWidgets('account type is hidden and remaining actions call their owner',
       (tester) async {
     final fixture = _Fixture();
     addTearDown(fixture.dispose);
-    await _pump(tester, fixture.page());
-    await tester.tap(_key('internal-transfer-account-type'));
+    await _pump(
+        tester, fixture.page(accountType: FundTransferAccountType.account));
+    expect(_key('internal-transfer-account-type'), findsNothing);
+    expect(find.text('账号类型'), findsNothing);
+    expect(find.text('请填写收款人99号'), findsOneWidget);
     await tester.tap(_key('internal-transfer-contacts'));
     await tester.tap(_key('internal-transfer-all'));
     await tester.tap(_key('internal-transfer-help'));
     await tester.tap(_key('internal-transfer-history'));
-    expect(fixture.accountTaps, 1);
+    expect(fixture.accountTaps, 0);
     expect(fixture.contactTaps, 1);
     expect(fixture.allTaps, 1);
     expect(fixture.amount.text, '12.123456');

@@ -44,6 +44,7 @@ void main() {
   const channel = MethodChannel('flutter_openim_sdk');
   late _IM im;
   late List<FriendApplicationInfo> rows;
+  late List<FriendApplicationInfo> outgoingRows;
   late List<Completer<String>> replies;
   late bool holdRecipient, holdApplicant;
   late int calls;
@@ -68,6 +69,7 @@ void main() {
     im = Get.put<IMController>(_IM()) as _IM;
     Get.put<HomeLogic>(_Home());
     rows = [row];
+    outgoingRows = [];
     replies = [];
     holdRecipient = holdApplicant = false;
     calls = 0;
@@ -82,7 +84,7 @@ void main() {
       }
       return recipient
           ? jsonEncode(rows.map((row) => row.toJson()).toList())
-          : '[]';
+          : jsonEncode(outgoingRows.map((row) => row.toJson()).toList());
     });
   });
   tearDown(() async {
@@ -109,6 +111,38 @@ void main() {
     expect(logic.loading.value, isTrue);
     replies.single.complete('[]');
     await tester.pumpAndSettle();
+    expect(logic.loading.value, isFalse);
+  });
+
+  testWidgets('outgoing first waits for incoming before publishing the list',
+      (tester) async {
+    holdRecipient = true;
+    outgoingRows = [
+      FriendApplicationInfo(
+          fromUserID: 'me', toUserID: 'outgoing', createTime: 2)
+    ];
+    final logic = await open(tester);
+    expect(logic.applicationList, isEmpty);
+    expect(logic.loading.value, isTrue);
+    replies.single.complete(jsonEncode([row.toJson()]));
+    await tester.pumpAndSettle();
+    expect(logic.applicationList.map((e) => e.fromUserID),
+        containsAll(['me', 'other']));
+    expect(logic.loading.value, isFalse);
+  });
+
+  testWidgets('outgoing-only list appears once incoming is confirmed empty',
+      (tester) async {
+    holdRecipient = true;
+    outgoingRows = [
+      FriendApplicationInfo(
+          fromUserID: 'me', toUserID: 'outgoing', createTime: 2)
+    ];
+    final logic = await open(tester);
+    expect(logic.applicationList, isEmpty);
+    replies.single.complete('[]');
+    await tester.pumpAndSettle();
+    expect(logic.applicationList.single.toUserID, 'outgoing');
     expect(logic.loading.value, isFalse);
   });
 

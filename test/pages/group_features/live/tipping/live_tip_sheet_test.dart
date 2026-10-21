@@ -139,7 +139,11 @@ void main() {
   setUp(() {
     Get.testMode = true;
     SharedPreferences.setMockInitialValues({});
-    wallet = WalletFundTestTransport()..respond(_balances());
+    wallet = (WalletFundTestTransport()..securityCheck = ((request) => {
+      'smsRequired': false, 'reasons': <String>[], 'blockedUntil': 0,
+      'phoneMasked': '', 'currency': (request['tip'] as Map)['currency'],
+      'smsThreshold': '5', 'cooldownHours': 2,
+    }))..respond(_balances());
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(
             _sdk,
@@ -204,7 +208,8 @@ void main() {
     await tester.tap(find.byTooltip('重试余额'));
     await _frames(tester);
     expect(find.text('可用余额 12.345678 USDT'), findsOneWidget);
-    expect(wallet.requests, hasLength(2));
+    expect(wallet.requests.where((r) => r.path.endsWith('/balances')), hasLength(2));
+    expect(wallet.requests.where((r) => r.path.endsWith('/withdrawal-security/check')), isEmpty);
   });
 
   testWidgets('new tip uses the selected currency and exact smallest units',
@@ -231,7 +236,39 @@ void main() {
     expect(payment.requests.single.path, endsWith('/live/live-1/tip'));
     expect(payment.requests.single.data['currency'], 'BI99');
     expect(payment.requests.single.data['amount'], 123);
-    expect(wallet.requests, hasLength(2));
+    expect(wallet.requests.where((r) => r.path.endsWith('/balances')), hasLength(2));
+    expect(wallet.requests.where((r) => r.path.endsWith('/withdrawal-security/check')), hasLength(1));
+  });
+
+  testWidgets('tip cooldown prevents a payment request', (tester) async {
+    wallet.securityCheck = (request) => {
+      'smsRequired': false, 'reasons': <String>[],
+      'blockedUntil': DateTime.now().millisecondsSinceEpoch + 3600000,
+      'phoneMasked': '', 'currency': (request['tip'] as Map)['currency'],
+      'smsThreshold': '5', 'cooldownHours': 2,
+    };
+    final payment = LiveTransport((_) => throw StateError('Must not pay'));
+    await _mount(tester, wallet.wallet, payment: payment);
+    await tester.enterText(find.byKey(const ValueKey('live-tip-amount')), '1');
+    await tester.pump();
+    FocusManager.instance.primaryFocus?.unfocus();
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('确认打赏'));
+    await _frames(tester);
+    for (final digit in '123456'.split('')) {
+      await tester.tap(find.byKey(ValueKey('trade-password-key-$digit')));
+      await tester.pump();
+    }
+    await _frames(tester);
+    expect(find.text('暂时无法转出'), findsOneWidget);
+    expect(payment.requests, isEmpty);
+    await tester.tap(find.text('知道了'));
+    await _frames(tester);
+    EasyLoading.dismiss(animation: false);
+    await tester.pump();
+    await tester.pumpWidget(const SizedBox.shrink());
+    await tester.pump(const Duration(seconds: 5));
+    expect(payment.requests, isEmpty);
   });
 
   testWidgets('large text and keyboard keep fields and submit reachable',

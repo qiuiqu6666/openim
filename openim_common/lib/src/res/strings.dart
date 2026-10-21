@@ -205,6 +205,8 @@ class StrRes {
 
   static String get meetingEnableVideo => 'meetingEnableVideo'.tr;
 
+  static String get groupAdminAddedNtf => 'groupAdminAddedNtf'.tr;
+  static String get groupAdminRemovedNtf => 'groupAdminRemovedNtf'.tr;
   static String get memberInfoChangedNtf => 'memberInfoChangedNtf'.tr;
 
   static String get unsupportedMessage => 'unsupportedMessage'.tr;

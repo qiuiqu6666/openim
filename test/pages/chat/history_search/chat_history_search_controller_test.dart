@@ -134,6 +134,31 @@ void main() {
   });
 
   group('search state', () {
+    test('media stays newest first after loading older pages', () async {
+      final source = FakeSearchSource((call) async => call.pageIndex == 1
+          ? List.generate(
+              30,
+              (index) => message('media-$index')
+                ..contentType = MessageType.picture
+                ..sendTime = 1000 + index)
+          : [
+              message('old')
+                ..contentType = MessageType.picture
+                ..sendTime = 100
+            ]);
+      final controller =
+          ChatHistorySearchController(conversationID: 'chat', source: source);
+      addTearDown(controller.dispose);
+      await controller.search(const ChatHistorySearchQuery(
+          messageTypes: [MessageType.picture, MessageType.video]));
+      expect(controller.results.first.clientMsgID, 'media-29');
+      expect(controller.results.last.clientMsgID, 'media-0');
+      await controller.loadMore();
+      expect(controller.results.first.clientMsgID, 'media-29');
+      expect(controller.results.last.clientMsgID, 'old');
+      expect(controller.results, hasLength(31));
+    });
+
     test('initial idle becomes loading then successful empty', () async {
       final response = Completer<List<Message>>();
       final source = FakeSearchSource((_) => response.future);

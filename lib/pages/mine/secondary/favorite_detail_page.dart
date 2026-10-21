@@ -1,3 +1,4 @@
+import '../../favorites/feedback/favorite_send_feedback.dart';
 import 'package:openim_common/localization.dart';
 import 'dart:async';
 
@@ -298,7 +299,7 @@ class _FavoriteDetailPageState extends State<_FavoriteDetailContent> {
           _pendingSend = false;
           _pendingSendItem = null;
         });
-        showSettingsMessage(context, _text(AppCopy.text('已发送'), 'Sent'));
+        showFavoriteSendSuccess();
       } else {
         _pendingSend = true;
         _pendingSendItem = sendingItem;

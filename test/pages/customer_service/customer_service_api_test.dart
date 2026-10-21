@@ -28,6 +28,20 @@ void main() {
     dio.close(force: true);
   });
 
+  test('conversation lookup is scoped to the encoded visitor path', () async {
+    adapter.responses.add([
+      {'id': 354},
+      {'id': 350}
+    ]);
+    expect(await api.listConversations('contact /'), ['354', '350']);
+  });
+
+  test('invalid conversation response is not treated as an empty inbox',
+      () async {
+    adapter.responses.add({'error': 'unavailable'});
+    await expectLater(api.listConversations('contact'), throwsFormatException);
+  });
+
   for (final sample in unicodeSamples) {
     test('attachment history keeps exact ${sample.name} filename and body',
         () async {

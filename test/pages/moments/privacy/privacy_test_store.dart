@@ -34,6 +34,17 @@ class MemoryPrivacySelectionStore extends MomentsPrivacySelectionStore {
   }
 
   @override
+  Future<MomentsPrivacySelections> replace(
+      {required String ownerUserId,
+      required String baseUrl,
+      required MomentsPrivacySelections snapshot}) async {
+    ++applies;
+    if (failApply) throw StateError('Device choices could not be saved');
+    seed(ownerUserId: ownerUserId, baseUrl: baseUrl, value: snapshot);
+    return snapshot;
+  }
+
+  @override
   Future<MomentsPrivacySelections> apply(
       {required String ownerUserId,
       required String baseUrl,

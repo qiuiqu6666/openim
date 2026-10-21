@@ -52,6 +52,43 @@ class _Api extends FundApi {
 }
 
 void main() {
+  test('packet security uses total amount and excludes secrets', () {
+    final request = FundSecurityRequest.packet({
+      'clientOrderID': 'packet', 'biz': 'packet_normal', 'scene': 'group',
+      'groupID': 'group', 'currency': 'USDT', 'shareAmount': '0.01',
+      'shareCount': 3, 'payPassword': '123456', 'verifyCode': '654321',
+    });
+    expect(request.fields['amount'], '0.03');
+    expect(request.fields['shareCount'], 3);
+    expect(request.fields.containsKey('payPassword'), isFalse);
+    expect(request.fields.containsKey('verifyCode'), isFalse);
+    expect(request.toJson().keys, ['packet']);
+  });
+
+  test('swap security binds quote and both currencies', () {
+    final request = FundSecurityRequest.swap({
+      'clientOrderID': 'swap', 'fromCurrency': 'USDT', 'toCurrency': 'BI99',
+      'amount': '1.000001', 'quoteID': 'fixed-quote', 'payPassword': '123456',
+    });
+    expect(request.currency, 'USDT');
+    expect(request.fields['quoteID'], 'fixed-quote');
+    expect(request.fields['amount'], '1.000001');
+    expect(request.fields['toCurrency'], 'BI99');
+    expect(request.fields.containsKey('payPassword'), isFalse);
+    expect(request.toJson().keys, ['swap']);
+  });
+
+  test('tip security preserves minor units and live session', () {
+    final request = FundSecurityRequest.tip({
+      'clientOrderID': 'tip', 'liveSessionId': 'session', 'currency': 'BI99',
+      'amount': 123, 'memo': '谢谢', 'payPin': '123456',
+    });
+    expect(request.toJson(), {'tip': {
+      'clientOrderId': 'tip', 'sessionID': 'session', 'currency': 'BI99',
+      'amount': 123, 'memo': '谢谢',
+    }});
+  });
+
   test(
       'check and send freeze the same business fields without PIN or UI fields',
       () async {

@@ -10,8 +10,8 @@ class MomentsPrivacyChange {
   final bool enabled;
 }
 
-/// Confirmed selections on this device. This is never an ACL authority or a
-/// complete remote list: GET settings does not expose either privacy list.
+/// Cached server choices, with local confirmations for legacy servers.
+/// This snapshot never grants access; resource ACLs remain server-owned.
 class MomentsPrivacySelections {
   factory MomentsPrivacySelections(
           {Iterable<String> blockedViewerIds = const [],

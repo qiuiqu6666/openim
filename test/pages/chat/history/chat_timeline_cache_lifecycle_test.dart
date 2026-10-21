@@ -40,7 +40,7 @@ void main() {
   tearDown(ChatHistoryCache.clear);
 
   for (final change in ['none', 'delivery', 'clear', 'credentials', 'latest']) {
-    test('production reentry displays safe stale rows before refresh: $change',
+    test('production reentry restores only a current preview snapshot: $change',
         () async {
       final originalToken = OpenIM.iMManager.token;
       addTearDown(() => OpenIM.iMManager.token = originalToken);
@@ -58,7 +58,7 @@ void main() {
           snapshot: () => pending.future,
           latest: change == 'latest' ? _message('newer') : null);
       reopened.initialize(prefetch: false);
-      final canRestore = !['clear', 'credentials'].contains(change);
+      final canRestore = !['clear', 'credentials', 'latest'].contains(change);
       expect(reopened.initialWindowReady.value, canRestore);
       expect(reopened.messageList.map((m) => m.clientMsgID),
           canRestore ? ['loaded'] : isEmpty);

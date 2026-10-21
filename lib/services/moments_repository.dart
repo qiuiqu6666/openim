@@ -12,6 +12,7 @@ import '../core/controller/im_controller.dart';
 import '../core/im_callback.dart';
 import '../pages/moments/privacy/data/moments_privacy_selection_controller.dart';
 import 'moments_api.dart';
+import '../pages/moments/notifications/data/moments_notification_content.dart';
 export 'moments_api.dart';
 export '../pages/moments/privacy/data/moments_privacy_selection_store.dart';
 export '../pages/moments/privacy/data/moments_privacy_selections.dart';
@@ -77,6 +78,8 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   int _permissionGeneration = 0;
   MomentsCapabilities? capabilities;
   MomentsSettings? settings;
+  int _settingsRevision = 0;
+  final Map<String, int> _privacyWrites = {};
   final Map<String, MomentPost> _posts = {};
   final Map<String, int> _tombstones = {};
   final MomentsQueryState feedState = MomentsQueryState();
@@ -93,6 +96,7 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   final Set<String> _seenEvents = {};
   Future<MomentsCapabilities>? _capabilitiesWork;
   List<MomentNotification> _notifications = const [];
+  int _notificationContentReaders = 0;
   bool notificationsLoading = false;
   Object? notificationsError;
   bool notificationsHasMore = false;
@@ -120,7 +124,7 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
       !_disposed && _ensureSession() == scope;
   bool get available => capabilities?.enabled == true;
 
-  /// Confirmed changes made on this device, never a server ACL snapshot.
+  /// Cached server selections. Access checks remain server-owned.
   MomentsPrivacySelections get privacySelections {
     _ensureSession();
     return _privacySelections.value;
@@ -139,7 +143,14 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
   Map<String, MomentPost> get postsById => Map.unmodifiable(_posts);
   MomentPost? postById(String id) => _posts[id];
   List<MomentUser> get friends => List.unmodifiable(_friends ?? const []);
-  List<MomentNotification> get notifications => _notifications;
+  List<MomentNotification> get notifications {
+    final byId = {
+      for (final friend in _friends ?? <MomentUser>[]) friend.userId: friend
+    };
+    return List.unmodifiable(_notifications
+        .map((item) => MomentsNotificationContent.withFriend(item, byId)));
+  }
+
   int get unreadCount => notificationsCountsTrusted ? _unreadCount : 0;
   MomentsQueryState userState(String userId) =>
       _users.putIfAbsent(userId, MomentsQueryState.new);
@@ -686,8 +697,7 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
         throw const FormatException('Unexpected moments ID');
       }
       if (!_actorVisible(post.author)) {
-        throw const MomentsException('该动态暂不可见',
-            code: 'PERMISSION_REVOKED');
+        throw const MomentsException('该动态暂不可见', code: 'PERMISSION_REVOKED');
       }
       applyPost(post);
       if (trackForSync) _detailIds.add(momentId);
@@ -1014,11 +1024,25 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
       _actorVisible(item.actor) &&
       (item.comment == null || commentVisible(item.comment!)) &&
       (item.replyToUser == null || _actorVisible(item.replyToUser!));
+
+  /// The inbox owns this lease; background badge refreshes remain lightweight.
+  VoidCallback retainNotificationContent() {
+    _notificationContentReaders++;
+    var released = false;
+    return () {
+      if (released) return;
+      released = true;
+      _notificationContentReaders--;
+    };
+  }
+
   Future<MomentsPageResult<MomentNotification>> loadNotifications(
-          {bool refresh = true}) =>
-      _loadNotifications(refresh: refresh);
+          {bool refresh = true, bool includeContent = false}) =>
+      _loadNotifications(refresh: refresh, includeContent: includeContent);
   Future<MomentsPageResult<MomentNotification>> _loadNotifications(
-      {bool refresh = true, bool allowContextRetry = true}) async {
+      {bool refresh = true,
+      bool allowContextRetry = true,
+      bool includeContent = false}) async {
     final scope = _ensureSession();
     final permission = _permissionGeneration;
     if (notificationsLoading && !refresh) {
@@ -1063,6 +1087,10 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
         for (final item in visible) item.notificationId: item
       };
       _notifications = List.unmodifiable(all.values);
+      if (includeContent || _notificationContentReaders > 0) {
+        unawaited(_completeNotificationContent(
+            visible, scope, permission, generation));
+      }
       _notificationCursor = page.nextCursor;
       _notificationContextVersion = page.viewerContextVersion;
       notificationsHasMore = page.hasMore;
@@ -1086,7 +1114,8 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
         notificationsError = error;
         _handlePrivacyError(error);
         if (allowContextRetry && _paginationInvalid(error)) {
-          return _loadNotifications(allowContextRetry: false);
+          return _loadNotifications(
+              allowContextRetry: false, includeContent: includeContent);
         }
       }
       rethrow;
@@ -1096,6 +1125,33 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
         _notify();
       }
     }
+  }
+
+  Future<void> _completeNotificationContent(List<MomentNotification> items,
+      String scope, int permission, int generation) async {
+    bool current() =>
+        isSessionCurrent(scope) &&
+        permission == _permissionGeneration &&
+        generation == _notificationGeneration;
+    final enriched = await MomentsNotificationContent.load(
+        items: items,
+        api: api,
+        isCurrent: current,
+        canReadPost: (post) => _actorVisible(post.author));
+    if (!current()) return;
+    final byId = {for (final item in enriched) item.notificationId: item};
+    final updated = _notifications.map((item) {
+      final content = byId[item.notificationId];
+      return content == null
+          ? item
+          : item.read
+              ? content.asRead()
+              : content;
+    }).toList();
+    final visible = updated.where(_notificationVisible).toList();
+    if (visible.length != updated.length) notificationsCountsTrusted = false;
+    _notifications = List.unmodifiable(visible);
+    _notify();
   }
 
   Future<void> markNotificationsRead(
@@ -1127,11 +1183,15 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
     final scope = _ensureSession();
     await _requireFeature('settings');
     _guard(scope);
+    final revision = _settingsRevision;
     final value = await _protect(api.settings);
     _guard(scope);
-    settings = value;
+    if (revision != _settingsRevision || (_privacyWrites[scope] ?? 0) > 0) {
+      return settings ?? value;
+    }
+    await _acceptSettings(value, scope);
     _notify();
-    return value;
+    return settings ?? value;
   }
 
   Future<MomentsSettings> updateSettings(
@@ -1150,25 +1210,61 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
         clearCover: clearCover,
         expectedVersion: expectedVersion ?? previous.version));
     _guard(scope);
-    settings = value;
+    ++_settingsRevision;
+    await _acceptSettings(value, scope);
     _clearPrivateState();
     _notify();
-    return value;
+    return settings ?? value;
+  }
+
+  Future<void> _acceptSettings(MomentsSettings value, String scope) async {
+    _guard(scope);
+    if (settings != null && value.version < settings!.version) return;
+    final previous = settings;
+    final changed = previous != null && value.version != previous.version;
+    settings = value;
+    if (value.blockedViewersLoaded && value.hiddenAuthorsLoaded) {
+      final work = _privacySelections.synchronize(
+          ownerUserId: currentUserId,
+          baseUrl: baseUrl,
+          snapshot: MomentsPrivacySelections(
+              blockedViewerIds: value.blockedViewerIds,
+              hiddenAuthorIds: value.hiddenAuthorIds));
+      if (changed) _relationChanged();
+      _notify();
+      await work;
+      _guard(scope);
+    }
   }
 
   Future<MomentsPrivacySelections> loadPrivacySelections(
-      {bool force = false}) async {
+      {bool force = false, bool refreshRemote = true}) async {
     final scope = _ensureSession();
     final owner = currentUserId;
     final server = baseUrl;
     if (owner.isEmpty) {
       throw const MomentsException('请重新登录', authRequired: true);
     }
-    final value = await _privacySelections.load(
-        ownerUserId: owner, baseUrl: server, force: force);
+    Object? cacheError;
+    try {
+      await _privacySelections.load(
+          ownerUserId: owner, baseUrl: server, force: force);
+    } catch (error) {
+      if (!refreshRemote) rethrow;
+      cacheError = error;
+      // A broken cache must not prevent recovery from the authoritative server.
+    }
     _guard(scope);
     _notify();
-    return value;
+    if (refreshRemote) {
+      final remote = await loadSettings();
+      if (cacheError != null &&
+          !(remote.blockedViewersLoaded && remote.hiddenAuthorsLoaded)) {
+        throw cacheError;
+      }
+    }
+    _guard(scope);
+    return _privacySelections.value;
   }
 
   Future<void> retryPrivacyPersistence() async {
@@ -1186,14 +1282,35 @@ class MomentsRepository extends ChangeNotifier with WidgetsBindingObserver {
     final server = baseUrl;
     await _requireFeature('settings');
     _guard(scope);
-    await loadPrivacySelections();
+    await loadPrivacySelections(refreshRemote: false);
     _guard(scope);
-    // The response is an operation acknowledgement. It cannot restore either
-    // list and must not overwrite the cover, visible range or settings version.
-    await _protect(() => kind == MomentsPrivacySelectionKind.blockedViewer
-        ? api.setBlockedViewer(userId, enabled)
-        : api.setHiddenAuthor(userId, enabled));
+    ++_settingsRevision;
+    _privacyWrites[scope] = (_privacyWrites[scope] ?? 0) + 1;
+    late MomentsSettings response;
+    try {
+      response = await _protect(() =>
+          kind == MomentsPrivacySelectionKind.blockedViewer
+              ? api.setBlockedViewer(userId, enabled)
+              : api.setHiddenAuthor(userId, enabled));
+    } finally {
+      final pending = (_privacyWrites[scope] ?? 1) - 1;
+      if (pending == 0) {
+        _privacyWrites.remove(scope);
+      } else {
+        _privacyWrites[scope] = pending;
+      }
+      if (isSessionCurrent(scope)) ++_settingsRevision;
+    }
     _guard(scope);
+    if (response.blockedViewersLoaded && response.hiddenAuthorsLoaded) {
+      final acceptance = _acceptSettings(response, scope);
+      _relationChanged();
+      await acceptance;
+      _guard(scope);
+      _notify();
+      return settings ?? response;
+    }
+    // Legacy servers return only an acknowledgement; retain other settings.
     final confirmation = _privacySelections.confirm(
         ownerUserId: owner,
         baseUrl: server,

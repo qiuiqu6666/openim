@@ -94,6 +94,18 @@ class CustomerServiceApi {
     return _required(map['id']?.toString() ?? '', 'conversation id');
   }
 
+  Future<List<String>> listConversations(String sourceId) async {
+    final raw = await _request('GET', '${_contact(sourceId)}/conversations');
+    if (raw is! List) throw const FormatException('Invalid conversation list');
+    return raw.map((row) {
+      if (row is! Map) throw const FormatException('Invalid conversation');
+      return _required(row['id']?.toString() ?? '', 'conversation id');
+    }).toList();
+  }
+
+  static bool isNotFound(Object error) =>
+      error is DioException && error.response?.statusCode == 404;
+
   Future<List<CustomerServiceMessage>> listMessages({
     required String contactId,
     required String conversationId,

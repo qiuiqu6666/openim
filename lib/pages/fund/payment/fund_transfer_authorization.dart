@@ -22,7 +22,9 @@ class FundTransferAuthorization {
   Future<FundSecurityProof> authorize(BuildContext context,
       Map<String, dynamic> request, bool Function() isCurrent) async {
     if (!isCurrent()) throw const PasswordPaymentException('登录状态已变更，请重新打开页面');
-    final transaction = FundSecurityRequest.transfer(request);
+    final transaction = request['biz'] != null
+        ? FundSecurityRequest.packet(request)
+        : FundSecurityRequest.transfer(request);
     final fingerprint = jsonEncode(transaction.toJson());
     if (_verifiedRequest == fingerprint &&
         _proof != null &&
@@ -39,6 +41,8 @@ class FundTransferAuthorization {
 
   /// An accepted original order is recovered before SMS or another POST.
   Future<FundOrder?> recover(Map<String, dynamic> request) async {
+    // Packet retries also complete server-side group message delivery.
+    if (request['biz'] != null) return null;
     FundOrder order;
     try {
       order = await api.getOrderByClient(request['clientOrderID'] as String);
@@ -51,7 +55,9 @@ class FundTransferAuthorization {
         order.recvID != request['recvID'] ||
         order.groupID != (request['groupID'] ?? '') ||
         order.scene.name !=
-            (request['recipientType'] != null ? 'internal' : request['scene']) ||
+            (request['recipientType'] != null
+                ? 'internal'
+                : request['scene']) ||
         (order.recipientType.isNotEmpty &&
             order.recipientType != (request['recipientType'] ?? '')) ||
         (order.recipient.isNotEmpty &&

@@ -237,34 +237,6 @@ class FundInternalTransferForm extends StatelessWidget {
         ]));
   }
 
-  Widget _accountType(BuildContext context) {
-    final colors = FundPageColors.of(context);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      _label(context, _text(context, AppCopy.text('账号类型'), 'Account type')),
-      const SizedBox(height: FundInternalTransferTokens.labelGap),
-      _fieldSurface(
-          context,
-          InkWell(
-              key: const ValueKey('internal-transfer-account-type'),
-              borderRadius:
-                  BorderRadius.circular(FundInternalTransferTokens.fieldRadius),
-              onTap: _editable ? onChooseAccountType : null,
-              child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                      vertical: FundInternalTransferTokens.fieldPadding),
-                  child: Row(children: [
-                    Expanded(
-                        child: Text(_accountLabel(context),
-                            style: _style(
-                                context, FundInternalTransferTokens.inputFont,
-                                weight: FontWeight.w600))),
-                    Icon(Icons.keyboard_arrow_down_rounded,
-                        color: colors.subText,
-                        size: FundInternalTransferTokens.iconSize),
-                  ])))),
-    ]);
-  }
-
   Widget _recipient(BuildContext context) {
     final colors = FundPageColors.of(context);
     return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -366,17 +338,13 @@ class FundInternalTransferForm extends StatelessWidget {
                 key: const ValueKey('internal-transfer-all'),
                 onPressed: _editable ? onAll : null,
                 style: TextButton.styleFrom(
-                    foregroundColor: colors.dark
-                        ? Color.lerp(AppTokens.success, colors.text, .18)
-                        : AppTokens.success,
+                    foregroundColor: colors.text,
                     minimumSize: const Size(
                         FundInternalTransferTokens.targetMinSize,
                         FundInternalTransferTokens.targetMinSize)),
                 child: Text(_text(context, '全部', 'All'),
                     style: _style(context, FundInternalTransferTokens.inputFont,
-                        color: colors.dark
-                            ? Color.lerp(AppTokens.success, colors.text, .18)
-                            : AppTokens.success,
+                        color: colors.text,
                         weight: FontWeight.w600))),
           ])),
       const SizedBox(height: FundInternalTransferTokens.smallGap),
@@ -532,11 +500,6 @@ class FundInternalTransferForm extends StatelessWidget {
                                                         CrossAxisAlignment
                                                             .start,
                                                     children: [
-                                                  _accountType(context),
-                                                  const SizedBox(
-                                                      height:
-                                                          FundInternalTransferTokens
-                                                              .sectionGap),
                                                   _recipient(context),
                                                   const SizedBox(
                                                       height:

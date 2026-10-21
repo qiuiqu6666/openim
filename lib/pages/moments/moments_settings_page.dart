@@ -118,7 +118,7 @@ class _MomentsSettingsPageState extends State<MomentsSettingsPage> {
       return;
     }
     try {
-      await repository.loadPrivacySelections();
+      await repository.loadPrivacySelections(refreshRemote: false);
     } catch (error) {
       if (mounted && request == _requestGeneration) {
         setState(() => _privacyError = error);
@@ -309,7 +309,7 @@ class _MomentsSettingsPageState extends State<MomentsSettingsPage> {
           MomentsStatePanel(
             icon: Icons.cloud_off_rounded,
             title: momentsText(context,
-                zh: '本机选择加载失败', en: 'Could not load choices on this device'),
+                zh: '权限名单加载失败', en: 'Could not load privacy choices'),
             message: momentsErrorText(context, _privacyError!),
             actionLabel: momentsText(context, zh: '重新加载', en: 'Reload'),
             onAction: _saving || _loading ? null : () => unawaited(_load()),
@@ -328,10 +328,10 @@ class _MomentsSettingsPageState extends State<MomentsSettingsPage> {
                 ? null
                 : () => unawaited(_retryPrivacyPersistence()),
           ),
-        if (settings != null)
+        if (settings != null && settings.updatedAt > 0)
           SettingsSectionText(momentsText(context,
-              zh: '人数为此设备上已设置的朋友。',
-              en: 'Counts show friends set on this device.')),
+              zh: '服务端更新时间：${DateTime.fromMillisecondsSinceEpoch(settings.updatedAt).toLocal().toString().split('.').first}',
+              en: 'Last server update: ${DateTime.fromMillisecondsSinceEpoch(settings.updatedAt).toLocal().toString().split('.').first}')),
       ],
     );
   }

@@ -711,6 +711,17 @@ class IMUtils {
               }
             }
             break;
+          case MessageType.groupMemberSetToAdminNotification:
+          case MessageType.groupMemberSetToOrdinaryUserNotification:
+            final ntf = GroupMemberInfoChangedNotification.fromJson(map);
+            text = sprintf(
+              message.contentType == MessageType.groupMemberSetToAdminNotification
+                  ? StrRes.groupAdminAddedNtf
+                  : StrRes.groupAdminRemovedNtf,
+              [getGroupMemberShowName(ntf.opUser!),
+               getGroupMemberShowName(ntf.changedUser!)],
+            );
+            break;
           case MessageType.groupMemberInfoChangedNotification:
             final ntf = GroupMemberInfoChangedNotification.fromJson(map);
             text = sprintf(StrRes.memberInfoChangedNtf,

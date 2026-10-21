@@ -142,8 +142,8 @@ class MomentMedia {
             json['coverMediaID'] ??
             json['coverMediaId']),
         type: _string(json['type']).isEmpty ? 'IMAGE' : _string(json['type']),
-        contentPath: _string(json['contentPath']),
-        thumbPath: _string(json['thumbPath']),
+        contentPath: _string(json['contentPath'] ?? json['url']),
+        thumbPath: _string(json['thumbPath'] ?? json['thumbUrl']),
         width: _optionalInt(json['width']),
         height: _optionalInt(json['height']),
         durationSec: _optionalInt(json['durationSec']),
@@ -470,10 +470,12 @@ class MomentsSettings {
       this.visibleRangeDays = 0,
       this.blockedViewerIds = const [],
       this.hiddenAuthorIds = const [],
-      this.blockedViewersLoaded = true,
-      this.hiddenAuthorsLoaded = true,
+      this.blockedViewersLoaded = false,
+      this.hiddenAuthorsLoaded = false,
       this.version = 0,
-      this.viewerContextVersion = ''});
+      this.viewerContextVersion = '',
+      this.updatedAt = 0});
+  final int updatedAt;
   final String? coverUrl, coverMediaId;
   final String viewerContextVersion;
   final int visibleRangeDays, version;
@@ -493,12 +495,27 @@ class MomentsSettings {
           hiddenAuthorIds: _settingsIds(json.containsKey('hiddenAuthorIDs')
               ? json['hiddenAuthorIDs']
               : json['hiddenAuthorIds']),
-          blockedViewersLoaded: json.containsKey('blockedViewerIDs') ||
+          blockedViewersLoaded: json['privacyListsLoaded'] == true ||
+              json.containsKey('blockedViewerIDs') ||
               json.containsKey('blockedViewerIds'),
-          hiddenAuthorsLoaded: json.containsKey('hiddenAuthorIDs') ||
+          hiddenAuthorsLoaded: json['privacyListsLoaded'] == true ||
+              json.containsKey('hiddenAuthorIDs') ||
               json.containsKey('hiddenAuthorIds'),
-          version: _int(json['version']),
+          updatedAt: int.tryParse('${json['updatedAt']}') ?? 0,
+          version: int.tryParse('${json['version']}') ?? 0,
           viewerContextVersion: _string(json['viewerContextVersion']));
+}
+
+MomentMedia? _notificationMedia(Map<String, dynamic> json) {
+  final id = _string(json['mediaID'] ?? json['mediaId']);
+  final content = _string(json['contentPath'] ?? json['url']);
+  final thumb = _string(json['thumbPath'] ?? json['thumbUrl']);
+  if (id.isEmpty && content.isEmpty && thumb.isEmpty) return null;
+  return MomentMedia(
+      mediaId: id,
+      contentPath: content,
+      thumbPath: thumb,
+      type: _string(json['type'], 'IMAGE').toUpperCase());
 }
 
 class MomentNotification {
@@ -509,6 +526,7 @@ class MomentNotification {
       this.momentId = '',
       this.commentId = '',
       this.momentText = '',
+      this.previewMedia,
       this.comment,
       MomentUser? replyToUser,
       this.createdAt = 0,
@@ -518,6 +536,7 @@ class MomentNotification {
       : _replyToUser = replyToUser;
   final String notificationId, type, momentId, commentId, momentText;
   final MomentUser actor;
+  final MomentMedia? previewMedia;
   final MomentComment? comment;
   final MomentUser? _replyToUser;
   MomentUser? get replyToUser =>
@@ -537,7 +556,10 @@ class MomentNotification {
         type: _string(json['type']).toUpperCase(),
         momentId: _string(json['momentID'] ?? json['momentId']),
         commentId: _string(json['commentID'] ?? json['commentId']),
-        momentText: _string(json['momentText']),
+        momentText: _string(json['momentText'] ?? json['postText']),
+        previewMedia: json['momentPreviewMedia'] is Map
+            ? _notificationMedia(momentsMap(json['momentPreviewMedia']))
+            : null,
         comment: json['comment'] == null
             ? null
             : MomentComment.fromJson(momentsMap(json['comment'])),
@@ -553,6 +575,29 @@ class MomentNotification {
             : json['read'] == true || json['readAt'] != null,
         available: json['available'] != false && json['unavailable'] != true,
       );
+  MomentNotification withContent({
+    MomentUser? actor,
+    String? momentText,
+    MomentMedia? previewMedia,
+    MomentComment? comment,
+    MomentUser? replyToUser,
+    bool? available,
+  }) =>
+      MomentNotification(
+        notificationId: notificationId,
+        actor: actor ?? this.actor,
+        type: type,
+        momentId: momentId,
+        commentId: commentId,
+        momentText: momentText ?? this.momentText,
+        previewMedia: previewMedia ?? this.previewMedia,
+        comment: comment ?? this.comment,
+        replyToUser: replyToUser ?? this.replyToUser,
+        createdAt: createdAt,
+        read: read,
+        available: available ?? this.available,
+        seq: seq,
+      );
   MomentNotification asRead() => MomentNotification(
       notificationId: notificationId,
       actor: actor,
@@ -560,6 +605,7 @@ class MomentNotification {
       momentId: momentId,
       commentId: commentId,
       momentText: momentText,
+      previewMedia: previewMedia,
       comment: comment,
       replyToUser: replyToUser,
       createdAt: createdAt,

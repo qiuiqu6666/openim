@@ -34,7 +34,7 @@ void main() {
       final info = ConversationInfo(
           conversationID: 'chat',
           isPrivateChat: outcome == 'private-existing',
-          latestMsg: row('not-yet-local', 100));
+          latestMsg: row('stored', 1));
       final timeline = ChatTimelineController(
           accountID: 'me',
           currentAccountID: () => 'me',
