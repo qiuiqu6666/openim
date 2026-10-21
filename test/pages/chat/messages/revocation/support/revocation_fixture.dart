@@ -5,7 +5,7 @@ import 'package:openim/pages/chat/messages/revocation/chat_message_revocation.da
 class RevocationFixture {
   RevocationFixture({Future<bool> Function()? confirm}) {
     controller = ChatMessageRevocation(
-      confirm: confirm,
+      confirm: confirm == null ? null : (_) => confirm(),
       log: events.add,
       conversationID: () => conversation,
       currentUserID: () => account,

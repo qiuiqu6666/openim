@@ -127,6 +127,7 @@ class ChatPage extends StatelessWidget {
                         : GroupAnnouncementBanner(
                             text: logic.announcement.value,
                             version: logic.announcementVersion.value,
+                        publisherID: logic.groupInfo?.notificationUserID,
                             groupID: logic.groupID!,
                             userID: OpenIM.iMManager.userID,
                             preferences: SpUtil().prefs,

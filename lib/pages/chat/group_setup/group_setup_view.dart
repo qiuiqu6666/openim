@@ -459,7 +459,9 @@ class GroupSetupPage extends StatelessWidget {
                 : (logic.groupInfo.value.notification?.trim().isNotEmpty ??
                         false)
                     ? () => showGroupAnnouncementSheet(
-                        Get.context!, logic.groupInfo.value.notification!)
+                        Get.context!, logic.groupInfo.value.notification!,
+                        publishedAt: logic.groupInfo.value.notificationUpdateTime,
+                        publisherID: logic.groupInfo.value.notificationUserID)
                     : null),
       ]);
 }

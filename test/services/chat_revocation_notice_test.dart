@@ -4,6 +4,23 @@ import 'package:openim/services/chat_history_cache.dart';
 import 'package:openim/services/chat_revocation_notice.dart';
 
 void main() {
+  test('group admin recall names both operator and original sender', () {
+    final source = Message(sendID: 'member', senderNickname: '小明',
+        sessionType: ConversationType.superGroup);
+    final info = RevokedInfo(revokerID: 'admin', revokerNickname: '南风',
+        sourceMessageSendID: 'member', sourceMessageSenderNickname: '小明');
+    final notice = ChatRevocationNotice.replace(source, info);
+    expect(ChatRevocationNotice.text(notice, 'viewer'), '南风撤回了小明的一条消息');
+    expect(ChatRevocationNotice.text(notice, 'admin'), '你撤回了小明的一条消息');
+    expect(ChatRevocationNotice.text(notice, 'member'), '南风撤回了你的一条消息');
+    info.sourceMessageSenderNickname = null;
+    expect(ChatRevocationNotice.text(ChatRevocationNotice.replace(source, info), 'viewer'),
+        '南风撤回了小明的一条消息');
+    info.revokerID = 'member';
+    info.revokerNickname = '小明';
+    expect(ChatRevocationNotice.text(ChatRevocationNotice.replace(source, info), 'viewer'),
+        '小明撤回了一条消息');
+  });
   tearDown(ChatHistoryCache.clear);
 
   Message original() => Message(

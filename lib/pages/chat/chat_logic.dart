@@ -352,12 +352,20 @@ class ChatLogic extends SuperController {
     isClosed: () => _sessionInactive || isOfficialNotificationChat,
   );
   late final _revocation = ChatMessageRevocation(
-    confirm: () async {
+    confirm: (message) async {
       final context = Get.context;
       if (_sessionInactive || context == null || !context.mounted) return false;
       return MessageActionConfirmationSheet.show(
         context,
-        title: 'chatMessageRevokeConfirm'.tr,
+        title: message.isGroupChat && message.sendID != OpenIM.iMManager.userID
+            ? 'chatMessageRevokeMemberConfirm'.trParams({
+                'name': getNewestNickname(message)?.trim().isNotEmpty == true
+                    ? getNewestNickname(message)!.trim()
+                    : message.senderNickname?.trim().isNotEmpty == true
+                        ? message.senderNickname!.trim()
+                        : message.sendID ?? '',
+              })
+            : 'chatMessageRevokeConfirm'.tr,
         action: StrRes.menuRevoke,
         sheetKey: const ValueKey('message-revoke-confirmation-sheet'),
       );

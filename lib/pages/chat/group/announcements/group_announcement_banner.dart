@@ -1,9 +1,11 @@
 import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'announcement_mention_link.dart';
 import 'group_announcement_marquee.dart';
+import 'group_announcement_publisher.dart';
 
 class GroupAnnouncementBanner extends StatefulWidget {
   const GroupAnnouncementBanner(
@@ -12,8 +14,10 @@ class GroupAnnouncementBanner extends StatefulWidget {
       required this.groupID,
       required this.userID,
       this.version = '',
+      this.publisherID,
       this.preferences});
   final String version;
+  final String? publisherID;
   final String text;
   final String groupID;
   final String userID;
@@ -114,7 +118,9 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner> {
     final key = _readKey;
     final preferences = widget.preferences;
     try {
-      final confirmed = await showGroupAnnouncementSheet(context, text);
+      final confirmed = await showGroupAnnouncementSheet(context, text,
+          publisherID: widget.publisherID,
+          publishedAt: int.tryParse(widget.version));
       if (confirmed == true) {
         final prefs = preferences ?? await SharedPreferences.getInstance();
         await prefs.setString(key, text);
@@ -221,7 +227,8 @@ class _GroupAnnouncementBannerState extends State<GroupAnnouncementBanner> {
   }
 }
 
-Future<bool?> showGroupAnnouncementSheet(BuildContext context, String text) =>
+Future<bool?> showGroupAnnouncementSheet(BuildContext context, String text,
+        {int? publishedAt, String? publisherID}) =>
     showModalBottomSheet<bool>(
       context: context,
       isScrollControlled: true,
@@ -245,6 +252,20 @@ Future<bool?> showGroupAnnouncementSheet(BuildContext context, String text) =>
                         .textTheme
                         .headlineSmall
                         ?.copyWith(fontWeight: FontWeight.bold)),
+                if (publishedAt != null && publishedAt > 0) ...[
+                  const SizedBox(height: AppTokens.s3),
+                  Text(
+                    '${AppCopy.text('发布时间')}：${DateFormat('yyyy-MM-dd HH:mm').format(DateTime.fromMillisecondsSinceEpoch(publishedAt < 100000000000 ? publishedAt * 1000 : publishedAt))}',
+                    key: const ValueKey('announcement-published-at'),
+                    style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                        color: Theme.of(sheetContext).colorScheme.onSurfaceVariant),
+                  ),
+                ],
+                if (publisherID?.trim().isNotEmpty == true) ...[
+                  const SizedBox(height: AppTokens.s3),
+                  GroupAnnouncementPublisher(
+                    key: ValueKey(publisherID), userID: publisherID!.trim()),
+                ],
                 const SizedBox(height: 22),
                 Flexible(
                     child: SingleChildScrollView(

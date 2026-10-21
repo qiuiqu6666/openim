@@ -49,6 +49,7 @@ const Map<String, String> zhTW = {
   'chatSelectionForwardLimit': '逐條轉發最多選擇30條訊息',
   'chatSelectionMergeLimit': '合併轉發最多選擇100條訊息',
   'chatMessageDeleteConfirm': '確定刪除這條訊息？',
+  'chatMessageRevokeMemberConfirm': '確定撤回 @name 的這則訊息？',
   'chatMessageRevokeConfirm': '確定撤回這條訊息？',
   'chatSelectionDeleteConfirm': '確定刪除已選的 @count 條訊息？',
   'chatSelectionDeleteFailed': '部分訊息刪除失敗，請重試',

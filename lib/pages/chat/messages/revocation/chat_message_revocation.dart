@@ -44,7 +44,7 @@ class ChatMessageRevocation {
   final int Function() groupRevision;
   final bool Function(Message) isCurrentMessage;
   final void Function(String) onRevoked, showFeedback;
-  final Future<bool> Function()? confirm;
+  final Future<bool> Function(Message message)? confirm;
   final RevocationLog? log;
   bool _confirming = false;
   final RevokeMemberReader _readMembers;
@@ -158,7 +158,7 @@ class ChatMessageRevocation {
         _confirming = true;
         final bool confirmed;
         try {
-          confirmed = await confirm!();
+          confirmed = await confirm!(message);
         } finally {
           _confirming = false;
         }

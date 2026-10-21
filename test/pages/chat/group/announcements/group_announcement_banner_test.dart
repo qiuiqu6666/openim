@@ -7,6 +7,20 @@ import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('announcement sheet displays server publication time', (tester) async {
+    final date = DateTime(2026, 10, 22, 9, 30);
+    await tester.pumpWidget(ScreenUtilInit(builder: (_, __) => MaterialApp(home: Scaffold(body: Builder(
+      builder: (context) => TextButton(onPressed: () => showGroupAnnouncementSheet(
+        context, '公告内容', publisherID: 'publisher-123', publishedAt: date.millisecondsSinceEpoch ~/ 1000),
+        child: const Text('open')),
+    )))));
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('2026-10-22 09:30'), findsOneWidget);
+    expect(find.textContaining('publisher-123'), findsOneWidget);
+    expect(find.byKey(const ValueKey('announcement-published-at')), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
   for (final dark in [false, true]) {
     for (final dimensions in [(375.0, 1.0), (320.0, 2.0)]) {
       testWidgets(

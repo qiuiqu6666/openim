@@ -48,6 +48,7 @@ const Map<String, String> zh_CN = {
   'chatSelectionForwardLimit': '逐条转发最多选择30条消息',
   'chatSelectionMergeLimit': '合并转发最多选择100条消息',
   'chatMessageDeleteConfirm': '确定删除这条消息？',
+  'chatMessageRevokeMemberConfirm': '确定撤回 @name 的这条消息？',
   'chatMessageRevokeConfirm': '确定撤回这条消息？',
   'chatSelectionDeleteConfirm': '确定删除已选的 @count 条消息？',
   'chatSelectionDeleteFailed': '部分消息删除失败，请重试',
