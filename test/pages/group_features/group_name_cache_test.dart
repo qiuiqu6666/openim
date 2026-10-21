@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import 'package:openim/pages/group_features/personalization/group_personalization.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hive/hive.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
@@ -28,6 +29,70 @@ void main() {
         fetchGroups: fetch ?? (_) async => [],
         nameCache: GroupNameCache(user),
       );
+
+  test('cold restart restores custom color and uploaded icon without SDK reads',
+      () async {
+    var calls = 0;
+    final first = store('alice');
+    first.seed(GroupInfo(
+        groupID: 'g',
+        ex: const GroupPersonalization(
+                color: 0xFFDC2626, iconUrl: 'https://example.com/icon.png')
+            .mergeInto(null)));
+    await Hive.box<dynamic>(GroupNameCache.boxName).flush();
+    first.dispose();
+    await Hive.close();
+    await GroupNameCache.initialize();
+    final restarted = store('alice', fetch: (_) async {
+      calls++;
+      throw StateError('offline');
+    });
+    addTearDown(restarted.dispose);
+    final appearance =
+        GroupPersonalization.fromEx(restarted.nameAppearanceEx('g'));
+    expect(appearance.color, 0xFFDC2626);
+    expect(appearance.iconUrl, 'https://example.com/icon.png');
+    expect(calls, 0);
+    expect(restarted.cachedGroupInfo('g'), isNull);
+    expect(restarted.features('g').valid, isFalse);
+    final other = store('bob');
+    addTearDown(other.dispose);
+    expect(other.nameAppearanceEx('g'), isNull);
+    restarted.invalidateSession();
+    expect(restarted.nameAppearanceEx('g'), isNull);
+  });
+
+  test('preset icon persists and reset, remote changes and leaving replace it',
+      () async {
+    final current = store('alice');
+    addTearDown(current.dispose);
+    current.seed(GroupInfo(
+        groupID: 'g',
+        ex: const GroupPersonalization(color: 0xFFDC2626, iconKey: 'heart')
+            .mergeInto(null)));
+    await Hive.box<dynamic>(GroupNameCache.boxName).flush();
+    expect(
+        GroupPersonalization.fromEx(GroupNameCache('alice').readAppearance('g'))
+            .iconKey,
+        'heart');
+    current.seed(GroupInfo(
+        groupID: 'g',
+        ex: const GroupPersonalization(color: 0xFF008BFF).mergeInto(null)));
+    await Hive.box<dynamic>(GroupNameCache.boxName).flush();
+    var saved = GroupPersonalization.fromEx(
+        GroupNameCache('alice').readAppearance('g'));
+    expect(saved.iconKey, isNull);
+    expect(saved.color, 0xFF008BFF);
+    current.seed(GroupInfo(
+        groupID: 'g', ex: const GroupPersonalization().mergeInto(null)));
+    await Hive.box<dynamic>(GroupNameCache.boxName).flush();
+    saved = GroupPersonalization.fromEx(
+        GroupNameCache('alice').readAppearance('g'));
+    expect(saved.color, isNull);
+    current.remove('g');
+    await Hive.box<dynamic>(GroupNameCache.boxName).flush();
+    expect(GroupNameCache('alice').readAppearance('g'), isNull);
+  });
 
   test('reopened database restores display synchronously without permissions',
       () async {

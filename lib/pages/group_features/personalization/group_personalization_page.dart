@@ -6,6 +6,7 @@ import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import '../../chat/group_setup/group_setup_logic.dart';
 import 'group_personalization_editor.dart';
 import 'group_personalization.dart';
+import '../data/group_name_cache.dart';
 
 class GroupPersonalizationPage extends StatefulWidget {
   const GroupPersonalizationPage({super.key, required this.logic});
@@ -82,6 +83,9 @@ class _GroupPersonalizationPageState extends State<GroupPersonalizationPage> {
       final ex = appearance.mergeInto(latest.ex);
       await manager
           .setGroupInfo(GroupInfo(groupID: permission.groupID, ex: ex));
+      if (!current) return;
+      await GroupNameCache(permission.sdkAccount)
+          .writeAppearance(permission.groupID, ex);
       if (!current) return;
       latest.ex = ex;
       widget.logic.applyGroupInfo(latest);

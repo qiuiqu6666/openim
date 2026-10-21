@@ -236,15 +236,14 @@ class GroupPersonalizationEditor extends StatelessWidget {
                                                     appearance.iconUrl != null,
                                                 child: appearance.iconUrl !=
                                                         null
-                                                    ? Image.network(
-                                                        appearance.iconUrl!,
+                                                    ? ImageUtil.networkImage(
+                                                        url:
+                                                            appearance.iconUrl!,
                                                         width: tile * .72,
                                                         height: tile * .72,
-                                                        errorBuilder: (_, __,
-                                                                ___) =>
-                                                            const Icon(
-                                                                CupertinoIcons
-                                                                    .photo))
+                                                        errorWidget: const Icon(
+                                                            CupertinoIcons
+                                                                .photo))
                                                     : Column(
                                                         mainAxisSize:
                                                             MainAxisSize.min,

@@ -93,6 +93,13 @@ class GroupFeatureStore extends ChangeNotifier {
   GroupGameType gameType(String id) => active && !_left.contains(id)
       ? _gameTypes[id] ?? nameCache?.read(id) ?? GroupGameType.ordinary
       : GroupGameType.ordinary;
+  String? nameAppearanceEx(String id) {
+    if (!active || _left.contains(id)) return null;
+    return _groups.containsKey(id)
+        ? _groups[id]!.ex
+        : nameCache?.readAppearance(id);
+  }
+
   GroupFeatures features(String id) => _features[id] ?? const GroupFeatures();
   GroupLiveFeature liveFeature(String id) =>
       _liveStates[id]?.feature ?? features(id).live;
@@ -200,6 +207,7 @@ class GroupFeatureStore extends ChangeNotifier {
     _groups[id] = GroupInfo.fromJson(info.toJson());
     _gameTypes[id] = nextGameType;
     unawaited(nameCache?.write(id, nextGameType));
+    unawaited(nameCache?.writeAppearance(id, info.ex));
     _requested.add(id);
     _queued.remove(id);
     final summary = GroupFeatures.fromEx(info.ex);
@@ -677,6 +685,7 @@ class GroupFeatureStore extends ChangeNotifier {
     _groups.remove(id);
     _gameTypes.remove(id);
     unawaited(nameCache?.write(id, null));
+    unawaited(nameCache?.removeAppearance(id));
     _features.remove(id);
     _liveStates.remove(id);
     _pendingMirrors.remove(id);

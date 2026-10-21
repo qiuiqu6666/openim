@@ -11,3 +11,5 @@
 界面采用渐变预览卡、网格颜色选项、横向图标选择和固定底部保存按钮。仅提供默认颜色和预设颜色；内置图标以 iconKey 保存（robot/heart/crown/game/beer/football），并复用共享群名组件显示，未知标识忽略。上传图标与内置图标互斥。
 
 Reference layout uses a 938px baseline with six color columns and seven icon columns (fewer on narrow screens). All thirteen icons reuse source windows from the supplied artwork, including shared group-name rendering. The preview retains real group data. Layout values live in group_personalization_style.dart. CAPTURE_REFERENCE enables local rendered comparison using Windows system fonts.
+
+Appearance is persisted per account and group in the Hive box opened before runApp. First-frame group labels read it synchronously; SDK updates refresh it in the background. Explicit reset values replace old styles, leaving removes cached appearance, and successful saves await the local write before returning. Only display metadata is restored, never membership or permissions. Uploaded icons use ImageUtil disk caching; group avatars retain AvatarView disk caching.

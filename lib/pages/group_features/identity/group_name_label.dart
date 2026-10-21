@@ -31,7 +31,7 @@ class GroupNameLabel extends StatelessWidget {
     return ListenableBuilder(
       listenable: store!,
       builder: (context, _) =>
-          _name(context, store!.cachedGroupInfo(groupID ?? '')?.ex ?? ex),
+          _name(context, store!.nameAppearanceEx(groupID ?? '') ?? ex),
     );
   }
 
@@ -40,6 +40,7 @@ class GroupNameLabel extends StatelessWidget {
     final color = appearance.color == null ? null : Color(appearance.color!);
     final text = Text(name,
         maxLines: maxLines,
+        softWrap: maxLines != 1,
         overflow: overflow,
         style: color == null
             ? style
@@ -52,12 +53,14 @@ class GroupNameLabel extends StatelessWidget {
           child: appearance.iconKey != null
               ? GroupPersonalizationArtwork(
                   iconKey: appearance.iconKey!, size: size)
-              : Image.network(appearance.iconUrl!,
+              : ImageUtil.networkImage(
+                  url: appearance.iconUrl!,
                   width: size,
                   height: size,
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) =>
-                      SizedBox.square(dimension: size))),
+                  loadProgress: false,
+                  loadingWidget: SizedBox.square(dimension: size),
+                  errorWidget: SizedBox.square(dimension: size))),
       const SizedBox(width: AppTokens.s2),
       Flexible(child: text),
     ]);
