@@ -41,20 +41,10 @@ class GroupPersonalizationEditor extends StatelessWidget {
     return Scaffold(
         backgroundColor:
             dark ? Styles.c_F8F9FA : GroupPersonalizationStyle.page,
-        appBar: GlassAppBar(
-            toolbarHeight: math.max(48, 112 * s),
-            centerTitle: false,
+        appBar: TitleBar.back(
+            title: '群个性化',
             backgroundColor: dark ? Styles.c_FFFFFF : Colors.white,
-            leadingWidth: 120 * s,
-            leading: IconButton(
-                tooltip: '返回',
-                onPressed: () => Navigator.of(context).maybePop(),
-                icon: Icon(CupertinoIcons.back, color: ink, size: 40 * s)),
-            title: Text('群个性化',
-                style: TextStyle(
-                    fontSize: 44 * s,
-                    fontWeight: FontWeight.w700,
-                    color: ink))),
+            onTap: () => Navigator.of(context).maybePop()),
         body: SafeArea(
             top: false,
             child: Align(
