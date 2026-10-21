@@ -31,6 +31,24 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
   final _entries = <_BrowserEntry>[];
   int _suspensions = 0;
   bool _showPages = false;
+  final _pageScroll = ScrollController();
+  void _togglePages(bool show) {
+    for (final entry in _entries) {
+      entry.route.setOverview(show);
+    }
+    setState(() => _showPages = show);
+  }
+
+  void _closePage(InAppBrowserRoute route) {
+    final entry =
+        _entries.where((item) => identical(item.route, route)).firstOrNull;
+    if (entry == null) return;
+    setState(() {
+      _entries.remove(entry);
+      if (_entries.isEmpty) _showPages = false;
+    });
+  }
+
   bool get _suspended => _suspensions > 0;
 
   _BrowserEntry? get _expanded {
@@ -47,6 +65,9 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
   }
 
   void open(Uri uri) {
+    for (final entry in _entries) {
+      entry.route.setOverview(false);
+    }
     _showPages = false;
     for (final entry in _entries) {
       entry.route.retainInDock();
@@ -94,6 +115,7 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
     final index = _entries.indexWhere((entry) => identical(entry.route, route));
     if (index < 0) return;
     for (final entry in _entries) {
+      entry.route.setOverview(false);
       entry.route.retainInDock();
     }
     setState(() {
@@ -105,7 +127,7 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
 
   Future<bool> handleBack() async {
     if (_showPages && !_suspended) {
-      setState(() => _showPages = false);
+      _togglePages(false);
       return true;
     }
     final entry = _expanded;
@@ -116,6 +138,7 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
 
   @override
   void dispose() {
+    _pageScroll.dispose();
     if (identical(InAppBrowserHost._active, this)) {
       InAppBrowserHost._active = null;
     }
@@ -127,6 +150,7 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
     // Keep the same app subtree location whether a browser exists or not.
     return AnimatedBuilder(
       animation: Listenable.merge([
+        _pageScroll,
         for (final entry in _entries) ...[
           entry.route.animation,
           entry.route.minimized,
@@ -166,7 +190,7 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
               ),
             ),
           ),
-          if (bottom > 0)
+          if (bottom > 0 && !_showPages)
             Positioned(
               left: 0,
               right: 0,
@@ -178,22 +202,44 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
                   progress: dockRoute!.dockProgress,
                   child: dockRoute.buildDock(context,
                       pageCount: _entries.length,
-                      onShowPages: () => setState(() => _showPages = true)),
+                      onShowPages: () => _togglePages(true)),
                 ),
               ),
             ),
+          if (_showPages && !_suspended)
+            Positioned.fill(
+                child: ColoredBox(
+                    color: Theme.of(context)
+                        .colorScheme
+                        .scrim
+                        .withValues(alpha: .65))),
           for (final entry in _entries)
             Offstage(
               key: ObjectKey(entry),
-              offstage: _suspended || !identical(entry, expanded),
-              child: HeroControllerScope.none(
-                child: Navigator(
-                  key: entry.navigatorKey,
-                  onGenerateInitialRoutes: (_, __) => [_BrowserBaseRoute()],
+              offstage:
+                  _suspended || (!_showPages && !identical(entry, expanded)),
+              child: Transform(
+                transform: _showPages
+                    ? InAppBrowserPagePicker.previewTransform(
+                        context,
+                        _entries.indexOf(entry),
+                        _pageScroll.hasClients ? _pageScroll.offset : 0)
+                    : Matrix4.identity(),
+                child: IgnorePointer(
+                  ignoring: _showPages,
+                  child: HeroControllerScope.none(
+                    child: Navigator(
+                      key: entry.navigatorKey,
+                      onGenerateInitialRoutes: (_, __) => [_BrowserBaseRoute()],
+                    ),
+                  ),
                 ),
               ),
             ),
-          if (_entries.isNotEmpty && expanded == null && !_suspended)
+          if (_entries.isNotEmpty &&
+              expanded == null &&
+              !_suspended &&
+              !_showPages)
             Positioned(
               right: MediaQuery.paddingOf(context).right,
               top: MediaQuery.paddingOf(context).top +
@@ -206,12 +252,15 @@ class InAppBrowserHostState extends State<InAppBrowserHost> {
             ),
           if (_showPages && _entries.isNotEmpty && !_suspended)
             Positioned.fill(
-              child: InAppBrowserPagePicker(
-                pages: _entries.reversed.map((entry) => entry.route).toList(),
+              child: _BrowserDockOverlay(
+                  child: InAppBrowserPagePicker(
+                pages: _entries.map((entry) => entry.route).toList(),
+                scrollController: _pageScroll,
                 selected: _entries.last.route,
                 onSelect: _selectPage,
-                onDismiss: () => setState(() => _showPages = false),
-              ),
+                onDismiss: () => _togglePages(false),
+                onClose: _closePage,
+              )),
             ),
         ]);
       },

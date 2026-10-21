@@ -52,6 +52,35 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
   final _addressController = TextEditingController();
   final _addressFocus = FocusNode();
   bool _editingAddress = false;
+  bool _openingApp = false;
+
+  bool _externalAppLink(Uri? uri) =>
+      uri != null &&
+      uri.userInfo.isEmpty &&
+      uri.host.isNotEmpty &&
+      const {'itms-beta', 'testflight', 'itms-apps', 'itms-appss'}
+          .contains(uri.scheme);
+
+  Future<void> _openAppLink(Uri uri) async {
+    if (_openingApp) return;
+    _openingApp = true;
+    try {
+      if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+        _appLinkFailed();
+      }
+    } catch (_) {
+      _appLinkFailed();
+    } finally {
+      _openingApp = false;
+    }
+  }
+
+  void _appLinkFailed() {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(_text('无法打开外部应用，请确认已安装 TestFlight 或对应应用',
+            'Unable to open the app. Check that TestFlight or the required app is installed.'))));
+  }
 
   void _editAddress() {
     _addressController.text = _uri.toString();
@@ -142,7 +171,13 @@ class _InAppBrowserPageState extends State<InAppBrowserPage> {
       await controller.setJavaScriptMode(JavaScriptMode.unrestricted);
       await controller.setNavigationDelegate(NavigationDelegate(
         onNavigationRequest: (request) {
-          if (_allowed(Uri.tryParse(request.url))) {
+          if (!active()) return NavigationDecision.prevent;
+          final uri = Uri.tryParse(request.url);
+          if (_externalAppLink(uri)) {
+            if (request.isMainFrame) unawaited(_openAppLink(uri!));
+            return NavigationDecision.prevent;
+          }
+          if (_allowed(uri)) {
             return NavigationDecision.navigate;
           }
           if (active() && request.isMainFrame) {

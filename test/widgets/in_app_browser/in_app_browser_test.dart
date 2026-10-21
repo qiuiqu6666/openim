@@ -4,10 +4,24 @@ import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
+import 'package:url_launcher_platform_interface/url_launcher_platform_interface.dart';
 
 import 'package:openim_common/src/widgets/in_app_browser/in_app_browser.dart';
 import 'package:openim_common/src/widgets/in_app_browser/in_app_browser_edge_drag.dart';
 import 'package:webview_flutter_platform_interface/webview_flutter_platform_interface.dart';
+
+class _Launcher extends UrlLauncherPlatform {
+  @override
+  get linkDelegate => null;
+  final urls = <String>[];
+  bool succeeds = true;
+  @override
+  Future<bool> launchUrl(String url, LaunchOptions options) async {
+    expect(options.mode, PreferredLaunchMode.externalApplication);
+    urls.add(url);
+    return succeeds;
+  }
+}
 
 class _Platform extends WebViewPlatform {
   final controllers = <_Controller>[];
@@ -162,7 +176,42 @@ void main() {
     await tester.pump(const Duration(milliseconds: 500));
   }
 
-  testWidgets('web route loads internally and rejects app schemes',
+  testWidgets('TestFlight links open externally and failure keeps the page',
+      (tester) async {
+    final previous = UrlLauncherPlatform.instance;
+    final launcher = _Launcher();
+    UrlLauncherPlatform.instance = launcher;
+    addTearDown(() => UrlLauncherPlatform.instance = previous);
+    await open(tester);
+    final delegate = platform.delegates.single;
+    for (final scheme in ['itms-beta', 'testflight', 'itms-apps']) {
+      final url = '$scheme://testflight.apple.com/join/example';
+      expect(
+          await delegate
+              .navigate(NavigationRequest(url: url, isMainFrame: true)),
+          NavigationDecision.prevent);
+      await tester.pump();
+      expect(launcher.urls.last, url);
+    }
+    final count = launcher.urls.length;
+    await delegate.navigate(const NavigationRequest(
+        url: 'itms-beta://testflight.apple.com/join/example',
+        isMainFrame: false));
+    expect(launcher.urls.length, count);
+    launcher.succeeds = false;
+    await delegate.navigate(const NavigationRequest(
+        url: 'itms-beta://testflight.apple.com/join/example',
+        isMainFrame: true));
+    await tester.pump();
+    expect(find.textContaining('Unable to open the app.'), findsWidgets);
+    expect(find.byType(InAppBrowserPage), findsOneWidget);
+    expect(
+        platform.controllers.single.loaded, Uri.parse('https://example.com'));
+    await tester.tap(find.text('Done'));
+    await tester.pumpAndSettle();
+  });
+
+  testWidgets('web route loads internally and rejects unsupported app schemes',
       (tester) async {
     await open(tester);
     expect(
@@ -325,9 +374,9 @@ void main() {
       expect(find.byTooltip('Switch web pages (2)'), findsOneWidget);
       await tester.tap(find.byKey(const ValueKey('browser-page-count')));
       await tester.pumpAndSettle();
-      expect(find.widgetWithText(ListTile, 'first.example'), findsOneWidget);
-      expect(find.widgetWithText(ListTile, 'second.example'), findsOneWidget);
-      await tester.tap(find.widgetWithText(ListTile, 'first.example'));
+      expect(find.text('first.example'), findsOneWidget);
+      expect(find.text('second.example'), findsOneWidget);
+      await tester.tap(find.text('first.example'));
       await tester.pumpAndSettle();
       expect(tester.state(find.byType(InAppBrowserPage)), same(firstState));
       await tester.tap(find.byType(InAppBrowserEdgeDrag));
@@ -343,7 +392,7 @@ void main() {
       expect(find.byType(ListTile), findsNothing);
       await tester.tap(find.byKey(const ValueKey('browser-page-count')));
       await tester.pumpAndSettle();
-      await tester.tap(find.widgetWithText(ListTile, 'second.example'));
+      await tester.tap(find.text('second.example'));
       await tester.pumpAndSettle();
       await tester.tap(find.byType(InAppBrowserEdgeDrag));
       await tester.pump();
@@ -354,7 +403,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('https://second.example'), findsOneWidget);
       expect(find.byKey(const ValueKey('browser-dock-surface')), findsNothing);
-      await tester.tap(find.text('Done'));
+      await tester.tap(find.byTooltip('Close page second.example'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Close page second.example'), findsNothing);
+      await tester.tap(find.text('Done').hitTestable());
       await tester.pumpAndSettle();
       expect(find.text('second.example'), findsNothing);
       expect(find.text('first.example'), findsOneWidget);
@@ -429,9 +481,9 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('browser-page-count')));
     await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
-        find.widgetWithText(ListTile, 'page0.example'), 100,
+        find.text('page0.example'), 100,
         scrollable: find.byType(Scrollable));
-    expect(find.widgetWithText(ListTile, 'page0.example').hitTestable(),
+    expect(find.text('page0.example').hitTestable(),
         findsOneWidget);
     expect(await InAppBrowserHost.active!.handleBack(), isTrue);
     await tester.pumpAndSettle();
