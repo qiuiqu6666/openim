@@ -11,11 +11,13 @@ class AuthIdentitySelector extends StatelessWidget {
     this.action = '',
     this.account = false,
     this.showAccount = false,
+    this.accountLabel,
     this.onAccountSelected,
     required this.onChanged,
   });
   final bool account;
   final bool showAccount;
+  final String? accountLabel;
   final VoidCallback? onAccountSelected;
   final String action;
   final bool email;
@@ -79,7 +81,9 @@ class AuthIdentitySelector extends StatelessWidget {
                                       color: AuthReferenceTokens.brand500))
                               : null),
                       child: Text(
-                          '${value == 2 ? authText("用户ID", "User ID") : value == 1 ? authText(AppCopy.text('邮箱'), "Email") : authText(AppCopy.text('手机'), "Phone")}$action',
+                          value == 2 && accountLabel != null
+                              ? accountLabel!
+                              : '${value == 2 ? authText("用户ID", "User ID") : value == 1 ? authText(AppCopy.text('邮箱'), "Email") : authText(AppCopy.text('手机'), "Phone")}$action',
                           textAlign: TextAlign.center,
                           style: const TextStyle(
                               fontSize: AuthReferenceTokens.tabSize))),

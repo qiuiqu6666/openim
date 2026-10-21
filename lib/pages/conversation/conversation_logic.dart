@@ -81,6 +81,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   );
   ConversationFeedSnapshot get feedSnapshot =>
       (_feedCache ??= ConversationFeedSnapshotCache(list, states,
+              hasAttentionNotice: hasFriendApprovalNotice,
               order: _pinnedGroupOrder.apply,
               allows: (row) =>
                   _membership.allows(row) && _blacklistVisibility.allows(row),

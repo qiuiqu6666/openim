@@ -8,6 +8,18 @@ class ChatListPositionController {
   VoidCallback? _cancel;
   VoidCallback? _refreshViewport;
   bool _disposed = false;
+  bool _latestLayoutPending = false;
+
+  /// Apply the latest edge in the next list layout, before its first paint.
+  void requestLatestLayout() {
+    if (!_disposed) _latestLayoutPending = true;
+  }
+
+  bool takeLatestLayoutRequest() {
+    final pending = !_disposed && _latestLayoutPending;
+    _latestLayoutPending = false;
+    return pending;
+  }
 
   /// Resolves after the message has painted in the current chat viewport.
   /// A missing message, cancellation, or detached viewport resolves to false.
@@ -27,6 +39,7 @@ class ChatListPositionController {
 
   /// Invalidates a pending position request before an explicit scroll or exit.
   void cancel() {
+    _latestLayoutPending = false;
     if (!_disposed) _cancel?.call();
   }
 

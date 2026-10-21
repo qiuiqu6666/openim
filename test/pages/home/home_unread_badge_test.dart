@@ -10,6 +10,8 @@ import 'package:openim/core/im_callback.dart';
 import 'package:openim/core/session/connection/api_connection_health.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
+import 'package:openim/pages/conversation/summary/conversation_feed_snapshot.dart';
+import 'package:openim/pages/conversation/unread/friend_approval_notice.dart';
 import 'package:openim/pages/home/home_logic.dart';
 import 'package:openim/pages/home/home_view.dart';
 import 'package:openim_common/openim_common.dart';
@@ -81,6 +83,10 @@ class _Conversations extends GetxController
   @override
   int getUnreadCount(ConversationInfo info) => info.unreadCount;
   @override
+  bool hasFriendApprovalNotice(ConversationInfo info) => false;
+  @override
+  bool existUnreadMsg(ConversationInfo info) => info.unreadCount > 0;
+  @override
   String? getPrefixTag(ConversationInfo info) => '';
   @override
   void globalSearch() {}
@@ -99,6 +105,31 @@ class _Conversations extends GetxController
   @override
   void onClose() {
     popCtrl.dispose();
+    super.onClose();
+  }
+}
+
+class _ApprovalConversations extends _Conversations {
+  final seen = <String, Map<String, dynamic>>{};
+  final noticeStates = <String, ChatConversationState>{}.obs;
+  late final notices = FriendApprovalNotice(
+    read: (id) => seen[id],
+    write: (id, value) => seen[id] = value,
+  );
+  late final cache = ConversationFeedSnapshotCache(list, noticeStates,
+      hasAttentionNotice: notices.pending);
+
+  @override
+  ConversationFeedSnapshot get feedSnapshot => cache.read();
+  @override
+  bool hasFriendApprovalNotice(ConversationInfo info) => notices.pending(info);
+  @override
+  bool existUnreadMsg(ConversationInfo info) =>
+      info.unreadCount > 0 || notices.pending(info);
+
+  @override
+  void onClose() {
+    cache.dispose();
     super.onClose();
   }
 }
@@ -232,6 +263,53 @@ void main() {
   });
 
   for (final dark in [false, true]) {
+    testWidgets('friend approval synchronizes row and tab badges ($dark)',
+        (tester) async {
+      final approval = _row('approved', group: false, unread: 0)
+        ..latestMsg = Message(
+          contentType: MessageType.friendApplicationApprovedNotification,
+          clientMsgID: 'approval-1',
+          seq: 1,
+          sendTime: 1000,
+        );
+      final conversations = _ApprovalConversations()..list.add(approval);
+      await _mountHome(tester, conversations, dark: dark);
+      final rowBadge = find.descendant(
+          of: find.byKey(const ValueKey('approved')),
+          matching: find.byType(UnreadCountView));
+      expect(tester.widget<UnreadCountView>(rowBadge).count, 1);
+      expect(_positiveNavCounts(tester), [1]);
+      expect(approval.unreadCount, 0);
+
+      approval.unreadCount = 3;
+      conversations.list.refresh();
+      await tester.pumpAndSettle();
+      expect(_positiveNavCounts(tester), [3]);
+
+      approval.unreadCount = 0;
+      conversations.notices.confirm('approved',
+          messageID: 'approval-1', sequence: 1, time: 1000);
+      conversations.list.refresh();
+      await tester.pumpAndSettle();
+      expect(_positiveNavCounts(tester), isEmpty);
+      expect(rowBadge, findsNothing);
+
+      approval.latestMsg = Message(
+        contentType: MessageType.friendApplicationApprovedNotification,
+        clientMsgID: 'approval-2',
+        seq: 2,
+        sendTime: 2000,
+      );
+      conversations.list.refresh();
+      await tester.pumpAndSettle();
+      expect(_positiveNavCounts(tester), [1]);
+      approval.recvMsgOpt = 2;
+      conversations.list.refresh();
+      await tester.pumpAndSettle();
+      expect(_positiveNavCounts(tester), isEmpty);
+      expect(tester.takeException(), isNull);
+    });
+
     testWidgets('home unread badges follow notification scope ($dark)',
         (tester) async {
       final single = _row('single', group: false, unread: 3);

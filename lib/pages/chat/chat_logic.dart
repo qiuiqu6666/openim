@@ -601,6 +601,9 @@ class ChatLogic extends SuperController {
     isClosed: () => _sessionInactive,
     onFirstPage: () {
       if (!_dateWindow.buffering) {
+        if (_latestScroll.followingEntry) {
+          messagePositionController.requestLatestLayout();
+        }
         _latestScroll.requestEntry(complete: true);
       }
       if (!_dateWindow.buffering && !newMessages.awayFromLatest.value) {
@@ -878,6 +881,7 @@ class ChatLogic extends SuperController {
         notification.dragDetails != null) {
       messageArrivals.cancel();
       _latestScroll.endEntry();
+      messagePositionController.cancel();
       _messageFocus.cancel();
       _dateWindow.invalidate();
       _dateJump.invalidate();
@@ -1096,6 +1100,9 @@ class ChatLogic extends SuperController {
     _entryReadyWorker = ever(initialWindowReady, (bool ready) {
       if (ready && !_sessionInactive) {
         entryTrace?.mark('window_ready');
+        if (_latestScroll.followingEntry) {
+          messagePositionController.requestLatestLayout();
+        }
         _latestScroll.requestEntry();
       }
     });

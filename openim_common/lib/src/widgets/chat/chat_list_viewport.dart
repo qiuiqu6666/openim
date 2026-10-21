@@ -80,6 +80,7 @@ class _ChatListViewportState extends State<ChatListViewport>
     _foreground = WidgetsBinding.instance.lifecycleState == null ||
         WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
     _updatePartition();
+    widget.positionController?.takeLatestLayoutRequest();
     _controller.addListener(_onScroll);
     widget.positionController?.attach(this, _jumpToMessage, _cancelPositionJump,
         refreshViewport: _schedule);
@@ -88,6 +89,8 @@ class _ChatListViewportState extends State<ChatListViewport>
   @override
   void didUpdateWidget(covariant ChatListViewport oldWidget) {
     super.didUpdateWidget(oldWidget);
+    final latestLayout =
+        widget.positionController?.takeLatestLayoutRequest() == true;
     if (oldWidget.positionController != widget.positionController) {
       oldWidget.positionController?.detach(this);
       widget.positionController?.attach(
@@ -104,6 +107,9 @@ class _ChatListViewportState extends State<ChatListViewport>
       _restoreAnchors = null;
       _lastAnchors.clear();
       _centerID = null;
+    } else if (latestLayout) {
+      _cancelPositionJump();
+      _useLatestCenter(widget.messageIDs);
     } else if (!listEquals(_ids, widget.messageIDs)) {
       if (widget.followLatest &&
           !_jumping &&
@@ -118,7 +124,8 @@ class _ChatListViewportState extends State<ChatListViewport>
         _restoreAttempts = 0;
       }
     }
-    if (oldWidget.controller != widget.controller ||
+    if (latestLayout ||
+        oldWidget.controller != widget.controller ||
         !listEquals(_ids, widget.messageIDs)) {
       _updatePartition();
       final retained = _ids.toSet();

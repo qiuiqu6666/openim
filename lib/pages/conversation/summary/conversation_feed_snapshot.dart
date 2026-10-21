@@ -7,7 +7,10 @@ import '../unread/conversation_unread_count.dart';
 /// Share one projection between the two feeds and their navigation badges.
 class ConversationFeedSnapshotCache {
   ConversationFeedSnapshotCache(this.rows, this.states,
-      {this.order, this.allows, this.membershipRevision}) {
+      {this.order,
+      this.allows,
+      this.membershipRevision,
+      this.hasAttentionNotice}) {
     _workers = [
       ever(rows, (_) => _dirty = true),
       ever(states, (_) => _dirty = true),
@@ -20,6 +23,7 @@ class ConversationFeedSnapshotCache {
   final List<ConversationInfo> Function(Iterable<ConversationInfo>)? order;
   final bool Function(ConversationInfo)? allows;
   final RxInt? membershipRevision;
+  final bool Function(ConversationInfo)? hasAttentionNotice;
   late final List<Worker> _workers;
   bool _dirty = true;
   ConversationFeedSnapshot? _snapshot;
@@ -32,7 +36,8 @@ class ConversationFeedSnapshotCache {
     if (_dirty || _snapshot == null) {
       final ordered = order?.call(rows) ?? rows;
       _snapshot = ConversationFeedSnapshot(
-          allows == null ? ordered : ordered.where(allows!), states);
+          allows == null ? ordered : ordered.where(allows!), states,
+          hasAttentionNotice: hasAttentionNotice);
       _dirty = false;
     }
     return _snapshot!;
@@ -48,7 +53,8 @@ class ConversationFeedSnapshotCache {
 
 class ConversationFeedSnapshot {
   ConversationFeedSnapshot(Iterable<ConversationInfo> rows,
-      Map<String, ChatConversationState> states) {
+      Map<String, ChatConversationState> states,
+      {bool Function(ConversationInfo)? hasAttentionNotice}) {
     for (final row in rows) {
       final state = states[row.conversationID];
       if (state?.archived == true) {
@@ -56,7 +62,12 @@ class ConversationFeedSnapshot {
         if (row.isSingleChat) archivedSingles.add(row);
         continue;
       }
-      final unread = notifiableConversationUnreadCount(row);
+      // Match the row's fallback badge without altering SDK message counts or
+      // counting an approval twice when it already has unread messages.
+      final unread = notifiableConversationUnreadCount(row,
+          unreadCount: row.unreadCount > 0
+              ? row.unreadCount
+              : (hasAttentionNotice?.call(row) == true ? 1 : 0));
       if (row.isGroupChat) {
         groups.add(row);
         groupUnread += unread;

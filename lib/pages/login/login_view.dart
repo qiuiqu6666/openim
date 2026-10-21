@@ -28,6 +28,7 @@ class LoginPage extends StatelessWidget {
               child: Column(children: [
             AuthIdentitySelector(
                 showAccount: true,
+                accountLabel: authText('账号登陆', 'Account login'),
                 email: logic.loginType.value == LoginType.email,
                 account: logic.loginType.value == LoginType.account,
                 onAccountSelected: logic.submitting.value
@@ -67,7 +68,7 @@ class LoginPage extends StatelessWidget {
                 hint: switch (logic.loginType.value) {
                   LoginType.phone => authText('手机号码', 'Phone number'),
                   LoginType.email => authText('邮箱地址', 'Email address'),
-                  LoginType.account => authText('请输入用户ID', 'Enter user ID'),
+                  LoginType.account => authText('请输入账号', 'Enter account'),
                 },
                 keyboardType: switch (logic.loginType.value) {
                   LoginType.phone => TextInputType.phone,

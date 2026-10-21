@@ -103,6 +103,23 @@ Future<bool> _jump(
 }
 
 void main() {
+  testWidgets('latest replacement is aligned before its first painted frame',
+      (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    final fixture = await _mount(tester, position, scroll, count: 80);
+    scroll.jumpTo(900);
+    await tester.pumpAndSettle();
+    position.requestLatestLayout();
+    fixture.replace(List.generate(40, (index) => 'new-$index'));
+    await tester.pump();
+    _expectVisible(tester, 'new-0');
+    expect(scroll.offset, closeTo(scroll.position.minScrollExtent, 0.5));
+    final first = tester.getRect(find.byKey(const ValueKey('new-0')).first);
+    await tester.pump();
+    expect(tester.getRect(find.byKey(const ValueKey('new-0')).first), first);
+  });
+
   testWidgets('positioning accelerates and resolves only after travel',
       (tester) async {
     final position = ChatListPositionController();
