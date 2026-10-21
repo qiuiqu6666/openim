@@ -169,21 +169,8 @@ class ChatMessageNavigation {
     if (isClosed) return;
     final uri = Uri.tryParse(url);
     if (uri != null && !isClosed) {
-      final result = await openSystemBrowser(uri);
-      if (isClosed) return;
-      switch (result) {
-        case SystemBrowserOpenResult.opened:
-          break;
-        case SystemBrowserOpenResult.unavailable:
-          IMViews.showToast(
-              AppCopy.text('当前设备缺少系统浏览器支持，请安装或启用 Chrome 等支持应用内浏览的浏览器'));
-          break;
-        case SystemBrowserOpenResult.invalidLink:
-          IMViews.showToast(AppCopy.text('此链接不支持在应用内打开'));
-          break;
-        case SystemBrowserOpenResult.failed:
-          IMViews.showToast(AppCopy.text('系统浏览器打开失败，请重试'));
-          break;
+      if (!await openInAppBrowser(uri)) {
+        IMViews.showToast(AppCopy.text('此链接不支持在应用内打开'));
       }
     }
   }

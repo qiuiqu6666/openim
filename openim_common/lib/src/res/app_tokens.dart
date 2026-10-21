@@ -123,10 +123,6 @@ class AppTokens {
   static const double profileContentMaxWidth = 600;
   static const double minimumTapSize = 48;
   static const double browserSheetHeightFactor = .97;
-  static const double browserOverviewScale = .92;
-  static const double browserOverviewStep = .30;
-  static const double browserOverviewTail = .45;
-  static const double browserOverviewPerspective = .20;
   static const double browserPagePickerHeightFactor = .6;
   static const double browserBackgroundScale = .90;
   static const double browserBackgroundOffset = s4;

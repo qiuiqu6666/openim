@@ -22,12 +22,6 @@ class InAppBrowserRoute extends PageRoute<void>
         );
 
   final bool externalDock;
-  bool _overview = false;
-  void setOverview(bool value) {
-    if (_overview == value) return;
-    _overview = value;
-    changedInternalState();
-  }
   final Uri _uri;
   final _minimized = ValueNotifier(false);
   ValueListenable<bool> get minimized => _minimized;
@@ -269,11 +263,11 @@ class InAppBrowserRoute extends PageRoute<void>
                   children: [
                     if (!externalDock && dockProgress > 0) buildDock(context),
                     Offstage(
-                      offstage: minimized && !_overview,
+                      offstage: minimized,
                       child: FractionalTranslation(
                         translation: Offset(
                             0,
-                            minimized || _overview
+                            minimized
                                 ? 0
                                 : (_fromMinimized ? _restoreTravel : 1) *
                                     (1 -
@@ -333,7 +327,7 @@ class InAppBrowserRoute extends PageRoute<void>
                               icon: const Icon(Icons.close)),
                           Expanded(
                               child: TextButton(
-                                  onPressed: pageCount > 1 ? onShowPages : _restore,
+                                  onPressed: _restore,
                                   child: ValueListenableBuilder<String>(
                                       valueListenable: _address,
                                       builder: (_, address, __) =>
