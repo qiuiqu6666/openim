@@ -123,7 +123,15 @@ class LiveTipForm extends StatelessWidget {
                                 }
                               },
                               children: {
-                                for (final value in currencies)
+                                for (final value in [
+                                  ...currencies.where((v) =>
+                                      v.code == FundCurrency.bi99.code),
+                                  ...currencies.where((v) =>
+                                      v.code == FundCurrency.usdt.code),
+                                  ...currencies.where((v) =>
+                                      v.code != FundCurrency.bi99.code &&
+                                      v.code != FundCurrency.usdt.code),
+                                ])
                                   value.code: _currencyLabel(context, value,
                                       value.code == currency?.code)
                               }),

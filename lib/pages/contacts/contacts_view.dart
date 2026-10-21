@@ -85,7 +85,8 @@ class ContactsPage extends StatelessWidget {
     final starred = <ISUserInfo>[];
     final regular = <ISUserInfo>[];
     for (final friend in logic.friends) {
-      (logic.stars.isStarred(friend.userID!) ? starred : regular).add(friend);
+      regular.add(friend);
+      if (logic.stars.isStarred(friend.userID!)) starred.add(friend);
     }
     final rows = <_DirectoryRow>[
       _DirectoryRow.action(
@@ -123,9 +124,10 @@ class ContactsPage extends StatelessWidget {
         if (row.friend != null) {
           final id = row.friend!.userID!;
           return VisibilityDetector(
-            key: ValueKey('contact-presence-$id'),
+            key: ValueKey('contact-presence-${row.tag}-$id'),
             onVisibilityChanged: (info) =>
-                logic.setPresenceVisible(id, info.visibleFraction > 0),
+                logic.setPresenceVisible(id, info.visibleFraction > 0,
+                    source: 'directory-${row.tag}-$id'),
             child: _buildFriend(row.friend!),
           );
         }

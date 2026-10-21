@@ -191,6 +191,11 @@ class ChatGroupController {
         ].contains(groupMembersInfo?.roleLevel);
   }
 
+  bool get personallyMuted {
+    _muteRevision.value;
+    return isGroupChat && (groupMembersInfo?.muteEndTime ?? 0) > _nowSeconds();
+  }
+
   bool get sendingMuted {
     _muteRevision.value;
     if (membershipPending.value) return true;

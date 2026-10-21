@@ -152,6 +152,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
     double? toolbarHeight,
     String? title,
     Color? titleColor,
+    Widget? titleWidget,
     String? avatarUrl,
     String? presenceText,
     bool isOnline = false,
@@ -201,7 +202,7 @@ class TitleBar extends StatelessWidget implements PreferredSizeWidget {
                     mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(graphemeTrim(title ?? ''),
+                      titleWidget ?? Text(graphemeTrim(title ?? ''),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: Styles.ts_0C1C33_17sp

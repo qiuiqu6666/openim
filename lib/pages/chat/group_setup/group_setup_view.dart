@@ -80,6 +80,10 @@ class GroupSetupPage extends StatelessWidget {
                               logic.updating.value ? null : logic.setPinned,
                         )),
                   ]),
+                if (logic.isOwner || logic.isAdmin)
+                  _section([
+                    _settingRow(StrRes.groupManage, onTap: logic.groupManage)
+                  ]),
                 if (logic.isJoinedGroup.value)
                   _section([
                     _settingRow('groupReport'.tr,
@@ -88,10 +92,6 @@ class GroupSetupPage extends StatelessWidget {
                               targetName: logic.groupInfo.value.groupName ?? '',
                               groupID: logic.groupInfo.value.groupID,
                             )))
-                  ]),
-                if (logic.isOwner || logic.isAdmin)
-                  _section([
-                    _settingRow(StrRes.groupManage, onTap: logic.groupManage)
                   ]),
                 if (!logic.isOwner &&
                     (logic.isJoinedGroup.value ||

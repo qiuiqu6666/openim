@@ -1,3 +1,4 @@
+import '../../../widgets/auth/auth_agreement.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
@@ -101,7 +102,7 @@ class SetPasswordPage extends StatelessWidget {
                         height:
                             RegistrationReferenceTokens.profileAgreementGap),
                   ],
-                  const RegisterAgreement(),
+                  AuthAgreement(accepted: logic.agreementAccepted.value, onChanged: busy ? null : logic.setAgreementAccepted),
                   const SizedBox(height: RegistrationReferenceTokens.actionGap),
                   AuthPrimaryButton(
                     key: const ValueKey('signup-submit'),

@@ -39,6 +39,13 @@ class SetPasswordLogic extends GetxController {
   final pwdCtrl = TextEditingController();
   final pwdAgainCtrl = TextEditingController();
   final enabled = false.obs;
+  final agreementAccepted = true.obs;
+  void setAgreementAccepted(bool value) {
+    if (_closed || isClosed) return;
+    agreementAccepted.value = value;
+    _onChanged();
+  }
+
   final submitting = false.obs;
   final pickingAvatar = false.obs;
   final avatar = Rxn<RegistrationAvatar>();
@@ -130,7 +137,7 @@ class SetPasswordLogic extends GetxController {
     _profileDraft?.nickname = nicknameCtrl.text;
     _touchedFields.refresh();
     nicknameError.value = errorFor(RegistrationField.nickname);
-    enabled.value = nickname.characters.length >= 2 &&
+    enabled.value = agreementAccepted.value && nickname.characters.length >= 2 &&
         RegisterPasswordRules.valid(pwdCtrl.text) &&
         pwdAgainCtrl.text == pwdCtrl.text;
   }
@@ -169,6 +176,7 @@ class SetPasswordLogic extends GetxController {
   }
 
   Future<void> register() async {
+    if (!agreementAccepted.value) return;
     if (_closed ||
         isClosed ||
         _registering ||

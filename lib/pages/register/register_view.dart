@@ -1,3 +1,4 @@
+import '../../widgets/auth/auth_agreement.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -201,7 +202,7 @@ class RegisterPage extends StatelessWidget {
                 onPressed: logic.enabled.value ? () => _submit(context) : null,
               ),
               const SizedBox(height: RegistrationReferenceTokens.actionGap),
-              const Center(child: RegisterAgreement()),
+              Center(child: AuthAgreement(accepted: logic.agreementAccepted.value, onChanged: busy ? null : logic.setAgreementAccepted)),
             ],
           );
         }),

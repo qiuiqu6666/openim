@@ -29,6 +29,7 @@ class ChatInputBox extends StatefulWidget {
     this.pendingSend = false,
     this.pendingSending = false,
     this.showDisabledWarning = true,
+    this.muteNotice = false,
     this.isNotInGroup = false,
     this.hintText,
     this.forceCloseToolboxSub,
@@ -50,6 +51,7 @@ class ChatInputBox extends StatefulWidget {
   final bool pendingSend;
   final bool pendingSending;
   final bool showDisabledWarning;
+  final bool muteNotice;
   final bool isNotInGroup;
   final String? hintText;
   final Widget toolbox;
@@ -229,6 +231,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
                 : 0;
     final content = _inputBlocked && !widget.pendingSending
         ? ChatDisableInputBox(
+            muteNotice: widget.muteNotice && !widget.isNotInGroup,
             showWarning: widget.isNotInGroup || widget.showDisabledWarning,
             message: widget.isNotInGroup
                 ? StrRes.notSendMessageNotInGroup

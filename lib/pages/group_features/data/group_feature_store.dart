@@ -194,6 +194,7 @@ class GroupFeatureStore extends ChangeNotifier {
       _queued.remove(id);
       return;
     }
+    final appearanceChanged = previous?.ex != info.ex;
     final nextGameType = GroupGameType.fromEx(info.ex);
     final gameTypeChanged = gameType(id) != nextGameType;
     _groups[id] = GroupInfo.fromJson(info.toJson());
@@ -208,13 +209,13 @@ class GroupFeatureStore extends ChangeNotifier {
     // is pending, including the backend's non-JSON ex retry case.
     if (pendingRevision != null) {
       if (!summary.valid || summary.revision < pendingRevision) {
-        if (gameTypeChanged) notifyListeners();
+        if (gameTypeChanged || appearanceChanged) notifyListeners();
         return;
       }
       _pendingMirrors.remove(id);
     }
     if (summary.valid && old.valid && summary.revision <= old.revision) {
-      if (gameTypeChanged) notifyListeners();
+      if (gameTypeChanged || appearanceChanged) notifyListeners();
       return;
     }
     // Invalid/unknown schema must fail closed, even when a prior summary existed.

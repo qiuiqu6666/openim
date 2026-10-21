@@ -18,7 +18,7 @@ import 'package:openim_common/openim_common.dart';
 
 class _FakeContactsLogic implements ContactsLogic {
   @override
-  void setPresenceVisible(String id, bool visible) {}
+  void setPresenceVisible(String id, bool visible, {Object? source}) {}
   @override
   final presence = PresenceStore();
   @override
@@ -124,7 +124,15 @@ void main() {
       'updatedAt': 1,
     }));
     await tester.pumpAndSettle();
-    expect(find.byIcon(Icons.star_rounded), findsOneWidget);
+    expect(find.byIcon(Icons.star_rounded), findsNWidgets(2));
+    expect(find.text('李雷'), findsNWidgets(2));
+    final directory = tester.widget<AzListView>(find.byType(AzListView));
+    expect(directory.indexBarData, containsAllInOrder(['↑', '★', 'L']));
+    expect(directory.data.map((row) => row.getSuspensionTag()),
+        ['↑', '↑', '↑', '↑', '★', 'L', '~']);
+    await tester.tap(find.text('李雷').first);
+    await tester.tap(find.text('李雷').last);
+    expect(logic.openedFriends, 2);
     logic.stars.apply(StarFriend.fromJson({
       'friendUserID': 'u1',
       'starred': false,
@@ -134,7 +142,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.star_rounded), findsNothing);
     await tester.tap(find.text('李雷'));
-    expect(logic.openedFriends, 1);
+    expect(logic.openedFriends, 3);
     expect(tester.takeException(), isNull);
     const output = String.fromEnvironment('CONTACTS_LAYOUT_PREVIEW');
     if (output.isNotEmpty) {

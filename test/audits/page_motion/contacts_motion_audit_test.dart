@@ -63,7 +63,7 @@ class _MotionPickerContacts extends GetxController implements ContactsLogic {
   final presence = _MotionPresence();
 
   @override
-  void setPresenceVisible(String id, bool visible) {}
+  void setPresenceVisible(String id, bool visible, {Object? source}) {}
 
   @override
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);

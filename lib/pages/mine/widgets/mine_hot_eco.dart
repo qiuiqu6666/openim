@@ -1,14 +1,17 @@
+import 'mine_ecosystem_artwork.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import 'mine_profile_localization.dart';
+import 'mine_ecosystem_icon.dart';
 
 const _assetPackage = 'openim_common';
 
 class MineHotEcoSection extends StatelessWidget {
   static const imageProviders = <AssetImage>[
+    AssetImage(MineEcosystemArtwork.asset),
     AssetImage('assets/images/profile_eco_ai_99chat.webp',
         package: _assetPackage),
     AssetImage('assets/images/profile_eco_shop_99chat.webp',
@@ -93,6 +96,7 @@ class MineHotEcoSection extends StatelessWidget {
                           columns,
                       child: _MineHotEcoTile(
                         item: items[i],
+                        artworkIndex: i,
                         onTap: () {
                           final item = items[i];
                           if (item.opensWallet && onWalletTap != null) {
@@ -139,7 +143,7 @@ class MineHotEcoSection extends StatelessWidget {
   Widget _buildHeading(BuildContext context, double width) {
     final large = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     final title = Row(children: [
-      Text('🔥', style: TextStyle(fontSize: width * 0.046)),
+      MineEcosystemIcon(size: width * 0.06),
       const SizedBox(width: AppTokens.s3),
       Expanded(
           child: Text(
@@ -152,21 +156,10 @@ class MineHotEcoSection extends StatelessWidget {
             fontWeight: FontWeight.w600),
       )),
     ]);
-    final status = Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.s5, vertical: AppTokens.s3),
-        child: Text(mineText(context, zh: '后续开放', en: 'Coming soon'),
-            style: TextStyle(
-                color: secondaryTextColor,
-                fontSize: AppTokens.captionFontSize)));
     return ConstrainedBox(
       key: const ValueKey('mine-hot-eco-title-row'),
       constraints: const BoxConstraints(minHeight: AppTokens.minimumTapSize),
-      child: large
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [title, status])
-          : Row(children: [Expanded(child: title), status]),
+      child: title,
     );
   }
 }
@@ -188,11 +181,13 @@ class _MineHotEcoItem {
 class _MineHotEcoTile extends StatefulWidget {
   const _MineHotEcoTile({
     required this.item,
+    required this.artworkIndex,
     required this.onTap,
     required this.delay,
   });
 
   final _MineHotEcoItem item;
+  final int artworkIndex;
   final VoidCallback onTap;
   final Duration delay;
 
@@ -269,82 +264,30 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
 
   @override
   Widget build(BuildContext context) => AspectRatio(
-        aspectRatio: 0.78,
+        aspectRatio: 1.25,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final tileWidth = constraints.maxWidth;
-            final radius = tileWidth * 0.12;
+            final radius = tileWidth * 0.085;
             return Material(
               color: Colors.transparent,
               child: InkWell(
                 borderRadius: BorderRadius.circular(radius),
                 onTap: widget.item.enabled ? widget.onTap : null,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(radius),
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      Transform.scale(
-                        scale: 1.34,
-                        child: Image.asset(
-                          'assets/images/${widget.item.assetName}',
-                          package: _assetPackage,
-                          fit: BoxFit.cover,
-                          alignment: Alignment.center,
-                          gaplessPlayback: true,
-                        ),
-                      ),
-                      if (!_reduceMotion && widget.item.enabled)
-                        _MineHotEcoLightSweep(animation: _sweep),
-                      Positioned(
-                        left: tileWidth * 0.06,
-                        bottom: tileWidth * 0.10,
-                        right: tileWidth * 0.06,
-                        child: Row(
-                          children: [
-                            Container(
-                              width: tileWidth * 0.16,
-                              height: tileWidth * 0.16,
-                              decoration: BoxDecoration(
-                                color:
-                                    AppTokens.onAccent.withValues(alpha: 0.35),
-                                shape: BoxShape.circle,
-                                border: Border.all(
-                                  color: AppTokens.onAccent
-                                      .withValues(alpha: 0.75),
-                                  width: tileWidth * 0.0096,
-                                ),
-                              ),
-                              child: Icon(
-                                widget.item.enabled
-                                    ? Icons.arrow_forward_rounded
-                                    : Icons.lock_outline_rounded,
-                                color: AppTokens.onAccent,
-                                size: tileWidth * 0.1088,
-                              ),
-                            ),
-                            SizedBox(width: tileWidth * 0.03),
-                            Expanded(
-                              child: FittedBox(
-                                fit: BoxFit.scaleDown,
-                                alignment: Alignment.centerLeft,
-                                child: Text(
-                                  widget.item.title,
-                                  maxLines: 1,
-                                  softWrap: false,
-                                  style: TextStyle(
-                                    color: AppTokens.onAccent,
-                                    fontSize: tileWidth * 0.11,
-                                    fontWeight: FontWeight.w700,
-                                    height: 1.1,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                child: Semantics(
+                  label: widget.item.title,
+                  button: true,
+                  enabled: widget.item.enabled,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(radius),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        MineEcosystemArtwork(index: widget.artworkIndex),
+                        if (!_reduceMotion && widget.item.enabled)
+                          _MineHotEcoLightSweep(animation: _sweep),
+                      ],
+                    ),
                   ),
                 ),
               ),

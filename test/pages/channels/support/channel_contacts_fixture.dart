@@ -25,7 +25,7 @@ class ChannelContactsFixture extends ContactCardPickerContacts {
   @override
   Future<void> ensureFriendsLoaded() async {}
   @override
-  void setPresenceVisible(String id, bool visible) {}
+  void setPresenceVisible(String id, bool visible, {Object? source}) {}
 }
 
 class _ChannelIM extends GetxController implements IMController {

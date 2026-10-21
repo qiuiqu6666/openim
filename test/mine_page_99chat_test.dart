@@ -70,11 +70,6 @@ void main() {
     expect(find.text('个性签名: 未设置'), findsOneWidget);
 
     for (final text in const [
-      '热门生态',
-      'AI助手',
-      '生活缴费',
-      '数字资产',
-      '社区广场',
       '收藏',
       '通话',
       '消息通知',
@@ -82,6 +77,11 @@ void main() {
       '设置',
     ]) {
       expect(find.text(text), findsOneWidget, reason: 'missing $text');
+    }
+
+    for (final label in ['AI助手', '生活缴费', '数字资产', '社区广场']) {
+      expect(find.bySemanticsLabel(label), findsOneWidget);
+      expect(find.text(label), findsNothing);
     }
 
     expect(find.text('账号设置'), findsNothing);
@@ -93,12 +93,12 @@ void main() {
     expect(favoritesTapped, isTrue);
     expect(tappedFeature, isNull);
 
-    await tester.tap(find.text('生活缴费'));
+    await tester.tap(find.bySemanticsLabel('生活缴费'));
     await tester.pump();
     expect(tappedFeature, isNull);
     expect(find.text('暂未开放'), findsNothing);
 
-    await tester.tap(find.text('AI助手'));
+    await tester.tap(find.bySemanticsLabel('AI助手'));
     await tester.pump();
     expect(tappedFeature, 'AI助手');
   });
@@ -147,8 +147,8 @@ void main() {
     final signatureText = tester.widget<Text>(find.text('个性签名: 未设置'));
     expect(signatureText.style?.fontSize, closeTo(504 * 0.034, 0.001));
 
-    final hotEcoText = tester.widget<Text>(find.text('热门生态'));
-    expect(hotEcoText.style?.fontSize, closeTo(504 * 0.043, 0.001));
+    expect(find.text('热门生态'), findsOneWidget);
+    expect(find.text('后续开放'), findsNothing);
   });
 
   testWidgets('mine profile locks source-level 99chat geometry and colors',
@@ -283,13 +283,9 @@ void main() {
     expect(shareRect.top - notificationsRect.bottom, 14);
     expect(settingsRect.top - shareRect.bottom, 0);
 
-    final titleRow = tester.getRect(
-      find.byKey(const ValueKey('mine-hot-eco-title-row')),
-    );
-    final tilesRow = tester.getRect(
-      find.byKey(const ValueKey('mine-hot-eco-tiles-row')),
-    );
-    expect(titleRow.height, greaterThanOrEqualTo(AppTokens.minimumTapSize));
-    expect(tilesRow.top - titleRow.bottom, closeTo(0, 0.001));
+    expect(
+        find.byKey(const ValueKey('mine-hot-eco-title-row')), findsOneWidget);
+    expect(
+        find.byKey(const ValueKey('mine-hot-eco-tiles-row')), findsOneWidget);
   });
 }

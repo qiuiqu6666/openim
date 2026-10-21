@@ -497,6 +497,7 @@ class ChatLogic extends SuperController {
   RxString get announcementVersion => _group.announcementVersion;
   String? get groupOwnerID => _group.groupOwnerID;
   bool get sendingMuted => isOfficialNotificationChat || _group.sendingMuted;
+  bool get personallyMuted => _group.personallyMuted;
   bool get isChannel => _group.isChannel;
   bool get isChannelSubscriber => isChannel && !_group.isAdminOrOwner;
   bool get groupMutePending =>
@@ -1455,7 +1456,8 @@ class ChatLogic extends SuperController {
   void retryMediaPreparation() => _media.retryPreparation();
   String? get mediaPreparationLabel => _media.preparationLabel;
   bool get hasFailedVideoPreparation => _media.hasFailedVideos;
-  void retryOriginalVideoPreparation() => _media.retryPreparation(originalVideos: true);
+  void retryOriginalVideoPreparation() =>
+      _media.retryPreparation(originalVideos: true);
   void cancelMediaPreparation() => _media.cancelPreparation();
   Future<void> onTapFile() => _media.onTapFile();
   Future<void> onTapCamera() => _media.onTapCamera();

@@ -1,3 +1,4 @@
+import '../../../group_features/personalization/group_personalization_page.dart';
 import '../../../channels/models/channel_kind.dart';
 import '../../../channels/presentation/channel_labels.dart';
 import 'package:openim_common/localization.dart';
@@ -64,6 +65,10 @@ class GroupManagePage extends StatelessWidget {
                                   ? null
                                   : () => _selectJoinRule(context, rule)),
                       ]),
+                      if (!isChannelEx(info.ex) && logic.groupSetupLogic.isOwner) ...[
+                        const SizedBox(height: 16),
+                        _section([_row('群个性化', onTap: busy ? null : () => Get.to(() => GroupPersonalizationPage(logic: logic.groupSetupLogic)))]),
+                      ],
                       const SizedBox(height: 16),
                       _section([
                         if (!logic.friendProtection.ready.value)

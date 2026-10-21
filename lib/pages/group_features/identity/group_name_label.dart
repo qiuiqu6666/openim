@@ -2,17 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../data/group_feature_store.dart';
-import '../models/group_game_type.dart';
-
-/// Public group type affects the name only, never member names or permissions.
-Color? groupNameColor(BuildContext context, GroupGameType type) {
-  if (type != GroupGameType.sangong && type != GroupGameType.markSix) {
-    return null;
-  }
-  return Theme.of(context).brightness == Brightness.dark
-      ? AppTokens.paymentErrorDark
-      : AppTokens.danger;
-}
+import '../personalization/group_personalization.dart';
+import '../personalization/group_personalization_artwork.dart';
 
 /// Reuses account-scoped metadata. Rendering a name never starts a request.
 class GroupNameLabel extends StatelessWidget {
@@ -36,20 +27,39 @@ class GroupNameLabel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    if (store == null) return _name(context, GroupGameType.fromEx(ex));
+    if (store == null) return _name(context, ex);
     return ListenableBuilder(
       listenable: store!,
-      builder: (context, _) => _name(context, store!.gameType(groupID ?? '')),
+      builder: (context, _) =>
+          _name(context, store!.cachedGroupInfo(groupID ?? '')?.ex ?? ex),
     );
   }
 
-  Widget _name(BuildContext context, GroupGameType type) {
-    final color = groupNameColor(context, type);
-    return Text(name,
+  Widget _name(BuildContext context, String? metadata) {
+    final appearance = GroupPersonalization.fromEx(metadata);
+    final color = appearance.color == null ? null : Color(appearance.color!);
+    final text = Text(name,
         maxLines: maxLines,
         overflow: overflow,
         style: color == null
             ? style
             : (style ?? const TextStyle()).copyWith(color: color));
+    if (appearance.iconUrl == null && appearance.iconKey == null) return text;
+    final size =
+        (style?.fontSize ?? DefaultTextStyle.of(context).style.fontSize ?? 16);
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      ExcludeSemantics(
+          child: appearance.iconKey != null
+              ? GroupPersonalizationArtwork(
+                  iconKey: appearance.iconKey!, size: size)
+              : Image.network(appearance.iconUrl!,
+                  width: size,
+                  height: size,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) =>
+                      SizedBox.square(dimension: size))),
+      const SizedBox(width: AppTokens.s2),
+      Flexible(child: text),
+    ]);
   }
 }

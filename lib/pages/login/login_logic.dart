@@ -104,6 +104,13 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   final verificationCodeCtrl = TextEditingController();
   final obscureText = true.obs;
   final enabled = false.obs;
+  final agreementAccepted = true.obs;
+  void setAgreementAccepted(bool value) {
+    if (_closed || isClosed || submitting.value) return;
+    agreementAccepted.value = value;
+    _onChanged();
+  }
+
   final submitting = false.obs;
   final areaCode = "+86".obs;
   final isPasswordLogin = true.obs;
@@ -237,7 +244,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
       _deviceFlow?.cancel();
     }
     updatePasswordAccountType();
-    enabled.value = phoneCtrl.text.trim().isNotEmpty &&
+    enabled.value = agreementAccepted.value && phoneCtrl.text.trim().isNotEmpty &&
         (isPasswordLogin.value
             ? pwdCtrl.text.trim().isNotEmpty
             : verificationCodeCtrl.text.trim().isNotEmpty);
@@ -280,6 +287,7 @@ class LoginLogic extends GetxController with GetTickerProviderStateMixin {
   }
 
   Future<void> login() async {
+    if (!agreementAccepted.value) return;
     if (_closed || isClosed || _loggingIn || !_checkingInput()) return;
     _loggingIn = true;
     submitting.value = true;

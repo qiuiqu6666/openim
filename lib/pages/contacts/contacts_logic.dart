@@ -90,6 +90,7 @@ class ContactsLogic extends GetxController
   StreamSubscription<UserStatusInfo>? _presenceSubscription;
   final _presenceIDs = <String>{};
   final _visiblePresenceIDs = <String>{};
+  final _visiblePresenceSources = <Object, String>{};
   final _profilePresenceIDs = <Object, String>{};
   final _directoryPresenceIDs = <Object, Set<String>>{};
   Timer? _presenceTimer;
@@ -98,13 +99,16 @@ class ContactsLogic extends GetxController
   Future<void> _presenceWork = Future.value();
   bool _foreground = true;
 
-  void setPresenceVisible(String id, bool visible) {
+  void setPresenceVisible(String id, bool visible, {Object? source}) {
     if (isClosed) return;
     if (visible) {
-      _visiblePresenceIDs.add(id);
+      _visiblePresenceSources[source ?? id] = id;
     } else {
-      _visiblePresenceIDs.remove(id);
+      _visiblePresenceSources.remove(source ?? id);
     }
+    _visiblePresenceIDs
+      ..clear()
+      ..addAll(_visiblePresenceSources.values);
     _presenceTimer?.cancel();
     _presenceTimer = Timer(
         const Duration(milliseconds: 120), () => refreshPresence(force: false));

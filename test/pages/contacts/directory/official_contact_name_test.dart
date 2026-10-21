@@ -41,7 +41,7 @@ class _DirectoryLogic extends GetxController implements ContactsLogic {
   @override
   void viewFriend(ISUserInfo friend) => openedFriend = friend;
   @override
-  void setPresenceVisible(String id, bool visible) {}
+  void setPresenceVisible(String id, bool visible, {Object? source}) {}
   @override
   void searchContacts() {}
   @override

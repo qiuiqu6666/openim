@@ -93,9 +93,14 @@ class ChatPage extends StatelessWidget {
                   return TitleBar.chat(
                     toolbarHeight: headerHeight,
                     title: contactName ?? logic.nickname.value,
-                    titleColor: logic.isGroupChat
-                        ? groupNameColor(context,
-                            logic.groupFeatures.gameType(logic.groupID!))
+                    titleWidget: logic.isGroupChat
+                        ? GroupNameLabel(
+                            name: logic.nickname.value,
+                            groupID: logic.groupID,
+                            store: logic.groupFeatures,
+                            ex: logic.groupInfo?.ex,
+                            style: Styles.ts_0C1C33_17sp,
+                          )
                         : null,
                     avatarUrl: logic.faceUrl.value,
                     presenceText: logic.peerTyping.value
@@ -127,7 +132,7 @@ class ChatPage extends StatelessWidget {
                         : GroupAnnouncementBanner(
                             text: logic.announcement.value,
                             version: logic.announcementVersion.value,
-                        publisherID: logic.groupInfo?.notificationUserID,
+                            publisherID: logic.groupInfo?.notificationUserID,
                             groupID: logic.groupID!,
                             userID: OpenIM.iMManager.userID,
                             preferences: SpUtil().prefs,
@@ -256,6 +261,10 @@ class ChatPage extends StatelessWidget {
                   enabled: !logic.sendingMuted &&
                       !logic.pendingForward.sending.value,
                   showDisabledWarning: !logic.groupMutePending,
+                  muteNotice: logic.isGroupChat &&
+                      logic.sendingMuted &&
+                      !logic.groupMutePending &&
+                      !logic.isChannelSubscriber,
                   hintText: logic.groupMembershipPending
                       ? StrRes.synchronizing
                       : logic.groupMutePending
@@ -263,7 +272,11 @@ class ChatPage extends StatelessWidget {
                           : (logic.isChannelSubscriber
                               ? 'channelPublishRestricted'.tr
                               : logic.sendingMuted
-                                  ? StrRes.youMuted
+                                  ? (!logic.isGroupChat
+                                      ? StrRes.youMuted
+                                      : logic.personallyMuted
+                                          ? AppCopy.text('你被禁止发言')
+                                          : AppCopy.text('全员禁言中'))
                                   : null),
                   directionalText: logic.directionalText(),
                   onCloseDirectional: logic.onClearDirectional,

@@ -41,7 +41,7 @@ void main() {
         final scaffold = tester.element(find.byType(Scaffold));
         expect(MediaQuery.textScalerOf(scaffold).scale(16), 32);
         expect(tester.hasRunningAnimations, isFalse);
-        expect(find.text('Coming soon'), findsOneWidget);
+        expect(find.text('Coming soon'), findsNothing);
         expect(tester.takeException(), isNull);
         await tester.pumpWidget(const SizedBox.shrink());
       });

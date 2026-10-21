@@ -5,11 +5,16 @@ import 'chat_composer_palette.dart';
 
 class ChatDisableInputBox extends StatelessWidget {
   const ChatDisableInputBox(
-      {super.key, this.type = 0, this.message, this.showWarning = true});
+      {super.key,
+      this.type = 0,
+      this.message,
+      this.showWarning = true,
+      this.muteNotice = false});
 
   final int type;
   final String? message;
   final bool showWarning;
+  final bool muteNotice;
 
   @override
   Widget build(BuildContext context) {
@@ -26,16 +31,23 @@ class ChatDisableInputBox extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 if (showWarning) ...[
-                  ImageRes.warn.toImage
-                    ..width = 14.w
-                    ..height = 14.h,
+                  if (muteNotice)
+                    Icon(Icons.block,
+                        color: AppTokens.danger, size: AppTokens.s6)
+                  else
+                    ImageRes.warn.toImage
+                      ..width = 14.w
+                      ..height = 14.h,
                   6.horizontalSpace,
                 ],
                 Flexible(
                   child: Text(
                     message ?? StrRes.notSendMessageNotInGroup,
                     textAlign: TextAlign.center,
-                    style: Styles.ts_8E9AB0_14sp,
+                    style: muteNotice
+                        ? Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color: Theme.of(context).colorScheme.onSurface)
+                        : Styles.ts_8E9AB0_14sp,
                   ),
                 ),
               ],

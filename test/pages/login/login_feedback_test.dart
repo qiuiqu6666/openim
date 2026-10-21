@@ -1,3 +1,4 @@
+import 'package:openim/widgets/auth/auth_agreement.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -298,7 +299,15 @@ void main() {
     final mode =
         tester.getRect(find.byKey(const ValueKey('login-mode-switch')));
     expect(remember.center.dy, recovery.center.dy);
+    final agreement = tester.getRect(find.byType(AuthAgreement));
     expect(button.top - remember.bottom, AuthReferenceTokens.passwordSubmitGap);
+    final support = tester.getRect(find.byKey(const ValueKey('login-customer-service')));
+    expect(agreement.bottom, lessThanOrEqualTo(support.top));
+    expect(agreement.top, greaterThan(button.bottom));
+    expect(tester.widget<AuthAgreement>(find.byType(AuthAgreement)).accepted, isTrue);
+    await tester.tap(find.descendant(of: find.byType(AuthAgreement), matching: find.byType(Checkbox)));
+    await tester.pump();
+    expect(tester.widget<AuthAgreement>(find.byType(AuthAgreement)).accepted, isFalse);
     expect(mode.top, greaterThanOrEqualTo(button.bottom));
     expect(mode.left, button.left);
     final register =

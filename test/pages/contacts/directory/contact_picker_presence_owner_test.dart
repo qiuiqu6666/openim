@@ -592,6 +592,24 @@ void main() {
     await tester.pump();
   });
 
+  testWidgets('starred and alphabet rows retain presence until both leave',
+      (tester) async {
+    final logic = createLogic();
+    logic.setPresenceVisible('A', true, source: 'starred');
+    logic.setPresenceVisible('A', true, source: 'alphabet');
+    await _flushPresence(tester, logic);
+    expect(sdk.subscribed, {'A'});
+    logic.setPresenceVisible('A', false, source: 'starred');
+    await _flushPresence(tester, logic);
+    expect(sdk.subscribed, {'A'});
+    expect(sdk.unsubscriptions, isEmpty);
+    logic.setPresenceVisible('A', false, source: 'alphabet');
+    await _flushPresence(tester, logic);
+    expect(sdk.subscribed, isEmpty);
+    logic.onDelete();
+    await tester.pump();
+  });
+
   testWidgets('pausing and releasing a picker preserves the main shared friend',
       (tester) async {
     final logic = createLogic();

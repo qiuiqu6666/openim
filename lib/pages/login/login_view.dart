@@ -1,3 +1,4 @@
+import '../../widgets/auth/auth_agreement.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
@@ -23,7 +24,13 @@ class LoginPage extends StatelessWidget {
     Localizations.localeOf(context);
     return Obx(() => AuthMinimalLayout(
           header: const LoginToolbar(onHero: false, showSupport: false),
-          footer: AuthEntryFooter(version: logic.displayVersion.value),
+          footer: Column(children: [
+            AuthAgreement(
+              accepted: logic.agreementAccepted.value,
+              onChanged: logic.submitting.value ? null : logic.setAgreementAccepted,
+            ),
+            AuthEntryFooter(version: logic.displayVersion.value),
+          ]),
           child: AutofillGroup(
               child: Column(children: [
             AuthIdentitySelector(

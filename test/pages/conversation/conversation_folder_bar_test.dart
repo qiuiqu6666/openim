@@ -79,6 +79,45 @@ BoxDecoration _badgeDecoration(WidgetTester tester, String label) => tester
     .decoration! as BoxDecoration;
 
 void main() {
+  for (final reduced in [false, true]) {
+    testWidgets('selection glides, settles and retargets / reduced=$reduced',
+        (tester) async {
+      final folders = [_folder('a', '测试'), _folder('b', '分组')];
+      Widget host(String? selected) =>
+          _host(_bar(folders: folders, selected: selected),
+              reduceMotion: reduced);
+      final indicator =
+          find.byKey(const ValueKey('folder-selection-indicator'));
+      await tester.pumpWidget(host(null));
+      await tester.pumpAndSettle();
+      final start = tester.getRect(indicator);
+      await tester.pumpWidget(host('b'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 100));
+      final moving = tester.getRect(indicator);
+      await tester.pumpAndSettle();
+      final target = tester.getRect(indicator);
+      expect(target.left, greaterThan(start.left));
+      if (reduced) {
+        expect(moving, target);
+      } else {
+        expect(moving, isNot(target));
+        await tester.pumpWidget(host(null));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 220));
+        expect(tester.getRect(indicator).left,
+            inInclusiveRange(start.left, target.left));
+        await tester.pumpWidget(host('a'));
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 40));
+        await tester.pumpWidget(host('b'));
+        await tester.pumpAndSettle();
+        expect(tester.getRect(indicator), target);
+      }
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('no folders leave no bar space or create control',
       (tester) async {
     await tester.pumpWidget(_host(_bar(folders: [])));
@@ -112,13 +151,19 @@ void main() {
             tester.widget<Container>(addContainer).decoration! as BoxDecoration;
         expect(addDecoration.color,
             dark ? colors.surfaceContainerLow : AppTokens.surfaceLight);
-        expect(_segmentDecoration(tester, '工作').color,
-            dark ? colors.surfaceContainerHighest : const Color(0xFFECECEC));
+        await tester.pump();
+        final indicator = tester.widget<DecoratedBox>(
+            find.byKey(const ValueKey('folder-selection-indicator')));
+        expect((indicator.decoration as BoxDecoration).color,
+            (dark ? colors.surfaceContainerHighest : const Color(0xFFECECEC))
+                .withValues(alpha: .65));
+        expect(find.byKey(const ValueKey('folder-glass-track')), findsOneWidget);
+        expect(find.byType(LiquidGlassSurface), findsNWidgets(2));
         expect(_segmentDecoration(tester, '全部').color, Colors.transparent);
-        final title = tester.widget<Text>(find.text('工作'));
-        expect(title.style!.fontSize, 14);
-        expect(title.style!.fontWeight, FontWeight.w600);
-        expect(title.style!.color,
+        final title = DefaultTextStyle.of(tester.element(find.text('工作')));
+        expect(title.style.fontSize, 14);
+        expect(title.style.fontWeight, FontWeight.w600);
+        expect(title.style.color,
             dark ? colors.onSurface : AppTokens.textPrimaryLight);
         final decoratedSurfaces = tester
             .widgetList<DecoratedBox>(

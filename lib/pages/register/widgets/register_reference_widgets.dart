@@ -1,9 +1,7 @@
-import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'package:flutter/material.dart';
 
 import '../../../widgets/auth/auth_copy.dart';
 import '../../../widgets/auth/auth_reference.dart';
-import '../../mine/settings/pages/legal_document_page.dart';
 import '../rules/register_password_rules.dart';
 
 /// Measurements and feedback colors from the reference registration form.
@@ -87,44 +85,3 @@ class RegisterPasswordChecklist extends StatelessWidget {
   }
 }
 
-class RegisterAgreement extends StatelessWidget {
-  const RegisterAgreement({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    final style = TextStyle(
-      fontSize: 13,
-      height: 1.5,
-      color: AuthReferenceTokens.color(context, AuthReferenceTokens.ink400),
-    );
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 2),
-      child: Align(
-        alignment: Alignment.center,
-        child: Wrap(
-          alignment: WrapAlignment.center,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(authText('注册代表同意', 'By registering, you agree to'),
-                style: style),
-            GestureDetector(
-              onTap: () => Navigator.of(context).push(
-                  AppMaterialPageRoute<void>(
-                      builder: (_) => const LegalDocumentPage(
-                          kind: LegalDocumentKind.terms))),
-              child: Padding(
-                padding: const EdgeInsets.only(left: 2),
-                child: Text(authText('《用户协议》', '《User Agreement》'),
-                    style: style.copyWith(
-                      color: AuthReferenceTokens.color(
-                          context, AuthReferenceTokens.link),
-                      fontWeight: FontWeight.w600,
-                    )),
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

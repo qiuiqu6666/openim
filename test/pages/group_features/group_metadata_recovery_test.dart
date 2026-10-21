@@ -38,9 +38,7 @@ void main() {
     await tester.pump(const Duration(seconds: 1));
     await tester.pump();
     expect(calls, 4);
-    final context = tester.element(find.text('g'));
-    expect(tester.widget<Text>(find.text('g')).style?.color,
-        groupNameColor(context, GroupGameType.markSix));
+    expect(tester.widget<Text>(find.text('g')).style?.color, isNull);
     expect(tester.widget<Text>(find.text('ordinary')).style?.color, isNull);
     expect(tester.widget<Text>(find.text('agent')).style?.color, isNull);
     store.hydrate(['g', 'ordinary', 'agent']);

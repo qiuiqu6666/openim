@@ -1,3 +1,4 @@
+import '../../group_features/identity/group_name_label.dart';
 import '../../channels/models/channel_kind.dart';
 import '../../channels/presentation/channel_ui.dart';
 import 'package:flutter/material.dart';
@@ -50,9 +51,9 @@ class GroupProfilePanelPage extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(height: 16),
-                      Text(
-                        group.groupName ?? '',
-                        textAlign: TextAlign.center,
+                      GroupNameLabel(
+                        name: group.groupName ?? '',
+                        ex: group.ex,
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(

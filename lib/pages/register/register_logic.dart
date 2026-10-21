@@ -33,6 +33,13 @@ class RegisterLogic extends GetxController {
   final obscureConfirmPassword = true.obs;
   final areaCode = "+86".obs;
   final enabled = false.obs;
+  final agreementAccepted = true.obs;
+  void setAgreementAccepted(bool value) {
+    if (_closed || isClosed) return;
+    agreementAccepted.value = value;
+    _onChanged();
+  }
+
   final submitting = false.obs;
   final _touchedFields = <RegistrationField>{}.obs;
   bool _closed = false;
@@ -129,7 +136,7 @@ class RegisterLogic extends GetxController {
   void _onChanged() {
     if (_closed || isClosed) return;
     _touchedFields.refresh();
-    enabled.value = _accountError() == null &&
+    enabled.value = agreementAccepted.value && _accountError() == null &&
         RegisterNicknameRules.validate(nicknameCtrl.text) == null &&
         AuthFormRules.verificationCode(verificationCodeCtrl.text,
                 sixDigits: true) ==
@@ -199,6 +206,7 @@ class RegisterLogic extends GetxController {
   }
 
   Future<void> next() async {
+    if (!agreementAccepted.value) return;
     if (_closed || isClosed || submitting.value) return;
     if (!accountCreated && !_checkingInput(includeCredentials: true)) return;
     final requestedAreaCode = areaCode.value;

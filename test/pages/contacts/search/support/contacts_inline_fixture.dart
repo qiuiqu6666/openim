@@ -47,7 +47,7 @@ class InlineContactsFixture extends GetxController implements ContactsLogic {
   @override
   void viewFriend(ISUserInfo friend) {}
   @override
-  void setPresenceVisible(String id, bool visible) {}
+  void setPresenceVisible(String id, bool visible, {Object? source}) {}
 
   @override
   void onClose() {
