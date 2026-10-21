@@ -8,7 +8,7 @@
 - `native/ios_home_tab_bar.dart` 负责平台视图及实例级通道，复用现有 PNG 图标、标签、主题 accent 和真实未读汇总。原生回调只请求选择，仍经过首页 `_selectMainTab` 与钱包入口流程；选中状态最终由 `NavBarConfig` 回传。消息、群聊及联系人角标来自现有响应式状态，其他入口不造角标数据。
 - 原生实现在 `ios/Runner/HomeNavigation/`：`HomeTabBarFactory` 注册能力查询和视图工厂；`HomeTabBarPlatformView` 同步配置、图标和角标；`HomeTabBarHostView` 管理 `UITabBarController` 的父子关系。没有搬移 Flutter 页面，也没有引入新的 SDK 订阅、导航框架或第三方插件。
 - 原生控件保留系统 Liquid Glass 材质、选中指示、文字布局和辅助功能行为，支持应用亮暗主题及 RTL。iPad 仍显示五个底部入口；原生滚动收起关闭，因为 Flutter 列表不会自动参与 UIKit 滚动联动。底栏占位沿用 64 + 一次底部安全区，搜索和多选操作条继续走既有分支。
-- 图标和文字配色沿用 Flutter 底栏：选中使用 `AppTokens.accent`，未选中使用对应亮暗主题的 `AppTokens.textSecondary`，分别同步给原生 `tintColor` / `unselectedItemTintColor`，避免 UIKit 默认黑白色替代项目灰色。
+- 图标配色沿用 Flutter 底栏：选中使用 `AppTokens.accent`，未选中使用对应亮暗主题的 `AppTokens.textSecondary`。iOS 26.2 会忽略未选中模板图标的 `unselectedItemTintColor`，因此图标先按 Token 着色，再以 `.alwaysOriginal` 交给原生底栏，保留系统玻璃和交互。复制系统现有 appearance 配置 normal/selected 的图标与标题颜色，不重置材质背景；标题仍由 UIKit 排版、合成。图标缓存同时核对配色，主题切换不会沿用旧色。
 - 每个原生视图拥有独立通道；Dart dispose 清除回调，原生视图离开 window 时移除子控制器，重新显示时恢复。重建不重复解码相同图标，也不重复发送相同配置。
 
 本次再次核对 [99chat 首页实际实现](https://github.com/qiuiqu6666/99chat/blob/main/lib/src/pages/home_page.dart) 的五个入口和状态保留行为；系统 Liquid Glass 是用户指定的新增平台表现，参考仓库没有对应原生实现。新增桥接组件是因为现有 `LiquidGlassSurface` 为 Flutter 渲染，不能直接调用系统 `UITabBarController`。
@@ -16,6 +16,8 @@
 验证入口：`test/pages/home/navigation/home_bottom_nav_bar_test.dart`（原生能力选择、角标/主题/标签/选中同步、入口回调、失效回调、异常回退）；现有 `glass_bottom_nav_bar_test.dart`、`home_unread_badge_test.dart` 和 `wallet_home_navigation_test.dart` 覆盖保留路径。
 
 以上 28 项测试全部通过；修改范围 analyze 无问题；`flutter build ios --debug --no-codesign --no-pub` 完整构建通过。结果和独立 UIKit 预览保存在工作区 `release-artifacts/home-native-navigation-20261022/`。构建没有修改设备签名配置，也没有安装到手机。
+
+颜色回归补充：在 iOS 26.2 使用生产原生控件复现了“已传入灰色但模板图标仍显示黑色”。原色图片修复后，对模拟器截图的图标区域采样，亮色为 `#626C79`、暗色及同一实例切换主题后为 `#9A9CA3`，选中均为 `#1E90FF`；玻璃胶囊保留。截图与采样记录见上述目录的 `color-*.png` 和 `native-color-verification.json`。6 项桥接回归及最新 iOS 无签名构建通过；这项截图验证使用独立 UIKit 测试宿主，尚未安装到手机。
 
 iOS 26.2 独立 UIKit 测试宿主已核对生产原生控件亮暗截图，实测 402×98 视图中系统底栏为 402×83，底部安全区 34；五个入口、角标、回调和控制器移除/恢复通过。测试宿主使用样例角标，不是线上账号页面。真实 Flutter 页面背后的材质采样、键盘、返回手势、VoiceOver 和 iPad/横屏最终观感仍需设备验证；不能用独立 UIKit 预览代替完整 App 验收。
 

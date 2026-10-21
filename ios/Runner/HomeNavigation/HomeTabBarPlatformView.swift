@@ -9,6 +9,7 @@ final class HomeTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarContr
     private let assetKey: (String) -> String
     private var previousItems: NSArray?
     private var previousIconSize: CGFloat?
+    private var previousPalette: [UInt32]?
 
     init(frame: CGRect, identifier: Int64, args: Any?,
          messenger: FlutterBinaryMessenger, parent: UIViewController?,
@@ -45,18 +46,41 @@ final class HomeTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarContr
             alpha: CGFloat((value >> 24) & 255) / 255)
     }
 
-    private func image(_ asset: String, size: CGFloat) -> UIImage? {
+    private func image(_ asset: String, size: CGFloat, tint: UIColor) -> UIImage? {
         guard let path = Bundle.main.path(forResource: assetKey(asset), ofType: nil),
               let original = UIImage(contentsOfFile: path) else { return nil }
         return UIGraphicsImageRenderer(size: CGSize(width: size, height: size)).image { _ in
             original.draw(in: CGRect(x: 0, y: 0, width: size, height: size))
-        }.withRenderingMode(.alwaysTemplate)
+        // Liquid Glass can recolor unselected template images to black/white,
+        // ignoring unselectedItemTintColor. Bake the app's semantic color into
+        // the original image so UIKit keeps it while rendering its own glass.
+        }.withTintColor(tint, renderingMode: .alwaysOriginal)
+    }
+
+    private func applyPalette(selected: UIColor, inactive: UIColor) {
+        let bar = host.tabs.tabBar
+        bar.tintColor = selected
+        bar.unselectedItemTintColor = inactive
+        // Copy the current system appearance: retain the Liquid Glass material.
+        let appearance = bar.standardAppearance.copy()
+        for layout in [appearance.stackedLayoutAppearance,
+                       appearance.inlineLayoutAppearance,
+                       appearance.compactInlineLayoutAppearance] {
+            layout.normal.iconColor = inactive
+            layout.normal.titleTextAttributes[.foregroundColor] = inactive
+            layout.selected.iconColor = selected
+            layout.selected.titleTextAttributes[.foregroundColor] = selected
+        }
+        bar.standardAppearance = appearance
+        bar.scrollEdgeAppearance = appearance
     }
 
     private func update(_ configuration: [String: Any]) -> FlutterError? {
         guard let items = configuration["items"] as? [[String: String]], items.count == 5,
               let selected = configuration["selectedIndex"] as? Int,
-              items.indices.contains(selected) else {
+              items.indices.contains(selected),
+              let accent = configuration["accent"] as? NSNumber,
+              let inactive = configuration["inactive"] as? NSNumber else {
             return FlutterError(code: "invalid-tabs", message: "Expected five home tabs", details: nil)
         }
         let dark = configuration["dark"] as? Bool == true
@@ -66,23 +90,20 @@ final class HomeTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarContr
         host.semanticContentAttribute = rtl ? .forceRightToLeft : .forceLeftToRight
         host.tabs.view.semanticContentAttribute = host.semanticContentAttribute
         host.tabs.tabBar.semanticContentAttribute = host.semanticContentAttribute
-        if let argb = configuration["accent"] as? NSNumber {
-            host.tabs.tabBar.tintColor = color(argb)
-        }
-        if let argb = configuration["inactive"] as? NSNumber {
-            host.tabs.tabBar.unselectedItemTintColor = color(argb)
-        }
+        let palette = [accent.uint32Value, inactive.uint32Value]
+        let selectedColor = color(accent)
+        let inactiveColor = color(inactive)
         // Rebuild artwork only for a changed label/asset/size, not every badge tick.
         let artwork = items.map { item in
             ["title": item["title"] ?? "", "icon": item["icon"] ?? "",
              "selectedIcon": item["selectedIcon"] ?? ""]
         } as NSArray
         let iconSize = (configuration["iconSize"] as? NSNumber)?.doubleValue ?? 24
-        if previousItems != artwork || previousIconSize != iconSize {
+        if previousItems != artwork || previousIconSize != iconSize || previousPalette != palette {
             var controllers: [UIViewController] = []
             for (index, item) in items.enumerated() {
-                guard let normal = image(item["icon"] ?? "", size: iconSize),
-                      let selectedImage = image(item["selectedIcon"] ?? "", size: iconSize) else {
+                guard let normal = image(item["icon"] ?? "", size: iconSize, tint: inactiveColor),
+                      let selectedImage = image(item["selectedIcon"] ?? "", size: iconSize, tint: selectedColor) else {
                     return FlutterError(code: "missing-tab-icon", message: "Home tab asset missing", details: index)
                 }
                 let page = UIViewController()
@@ -94,6 +115,10 @@ final class HomeTabBarPlatformView: NSObject, FlutterPlatformView, UITabBarContr
             host.tabs.setViewControllers(controllers, animated: false)
             previousItems = artwork
             previousIconSize = iconSize
+        }
+        if previousPalette != palette {
+            applyPalette(selected: selectedColor, inactive: inactiveColor)
+            previousPalette = palette
         }
         for (index, item) in items.enumerated() {
             let badge = item["badge"] ?? ""
