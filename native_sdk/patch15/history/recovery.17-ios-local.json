@@ -1,0 +1,74 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "03592bcae0ad0cf45343b5ae8eabe13e7b69930f",
+  "sdk_version": "v3.8.3-patch.15+recovery.17",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "d650303b9dc4d2c016382dce9f11410e47cb81da7022c793e50574ef5f0ce2bd",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "944018d9ce4ff785c28537b146c3e4f7cb9249ca1b12a1220015d1d3ee72228d",
+  "created": "2026-10-14",
+  "previous_release": "history/recovery.15.json",
+  "native_binary_integrated": true,
+  "checks": {
+    "core_race": "passed: five packages, real SQLite, Go 1.24.0 and final mobile dependencies",
+    "core_no_cgo": "passed: common/network/interaction/conversation_msg in AAR build",
+    "android_aar_build": "passed: four ABIs recovery.17",
+    "android_apk_build": "passed: signed arm64 release 3.0.1+2030 from isolated source",
+    "source_lock_tests": "passed: 15 tests",
+    "source_parity": "passed: 372 files from clean official patch roundtrip; only version and mobile build dependency overlays",
+    "android_bridge_tests": "passed: 24 JVM tests",
+    "flutter_history_tests": "passed: 274 tests, 12 existing skips, isolated application source",
+    "device_runtime": "not run; no previous release results carried forward",
+    "ios_framework": "passed: device arm64 and simulator arm64/x86_64; CGO=0 four packages, CGO=1 interaction/conversation_msg, SQLite transaction and notification bootstrap tests",
+    "apk_native_parity": "passed: embedded arm64 Core equals stripped verified AAR",
+    "apk_signature": "passed: APK Signature Scheme v2",
+    "database_full_suite": "passed: fresh isolated version-sync fixtures; full native SQLite package with race detector",
+    "ios_app_build": "passed: Release no-codesign; app embedded Core recovery.17 and build 2030 verified"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.17",
+    "sdk_version": "v3.8.3-patch.15+recovery.17",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not installed/tested in this run; signed arm64 release APK verified",
+    "aar_sha256": "4257788e8ddacb436de6d69117ce26aa907a38d60e0e0ee5d828c41be4173bda",
+    "apk_sha256": "703601dc56ebbcdf11feb5f8a45c113bc80d0151b472ff939c47f6c154d316c6",
+    "application_version": "3.0.1+2030"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.17",
+    "framework_prepared": true,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "not tested for recovery.17",
+    "framework_sha256": {
+      "ios-arm64/OpenIMCore.framework/OpenIMCore": "8b408b6498f6b995edde40c93d2d6f182d744a70e99126bed0e4e3825fce9262",
+      "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "cb279458b0e472453be087fe0d8370948a0442779372df001d2188f518a5d10e"
+    },
+    "pod_resolution_and_build": "passed: Xcode Release through Flutter 3.41.6 --no-codesign",
+    "app_validation_scope": "current macOS workspace; app contains verified recovery.17 Core; no signing/device installation",
+    "app_version": "3.0.1+2030",
+    "app_binary_sha256": "716511f5db12d1925d3f377e493834e23f7d686afd592dbcc7aa7970550480b9",
+    "verified_at": "2026-10-14T05:26:22.484975+00:00"
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned existing gomobile dependency closure",
+    "version/version: unique recovery.17 runtime identity"
+  ],
+  "verification_evidence": "verification/recovery.17-android.json",
+  "ios_verification_evidence": "verification/recovery.17-ios.json"
+}

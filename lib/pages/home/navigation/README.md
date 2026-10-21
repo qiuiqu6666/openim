@@ -2,6 +2,23 @@
 
 本模块负责首页五个入口的玻璃外观、选中指示和底部布局。导航仍使用 `PersistentTabView` 提供的 `NavBarConfig`；标签、图标、未读数据和点击回调来自原有首页配置。
 
+## iOS 系统底栏（2026-10-22）
+
+- `home_bottom_nav_bar.dart` 是首页的自适应入口。仅在真实 iOS 平台且宿主报告支持 iOS 26+ 系统设计时使用原生视图；旧版 iOS、Android、缺失桥接、原生配置失败以及用户选择半透明模式时保留原有 Flutter 底栏。
+- `native/ios_home_tab_bar.dart` 负责平台视图及实例级通道，复用现有 PNG 图标、标签、主题 accent 和真实未读汇总。原生回调只请求选择，仍经过首页 `_selectMainTab` 与钱包入口流程；选中状态最终由 `NavBarConfig` 回传。消息、群聊及联系人角标来自现有响应式状态，其他入口不造角标数据。
+- 原生实现在 `ios/Runner/HomeNavigation/`：`HomeTabBarFactory` 注册能力查询和视图工厂；`HomeTabBarPlatformView` 同步配置、图标和角标；`HomeTabBarHostView` 管理 `UITabBarController` 的父子关系。没有搬移 Flutter 页面，也没有引入新的 SDK 订阅、导航框架或第三方插件。
+- 原生控件保留系统 Liquid Glass 材质、选中指示、文字布局和辅助功能行为，支持应用亮暗主题及 RTL。iPad 仍显示五个底部入口；原生滚动收起关闭，因为 Flutter 列表不会自动参与 UIKit 滚动联动。底栏占位沿用 64 + 一次底部安全区，搜索和多选操作条继续走既有分支。
+- 图标和文字配色沿用 Flutter 底栏：选中使用 `AppTokens.accent`，未选中使用对应亮暗主题的 `AppTokens.textSecondary`，分别同步给原生 `tintColor` / `unselectedItemTintColor`，避免 UIKit 默认黑白色替代项目灰色。
+- 每个原生视图拥有独立通道；Dart dispose 清除回调，原生视图离开 window 时移除子控制器，重新显示时恢复。重建不重复解码相同图标，也不重复发送相同配置。
+
+本次再次核对 [99chat 首页实际实现](https://github.com/qiuiqu6666/99chat/blob/main/lib/src/pages/home_page.dart) 的五个入口和状态保留行为；系统 Liquid Glass 是用户指定的新增平台表现，参考仓库没有对应原生实现。新增桥接组件是因为现有 `LiquidGlassSurface` 为 Flutter 渲染，不能直接调用系统 `UITabBarController`。
+
+验证入口：`test/pages/home/navigation/home_bottom_nav_bar_test.dart`（原生能力选择、角标/主题/标签/选中同步、入口回调、失效回调、异常回退）；现有 `glass_bottom_nav_bar_test.dart`、`home_unread_badge_test.dart` 和 `wallet_home_navigation_test.dart` 覆盖保留路径。
+
+以上 28 项测试全部通过；修改范围 analyze 无问题；`flutter build ios --debug --no-codesign --no-pub` 完整构建通过。结果和独立 UIKit 预览保存在工作区 `release-artifacts/home-native-navigation-20261022/`。构建没有修改设备签名配置，也没有安装到手机。
+
+iOS 26.2 独立 UIKit 测试宿主已核对生产原生控件亮暗截图，实测 402×98 视图中系统底栏为 402×83，底部安全区 34；五个入口、角标、回调和控制器移除/恢复通过。测试宿主使用样例角标，不是线上账号页面。真实 Flutter 页面背后的材质采样、键盘、返回手势、VoiceOver 和 iPad/横屏最终观感仍需设备验证；不能用独立 UIKit 预览代替完整 App 验收。
+
 ## 文件与边界
 
 - `glass_bottom_nav_bar.dart`：圆角玻璃底栏与滑动选中胶囊。

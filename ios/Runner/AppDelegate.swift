@@ -49,6 +49,10 @@ import UserNotifications
         
         locationAddressBridge = ChatLocationAddressBridge(messenger: controller.binaryMessenger)
         GeneratedPluginRegistrant.register(with: self)
+        if let registrar = controller.registrar(forPlugin: "HomeNativeNavigation") {
+            registrar.register(HomeTabBarFactory(registrar: registrar, parent: controller),
+                               withId: "openim/home-tab-bar")
+        }
         controller.registrar(forPlugin: "NativeChatLocationMap")?.register(
             NativeChatLocationMapFactory(messenger: controller.binaryMessenger),
             withId: "openim/chat-location-map")

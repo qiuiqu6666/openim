@@ -1,0 +1,2 @@
+# This locked SDK source file is hashed with CRLF line endings.
+native_sdk/patch15/core-source/internal/conversation_msg/read_receipt_cold_cache_test.go text eol=crlf

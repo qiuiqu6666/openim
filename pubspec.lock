@@ -1450,12 +1450,11 @@ packages:
     source: hosted
     version: "1.0.1"
   livekit_client:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: livekit_client
-      sha256: "011affc0fca22b2f9b0e8827219dad9948f84f2bf057980693de13039de904c7"
-      url: "https://pub.dev"
-    source: hosted
+      path: "local_plugin/livekit_client"
+      relative: true
+    source: path
     version: "2.5.0+hotfix.3"
   local_auth:
     dependency: "direct main"

@@ -1,0 +1,61 @@
+--- a/lib/src/core/engine.dart
++++ b/lib/src/core/engine.dart
+@@ -207,6 +207,26 @@
+     //reset state
+     _isClosed = false;
+ 
++    // Listen before starting the socket. Join/peer events are broadcast and
++    // can arrive before SignalClient.connect (or the join await) returns.
++    // Keeping the completions avoids waiting for a second, nonexistent event.
++    final connectionEvents = createListener();
++    final joined = Completer<void>();
++    var primaryConnected = Completer<void>();
++    connectionEvents
++      ..on<EngineJoinResponseEvent>((_) {
++        if (!joined.isCompleted) joined.complete();
++      })
++      ..on<EnginePeerStateUpdatedEvent>((event) {
++        if (!event.isPrimary) return;
++        if (event.state.isConnected()) {
++          if (!primaryConnected.isCompleted) primaryConnected.complete();
++        } else if (primaryConnected.isCompleted) {
++          // A ready event followed by a disconnect before Join is stale.
++          primaryConnected = Completer<void>();
++        }
++      });
++
+     try {
+       // wait for socket to connect rtc server
+       await signalClient.connect(
+@@ -217,8 +237,8 @@
+       );
+ 
+       // wait for join response
+-      await events.waitFor<EngineJoinResponseEvent>(
+-        duration: this.connectOptions.timeouts.connection,
++      await joined.future.timeout(
++        this.connectOptions.timeouts.connection,
+         onTimeout: () => throw ConnectException(
+             'Timed out waiting for SignalJoinResponseEvent',
+             reason: ConnectionErrorReason.Timeout),
+@@ -227,9 +247,8 @@
+       logger.fine('Waiting for engine to connect...');
+ 
+       // wait until primary pc is connected
+-      await events.waitFor<EnginePeerStateUpdatedEvent>(
+-        filter: (event) => event.isPrimary && event.state.isConnected(),
+-        duration: this.connectOptions.timeouts.connection,
++      await primaryConnected.future.timeout(
++        this.connectOptions.timeouts.connection,
+         onTimeout: () => throw MediaConnectException(
+             'Timed out waiting for PeerConnection to connect, please check your network for ice connectivity'),
+       );
+@@ -241,6 +260,8 @@
+         reason: DisconnectReason.joinFailure,
+       ));
+       rethrow;
++    } finally {
++      await connectionEvents.dispose();
+     }
+   }
+ 

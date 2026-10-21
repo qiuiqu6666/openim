@@ -42,6 +42,12 @@ post_install do |installer|
     flutter_additional_ios_build_settings(target)
     # Start of the permission_handler configuration
     target.build_configurations.each do |config|
+      # Podspecs (including privacy resource bundles) can declare older targets
+      # than the app. Keep every generated target within our iOS 15+ baseline.
+      deployment_target = config.build_settings['IPHONEOS_DEPLOYMENT_TARGET']
+      if deployment_target.nil? || Gem::Version.new(deployment_target) < Gem::Version.new('15.0')
+        config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '15.0'
+      end
 
       # You can enable the permissions needed here. For example to enable camera
       # permission, just remove the `#` character in front so it looks like this:

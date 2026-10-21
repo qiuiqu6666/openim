@@ -1,0 +1,24 @@
+{
+  "platform": "ios",
+  "commit": "03592bcae0ad0cf45343b5ae8eabe13e7b69930f",
+  "sdk_version": "v3.8.3-patch.15+recovery.17",
+  "source_sha256": "944018d9ce4ff785c28537b146c3e4f7cb9249ca1b12a1220015d1d3ee72228d",
+  "patch_sha256": "d650303b9dc4d2c016382dce9f11410e47cb81da7022c793e50574ef5f0ce2bd",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "core_tests": "passed",
+  "device_runtime": "not installed/tested",
+  "binaries_sha256": {
+    "ios-arm64/OpenIMCore.framework/OpenIMCore": "8b408b6498f6b995edde40c93d2d6f182d744a70e99126bed0e4e3825fce9262",
+    "ios-arm64_x86_64-simulator/OpenIMCore.framework/OpenIMCore": "cb279458b0e472453be087fe0d8370948a0442779372df001d2188f518a5d10e"
+  },
+  "verified_at": "2026-10-14T05:26:22.484975+00:00",
+  "application_version": "3.0.1+2030",
+  "bundle_identifier": "vip.99chat.ios",
+  "app_binary_sha256": "716511f5db12d1925d3f377e493834e23f7d686afd592dbcc7aa7970550480b9",
+  "app_core_version_verified": "v3.8.3-patch.15+recovery.17",
+  "app_build": "passed: Xcode Release through Flutter 3.41.6 --no-codesign",
+  "source_lock_tests": "15 passed",
+  "native_tests": "CGO=0 common/network/interaction/conversation_msg; CGO=1 interaction/conversation_msg; SQLite message-sync batch and initial-notification bootstrap",
+  "logs_directory": "artifacts/recovery.17-ios-verification"
+}

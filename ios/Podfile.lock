@@ -472,7 +472,7 @@ SPEC CHECKSUMS:
   photo_manager: 1d80ae07a89a67dfbcae95953a1e5a24af7c3e62
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   qr_code_scanner_plus: 7e087021bc69873140e0754750eb87d867bed755
-  qr_image_decoder: 39ff21bd307df8ba683a869314b7ed506c93c765
+  qr_image_decoder: b9360c0be39cfd1d65dd79068327debd8012eb26
   record_ios: f75fa1d57f840012775c0e93a38a7f3ceea1a374
   screen_brightness_ios: 9953fd7da5bd480f1a93990daeec2eb42d4f3b52
   SDWebImage: e9fc87c1aab89a8ab1bbd74eba378c6f53be8abf
@@ -493,6 +493,6 @@ SPEC CHECKSUMS:
   WebRTC-SDK: 69d4e56b0b4b27d788e87bab9b9a1326ed05b1e3
   webview_flutter_wkwebview: 1821ceac936eba6f7984d89a9f3bcb4dea99ebb2
 
-PODFILE CHECKSUM: 4d476a40a5f7fd38024335c142c64eaa41db4c7c
+PODFILE CHECKSUM: aca5705fdc1dafa12d41e7a8b7fe226fe1a6d307
 
 COCOAPODS: 1.16.2

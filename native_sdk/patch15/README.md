@@ -265,6 +265,10 @@ Core common、network、interaction、conversation_msg、db 五包通过竞态�
 
 Android 构建证据见 `verification/recovery.18-android.json`。测试与构建结果限于本版记录，真机运行验收单独记录。
 
+## Local historical iOS build record
+
+The previous recovery.17 iOS build remains documented in `verification/recovery.17-ios.json`, `history/recovery.17-ios-local.json`, and `history/README-local-recovery.17-ios.md`. These are historical evidence only, not verification of the current SDK. Rebuild the iOS Framework from the current shared source before building the latest application.
+
 ## macOS iOS recovery.23-notification-tombstone.1 verification (2026-10-14)
 
 The current locked Core source was rebuilt for iOS device arm64 and simulator arm64/x86_64, installed in the local plugin, and verified against its artifact receipt. Core/SQLite build-script tests and 15 source-lock tests passed. Xcode Release no-codesign application 3.0.1+2027 compiled successfully; the Runner binary contains v3.8.3-patch.15+recovery.23-notification-tombstone.1 and does not contain recovery.17. Evidence: `verification/recovery.23-notification-tombstone-ios.json`.
@@ -291,3 +295,15 @@ COCOAPODS_CDN_MAX_CONCURRENCY=4 pod install --repo-update --deployment --project
 ```
 
 Run the command from the project root. The cache repair is local to this Mac; the cached spec and native binaries are not stored in Git. Direct Xcode Release no-codesign compilation passed after the repair. Evidence: `verification/cocoapods-download-repair-ios.json`. This verifies dependency installation and compilation, not signing or device runtime.
+
+## macOS iOS recovery.31-friend-profile.1 verification (2026-10-15)
+
+An old recovery.30 Framework caused the pre-compile guard to fail with `Stale ios SDK (sdk_version)`. Rebuilding the current locked source installed recovery.31 for device arm64 and simulator arm64/x86_64. Core/relation/SQLite/upload tests and 15 lock tests passed. Xcode Release no-codesign application 3.0.1+2028 compiled successfully; its Runner binary contains recovery.31-friend-profile.1 and no recovery.30-image-upload.1 identity. Evidence: `verification/recovery.31-friend-profile-ios.json`.
+
+After pulling a Core source/version update, rebuild the iOS SDK with `build-ios.sh` before compiling `ios/Runner.xcworkspace`. Keep the pre-compile guard enabled; it prevents silently using an old SDK. Original local changes were preserved. Signing and device runtime are not verified by this build.
+
+## macOS iOS recovery.32-read-receipt.1 verification (2026-10-15)
+
+The current 436-file source lock was built for iOS device arm64 and simulator arm64/x86_64 and installed in the local plugin with its matching artifact receipt. Core/relation/SQLite/upload tests and 15 lock tests passed. Xcode Release no-codesign application 3.0.1+2030 compiled successfully; its Runner binary contains v3.8.3-patch.15+recovery.32-read-receipt.1 and no recovery.31-friend-profile.1 identity. Evidence: `verification/recovery.32-read-receipt-ios.json`.
+
+Flutter and all iOS application/extension build configurations use build number 2030. The existing pre-compile SDK guard remains enabled for direct `ios/Runner.xcworkspace` builds. Original local edits were preserved; signing and device runtime were not tested.

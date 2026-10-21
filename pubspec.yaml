@@ -142,6 +142,9 @@ dependency_overrides:
   # Use light index feedback instead of the upstream generic vibration.
   azlistview:
     path: local_plugin/azlistview
+  # Preserve early Join/primary-ready events during LiveKit connection.
+  livekit_client:
+    path: local_plugin/livekit_client
   # Keep the Flutter API while pinning native Core to patch.15 in our adapter.
   flutter_openim_sdk:
     path: local_plugin/flutter_openim_sdk

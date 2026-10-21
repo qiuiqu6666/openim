@@ -12,7 +12,7 @@ import '../mine/widgets/mine_hot_eco.dart';
 import '../wallet/wallet_tab_shell.dart';
 import '../wallet/entry/wallet_entry_coordinator.dart';
 import 'home_logic.dart';
-import 'glass_bottom_nav_bar.dart';
+import 'navigation/home_bottom_nav_bar.dart';
 import 'navigation/home_navigation_tokens.dart';
 import 'navigation/home_navigation_icon.dart';
 import 'navigation/animated_home_icon.dart';
@@ -347,11 +347,18 @@ class _HomePageState extends State<HomePage> {
                   child: editBar,
                 );
               }
-              return GlassBottomNavBar(
-                config: config,
-                onItemSelected: (index) =>
-                    _selectMainTab(index, config.onItemSelected),
-              );
+              return Obx(() => HomeBottomNavBar(
+                    config: config,
+                    unreadCounts: [
+                      _unreadCount(groupChats: false),
+                      _unreadCount(groupChats: true),
+                      logic.unhandledCount.value,
+                      0,
+                      0,
+                    ],
+                    onItemSelected: (index) =>
+                        _selectMainTab(index, config.onItemSelected),
+                  ));
             }),
         navBarOverlap: const NavBarOverlap.full(),
         screenTransitionAnimation: const ScreenTransitionAnimation.none(),
