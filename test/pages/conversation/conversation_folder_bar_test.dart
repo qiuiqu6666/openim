@@ -149,16 +149,18 @@ void main() {
         final colors = Theme.of(tester.element(bar)).colorScheme;
         final addDecoration =
             tester.widget<Container>(addContainer).decoration! as BoxDecoration;
-        expect(addDecoration.color,
-            dark ? colors.surfaceContainerLow : AppTokens.surfaceLight);
+        expect(addDecoration.color, isNull);
+        expect(find.byKey(const ValueKey('folder-add-glass')), findsOneWidget);
         await tester.pump();
         final indicator = tester.widget<DecoratedBox>(
             find.byKey(const ValueKey('folder-selection-indicator')));
-        expect((indicator.decoration as BoxDecoration).color,
+        expect(
+            (indicator.decoration as BoxDecoration).color,
             (dark ? colors.surfaceContainerHighest : const Color(0xFFECECEC))
                 .withValues(alpha: .65));
-        expect(find.byKey(const ValueKey('folder-glass-track')), findsOneWidget);
-        expect(find.byType(LiquidGlassSurface), findsNWidgets(2));
+        expect(
+            find.byKey(const ValueKey('folder-glass-track')), findsOneWidget);
+        expect(find.byType(LiquidGlassSurface), findsNWidgets(3));
         expect(_segmentDecoration(tester, '全部').color, Colors.transparent);
         final title = DefaultTextStyle.of(tester.element(find.text('工作')));
         expect(title.style.fontSize, 14);

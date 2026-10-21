@@ -169,8 +169,6 @@ class _ConversationFolderBarState extends State<ConversationFolderBar> {
     final theme = Theme.of(context);
     final dark = theme.brightness == Brightness.dark;
     final colors = theme.colorScheme;
-    final barBackground =
-        dark ? colors.surfaceContainerLow : AppTokens.surfaceLight;
     final addForeground =
         dark ? colors.onSurfaceVariant : _FolderBarTokens.addLight;
     final shadowsEnabled =
@@ -342,7 +340,6 @@ class _ConversationFolderBarState extends State<ConversationFolderBar> {
                 height: _FolderBarTokens.height,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: barBackground,
                   shape: BoxShape.circle,
                   boxShadow: shadowsEnabled
                       ? [
@@ -355,12 +352,24 @@ class _ConversationFolderBarState extends State<ConversationFolderBar> {
                         ]
                       : const [],
                 ),
-                child: Icon(
-                  widget.reorderEditing
-                      ? Icons.check_rounded
-                      : Icons.add_rounded,
-                  size: _FolderBarTokens.addSize,
-                  color: addForeground,
+                child: LiquidGlassSurface(
+                  key: const ValueKey('folder-add-glass'),
+                  surface: NavigationGlassSurface.floating,
+                  preferLiquid: true,
+                  opacity: _FolderBarTokens.trackOpacity,
+                  borderRadius: BorderRadius.circular(AppTokens.rPill),
+                  child: DecoratedBox(
+                    decoration: _FolderBarTokens.glassDecoration(context),
+                    child: SizedBox.expand(
+                      child: Icon(
+                        widget.reorderEditing
+                            ? Icons.check_rounded
+                            : Icons.add_rounded,
+                        size: _FolderBarTokens.addSize,
+                        color: addForeground,
+                      ),
+                    ),
+                  ),
                 ),
               ),
             ),
