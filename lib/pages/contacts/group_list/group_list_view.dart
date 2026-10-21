@@ -197,7 +197,7 @@ class GroupListPage extends StatelessWidget {
               name: (info.groupName ?? '').trim().isEmpty
                   ? (onSelected == null ? info.groupID : '未命名群聊')
                   : info.groupName!,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style:
                   Styles.ts_0C1C33_17sp.copyWith(fontWeight: FontWeight.w500),
