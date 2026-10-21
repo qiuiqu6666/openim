@@ -1,0 +1,28 @@
+{
+  "version": "v3.8.3-patch.15+recovery.46-video-reliability.1",
+  "date": "2026-10-21",
+  "changes": [
+    "Global FIFO video compression queue, maximum 20 pending jobs; cancellation does not cancel another owner.",
+    "Compression idle deadline 60 seconds and total deadline 10 minutes; only increasing progress renews idle deadline.",
+    "iOS/macOS photo downloads use native progress. Single outstanding export per asset/resource; timeout retry observes existing work; fallback only after definite completion/failure.",
+    "Video download idle 60 seconds and total 10 minutes per observer. Non-Apple paths retain existing file/origin access.",
+    "Mobile SDK now integrates existing retry helper: three retries at 1/2/4 seconds, committed multipart bitmap retained, single nine-minute budget. Permanent failures/cancellation are not retried.",
+    "Preparation UI shows phases, offers cancel pending and explicit original-video retry; existing accepted background sends survive route disposal."
+  ],
+  "validation": {
+    "flutter_media": "176 tests passed",
+    "sdk_upload": "retry, PUT, deadlines, hash-lock and automatic multipart recovery tests passed",
+    "sdk_log": "log-order and archive regressions passed",
+    "build_tools": "15 tests passed; source lock verified",
+    "analyzer": "changed media source and new unit-test scope clean",
+    "widget": "320px width, 2x text; light/dark existing cases and phase/action test passed"
+  },
+  "limitations": [
+    "Native AAR/Framework and app packages not rebuilt.",
+    "No iPhone/Android device or real iCloud/weak-network acceptance performed.",
+    "The native compressor busy flag is never force-cleared. Missing native completion blocks standard encoding safely; original-video retry remains available.",
+    "Upload retry remains in uploading state; no separate native retry-status event was added.",
+    "PhotoManager does not expose cancellation for this read API: stopping observation prevents sending, but native download may finish in background."
+  ],
+  "graph": "Uploader graph returned UNKNOWN/no resolved callers. Native SDK API, conversation image/video/audio/file and diagnostic upload callers verified in source; shared mobile source differs from developer SDK by declared overlays."
+}

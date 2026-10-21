@@ -1,0 +1,74 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.46-preview-consistency",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "b7d8c00d2880c58a678c720416b0fc57d88741f63afd000fe0447bdd7a900c56",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "c843be5ce503ad9c3bc98f5e6fd24ac583932181a1f9facf964986ce4fe7ad55",
+  "created": "2026-10-20",
+  "previous_release": "history/recovery.45-branded-diagnostics.json",
+  "native_binary_integrated": true,
+  "checks": {
+    "core": "full native regression and race passed; targeted 20-repeat race passed",
+    "android": "four-ABI AAR and ARM64 debug APK built; packaged native library verified",
+    "ios_framework": "macOS required",
+    "patch_roundtrip": "491 files matched; documented build overlays excluded",
+    "flutter": "481 passed, 12 skipped; broad suite has 24 identical pre-existing failures; analyzer clean"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.46-preview-consistency",
+    "sdk_version": "v3.8.3-patch.15+recovery.46-preview-consistency",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "not tested",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true,
+    "aar_sha256": "1984153b61329b74b1ababf1228e0fd0c2322182650f56dd0942329217c0855f",
+    "apk_sha256": "aecc1764df2a0dbf4ee8abd744e37409268e483875a377e64c1e00ad222c6c34",
+    "verification_evidence": "verification/recovery.46-preview-consistency.json"
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.46-preview-consistency",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "shared locked recovery.46 source; macOS rebuild required",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 700
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.46-preview-consistency runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections",
+    "third_party/tools: pinned upstream tools with diagnostic output branding; original licenses retained"
+  ],
+  "verification_evidence": "verification/recovery.46-preview-consistency.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Confirmed preview sequence order, atomic durable preview repair after history and targeted reads, deletion/recall/pending/unread regression coverage."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "abb9fb7dbee7f787021e8932c7e9b819617aa036"
+}

@@ -1,0 +1,28 @@
+{
+  "version": "recovery.46-group-membership.1",
+  "date": "2026-10-21",
+  "baseline": "TestDepartedMemberPermissionRecovery/departed fails against original sync_member_requests.go",
+  "scenarios": [
+    "confirmed departure and healthy sibling",
+    "still joined permission denial",
+    "membership lookup failure",
+    "transient error",
+    "storage failure and retry",
+    "cancelled verification",
+    "membership present after rejoin"
+  ],
+  "packages": [
+    "internal/group",
+    "pkg/common",
+    "pkg/syncer",
+    "internal/interaction"
+  ],
+  "trees": [
+    "sdk-source/openim-sdk-core-recovery",
+    "native_sdk/patch15/core-source"
+  ],
+  "native_binaries_rebuilt": false,
+  "device_tested": false,
+  "server_modified": false,
+  "scope": "Membership retry cleanup, not a proven fix for all observed delivery delays"
+}

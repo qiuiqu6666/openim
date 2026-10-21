@@ -1,0 +1,12 @@
+{
+  "version": "v3.8.3-patch.15+recovery.46-log-order.1",
+  "date": "2026-10-21",
+  "change": "Chronological log selection across old/new filename prefixes. Same-date files use modification time; tied times prefer current prefix. Shared by latest-lines selection and all-log cleanup.",
+  "impact": "Current SDK graph rebuilt; Third.uploadLogs -> Third.UploadLogs, reported LOW. Native bridge consumers also checked in source.",
+  "regression_before": "TestLogUploadMixedNamesArchive recent/all failed with old ordering; recent ZIP contained old log.",
+  "regression_after": "Canonical SDK and shared mobile source targeted Go tests passed. Canonical tail/archive/error-stage regressions also passed.",
+  "source_lock": "Verified; 15 build-tool unit tests passed",
+  "android": "Source updated; native AAR and App not rebuilt",
+  "ios": "Source updated; Framework and App require macOS rebuild",
+  "device_test": "Not performed"
+}

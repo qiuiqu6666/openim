@@ -1,0 +1,71 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.46-video-reliability.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "823c0cfa5facf4752e0b207d181322cbfb9cc7a56978ba0778d1820413733a50",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "6a90cffc605dfb3b6e1f892c3860711f50ce19e903312d114de5c8d49c3abaa1",
+  "created": "2026-10-20",
+  "previous_release": "history/recovery.46-log-order.1.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "upload": "Transient failures retry up to 3 times within shared 9-minute deadline; real uploader HTTP test verifies committed parts skipped",
+    "source_lock": "verified; 15 build-tool tests passed",
+    "native_binaries": "not rebuilt",
+    "device_runtime": "not tested",
+    "flutter_media": "176 tests passed; scoped analysis clean"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.46-video-reliability.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.46-video-reliability.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": false,
+    "runtime_validation": "rebuild required; not device-tested",
+    "native_binary_integrated": false,
+    "aar_built": false,
+    "sdk_artifact_verified": false
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.46-video-reliability.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "shared media reliability source; macOS Framework and App rebuild required",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 706
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.46-video-reliability.1 runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections",
+    "third_party/tools: pinned upstream tools with diagnostic output branding; original licenses retained"
+  ],
+  "verification_evidence": "verification/recovery.46-video-reliability.1.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Preserve log-order correction and upload cancellation deadline; integrate bounded transient upload retries with persisted multipart resumption into shared mobile source."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "abb9fb7dbee7f787021e8932c7e9b819617aa036"
+}
