@@ -10,6 +10,8 @@ import 'package:openim/core/controller/app_controller.dart';
 import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/core/im_callback.dart';
 import 'package:openim/pages/chat/chat_logic.dart';
+import 'package:openim/pages/chat/messages/forwarding/pending_forward.dart';
+import 'package:openim/pages/chat/messages/forwarding/pending_forward_store.dart';
 import 'package:openim/pages/chat/history/chat_history_prefetcher.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/services/chat_history_cache.dart';
@@ -161,10 +163,57 @@ void main() {
       call.complete([]);
     }
     ChatHistoryCache.clear();
+    PendingForwardStore.shared.clear();
     Get.reset();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdkChannel, null);
   });
+
+  for (final closeBeforeReady in [false, true]) {
+    testWidgets(
+        'same conversation forward during build closed=$closeBeforeReady',
+        (tester) async {
+      final source = open();
+      final incoming = PendingForward(
+          [_entryMessage('forward-me')], UserInfo(userID: 'peer'),
+          merged: false);
+      final observer = Obx(() => Text(
+          source.pendingForward.draft.value == null ? 'empty' : 'pending'));
+      await tester.pumpWidget(
+          Directionality(textDirection: TextDirection.ltr, child: observer));
+      late ChatLogic destination;
+      await tester.pumpWidget(Directionality(
+        textDirection: TextDirection.ltr,
+        child: Column(children: [
+          observer,
+          Builder(builder: (_) {
+            Get.routing.args = {
+              'conversationInfo': _entryConversation(),
+              'pendingForward': incoming,
+            };
+            destination = ChatLogic();
+            controllers.add(destination);
+            destination.onInit();
+            if (closeBeforeReady) destination.onDelete();
+            return const SizedBox.shrink();
+          })
+        ]),
+      ));
+      expect(tester.takeException(), isNull);
+      await tester.pump();
+      expect(destination.pendingForward, same(source.pendingForward));
+      expect(source.pendingForward.draft.value,
+          closeBeforeReady ? isNull : same(incoming));
+      expect(find.text(closeBeforeReady ? 'empty' : 'pending'), findsOneWidget);
+      if (!closeBeforeReady) destination.onDelete();
+      source.onDelete();
+      for (final call in calls) {
+        call.complete([]);
+      }
+      await tester.pump();
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
 
   testWidgets(
       'cold entry paints verified local history before network completes',

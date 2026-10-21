@@ -40,6 +40,8 @@ const Map<String, String> en_US = {
   'chatSelectionEnter': 'Select',
   'chatSelectionTitle': 'Select messages',
   'chatPendingForwardCount': 'Forward @count messages',
+  'chatForwardClosePrompt': 'What would you like to do with the forwarded messages?',
+  'chatOpenForwardOptions': 'Open forwarding options',
   'chatCancelForward': 'Cancel forwarding',
   'chatSelectionCount': '@count selected',
   'chatSelectionMessage': 'Select message',

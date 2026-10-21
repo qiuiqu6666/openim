@@ -184,6 +184,11 @@ class ChatForwardingController {
           {required bool merged}) =>
       _forwardMessages(selection, merged: merged, requireCurrentSources: true);
 
+  Future<bool> reviewPending(List<Message> messages,
+          {required bool merged, String? mergeTitle}) =>
+      _forwardMessages(messages,
+          merged: merged, requireCurrentSources: false, mergeTitle: mergeTitle);
+
   Future<bool> sendPending(List<Message> messages, dynamic recipient,
           {required bool merged, String? mergeTitle}) =>
       _forwardMessages(messages,

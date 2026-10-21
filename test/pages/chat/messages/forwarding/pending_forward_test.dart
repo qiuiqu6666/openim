@@ -87,6 +87,35 @@ void main() {
     expect(controller.draft.value, isNull);
   });
 
+  for (final language in [
+    (const Locale('zh', 'CN'), '你希望对转发的消息做什么？', '打开转发选项'),
+    (const Locale('zh', 'TW'), '你希望對轉發的訊息做什麼？', '開啟轉發選項'),
+    (
+      const Locale('en', 'US'),
+      'What would you like to do with the forwarded messages?',
+      'Open forwarding options'
+    ),
+  ]) {
+    testWidgets(
+        'forward prompt survives stale translation registry ${language.$1}',
+        (tester) async {
+      await tester.pumpWidget(GetMaterialApp(
+        locale: language.$1,
+        translations: TranslationService(),
+        home: Scaffold(body: PendingForwardBar(count: 1, onCancel: () {})),
+      ));
+      await tester.pumpAndSettle();
+      Get.clearTranslations();
+      addTearDown(() => Get.addTranslations(TranslationService().keys));
+      await tester.tap(find.byKey(const ValueKey('pending-forward-cancel')));
+      await tester.pumpAndSettle();
+      expect(find.text(language.$2), findsOneWidget);
+      expect(find.text(language.$3), findsOneWidget);
+      expect(find.text('chatForwardClosePrompt'), findsNothing);
+      expect(find.text('chatOpenForwardOptions'), findsNothing);
+    });
+  }
+
   for (final dark in [false, true]) {
     testWidgets(
         'forward composer sends empty text and cancels without losing text / $dark',
@@ -96,6 +125,7 @@ void main() {
       addTearDown(tester.view.reset);
       final input = TextEditingController();
       var pending = true;
+      var openedOptions = 0;
       String? sent;
       await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
@@ -114,6 +144,7 @@ void main() {
                         if (pending)
                           PendingForwardBar(
                               count: 30,
+                              onOpenOptions: () => openedOptions++,
                               onCancel: () => setState(() => pending = false)),
                         ChatInputBox(
                           controller: input,
@@ -138,6 +169,17 @@ void main() {
       await tester.pump();
       await tester.tap(find.byKey(const ValueKey('pending-forward-cancel')));
       await tester.pumpAndSettle();
+      expect(pending, isTrue);
+      expect(find.text('你希望对转发的消息做什么？'), findsOneWidget);
+      await tester.tap(find.text('打开转发选项'));
+      await tester.pumpAndSettle();
+      expect(openedOptions, 1);
+      expect(pending, isTrue);
+      await tester.tap(find.byKey(const ValueKey('pending-forward-cancel')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('取消转发').last);
+      await tester.pumpAndSettle();
+      expect(pending, isFalse);
       expect(input.text, '附加文字');
       expect(find.widgetWithText(ElevatedButton, '发送'), findsOneWidget);
       expect(tester.takeException(), isNull);

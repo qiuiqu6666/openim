@@ -206,6 +206,8 @@ class ChatPage extends StatelessWidget {
             ),
           if (logic.pendingForward.draft.value case final draft?)
             PendingForwardBar(
+              key: ObjectKey(draft),
+              onOpenOptions: logic.reviewPendingForward,
               count: draft.messages.length,
               sending: logic.pendingForward.sending.value,
               onCancel: logic.pendingForward.cancel,

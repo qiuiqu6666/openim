@@ -380,6 +380,7 @@ class ChatLogic extends SuperController {
     showFeedback: IMViews.showToast,
   );
   late final PendingForwardController pendingForward;
+  PendingForward? _incomingForward;
   late final ChatForwardingController _forwarding = ChatForwardingController(
     delivery: _delivery,
     messages: () => messageList,
@@ -625,8 +626,8 @@ class ChatLogic extends SuperController {
       });
     },
     onFirstLoaded: _getGroupInfoAfterLoadMessage,
-    preserveReading: () => !_latestScroll.followingEntry &&
-        newMessages.awayFromLatest.value,
+    preserveReading: () =>
+        !_latestScroll.followingEntry && newMessages.awayFromLatest.value,
     canTrimHistory: (older) {
       if (_sessionInactive ||
           messageSelection.active ||
@@ -1048,6 +1049,13 @@ class ChatLogic extends SuperController {
   @override
   void onReady() {
     if (_sessionInactive) return;
+    // Another mounted route can observe this conversation-owned draft. GetX
+    // calls onReady after the frame, when notifying that route is safe.
+    final incomingForward = _incomingForward;
+    _incomingForward = null;
+    if (incomingForward != null && !pendingForward.sending.value) {
+      pendingForward.draft.value = incomingForward;
+    }
     _resetGroupAtType();
     _clearUnreadCount();
 
@@ -1069,10 +1077,7 @@ class ChatLogic extends SuperController {
       sessionToken: DataSp.imToken,
       conversationID: conversationInfo.conversationID,
     );
-    final incomingForward = arguments['pendingForward'] as PendingForward?;
-    if (incomingForward != null && !pendingForward.sending.value) {
-      pendingForward.draft.value = incomingForward;
-    }
+    _incomingForward = arguments['pendingForward'] as PendingForward?;
     _readDiagnostics
         .record('route_enter', {'unreadCount': conversationInfo.unreadCount});
     final account = arguments['officialAccount'];
@@ -1288,8 +1293,33 @@ class ChatLogic extends SuperController {
           : AppNavigator.startGroupChatSetup(
               conversationInfo: conversationInfo);
 
-  Future<void> sendTextMsg() async {
+  bool _reviewingPendingForward = false;
+
+  Future<void> reviewPendingForward() async {
+    final draft = pendingForward.draft.value;
     if (_sessionInactive ||
+        draft == null ||
+        pendingForward.sending.value ||
+        _reviewingPendingForward) {
+      return;
+    }
+    _reviewingPendingForward = true;
+    try {
+      final handled = await _forwarding.reviewPending(draft.messages,
+          merged: draft.merged, mergeTitle: draft.mergeTitle);
+      if (!_sessionInactive &&
+          handled &&
+          identical(pendingForward.draft.value, draft)) {
+        pendingForward.cancel();
+      }
+    } finally {
+      _reviewingPendingForward = false;
+    }
+  }
+
+  Future<void> sendTextMsg() async {
+    if (_reviewingPendingForward ||
+        _sessionInactive ||
         sendingMuted ||
         isInvalidGroup ||
         pendingForward.sending.value) {

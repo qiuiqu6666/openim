@@ -36,6 +36,8 @@ const Map<String, String> zhTW = {
   'chatSelectionEnter': '選擇',
   'chatSelectionTitle': '選擇訊息',
   'chatPendingForwardCount': '轉發@count條訊息',
+  'chatForwardClosePrompt': '你希望對轉發的訊息做什麼？',
+  'chatOpenForwardOptions': '開啟轉發選項',
   'chatCancelForward': '取消轉發',
   'chatSelectionCount': '已選擇 @count 條',
   'chatSelectionMessage': '選擇訊息',
