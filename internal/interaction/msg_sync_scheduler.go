@@ -260,9 +260,19 @@ func runMessageSyncLoop(ctx context.Context, input <-chan common.Cmd2Value, hand
 					enqueue(cmd)
 				}
 				if active != nil && active.Cmd == cmdSyncAuxiliaryMetadata && cmd.Cmd != cmdSyncAuxiliaryMetadata {
-					enqueue(*active)
-					reserveProgress = false
-					stop(true)
+					// A foreground/recovery signal must respect the same finite
+					// page allowance as live pushes. Otherwise repeated signals
+					// cancel every joined-group page before it can be retained.
+					if delay := common.MetadataPreemptionDelay(activeCtx); delay > 0 {
+						if preemption == nil {
+							preemption = time.NewTimer(delay)
+							preempt = preemption.C
+						}
+					} else {
+						enqueue(*active)
+						reserveProgress = false
+						stop(true)
+					}
 				}
 				if active != nil && active.Cmd == cmdReconcileMessageSeq && messageSyncPriority(cmd.Cmd) > 1 {
 					stop()

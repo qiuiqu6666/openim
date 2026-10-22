@@ -99,7 +99,9 @@ func (c *Conversation) GetOneConversation(ctx context.Context, sessionType int32
 }
 
 func (c *Conversation) GetMultipleConversation(ctx context.Context, conversationIDList []string) ([]*model_struct.LocalConversation, error) {
-	conversations, err := c.db.GetMultipleConversationDB(ctx, conversationIDList)
+	c.conversationSyncMutex.Lock()
+	defer c.conversationSyncMutex.Unlock()
+	conversations, err := c.reconcileStoredPreviews(ctx, conversationIDList)
 	if err != nil {
 		return nil, err
 	}

@@ -38,7 +38,11 @@ func retryableUploadError(err error) bool {
 	// alone misses failures while obtaining part limits, signatures or completion.
 	var coded errs.CodeError
 	if errors.As(err, &coded) {
-		return coded.Code() == sdkerrs.NetworkError || coded.Code() == sdkerrs.NetworkTimeoutError
+		return coded.Code() == 10901 || coded.Code() == sdkerrs.NetworkError || coded.Code() == sdkerrs.NetworkTimeoutError
+	}
+	var timed net.Error
+	if errors.As(err, &timed) && timed.Timeout() {
+		return true
 	}
 	var network *net.OpError
 	var dns *net.DNSError

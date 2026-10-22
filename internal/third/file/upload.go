@@ -1,4 +1,4 @@
-// Copyright © 2023 OpenIM SDK. All rights reserved.
+// Copyright 漏 2023 OpenIM SDK. All rights reserved.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ import (
 	"crypto/md5"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/api"
@@ -64,6 +65,7 @@ func NewFile(database db_interface.DataBase, loginUserID string) *File {
 }
 
 type File struct {
+	circuit     uploadCircuit
 	database    db_interface.DataBase
 	loginUserID string
 	confLock    sync.Locker
@@ -104,8 +106,23 @@ func (f *File) unlockHash(hash string) {
 }
 
 func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
-	return retryUpload(ctx, []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}, func() (*UploadFileResp, error) {
-		return f.uploadFileOnce(ctx, req, cb)
+	if req.Name == "" {
+		return nil, errors.New("name is empty")
+	}
+	route := &uploadRouteState{multiBucket: true, circuit: &f.circuit}
+	ctx = context.WithValue(ctx, uploadRouteKey{}, route)
+	budget := uploadBudget(req)
+	ctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	return retryUpload(ctx, []time.Duration{0, 0, 0, 0, 0}, func() (*UploadFileResp, error) {
+		attempt := *req
+		attempt.Name = uploadName(req.Name, f.loginUserID, route.hongKong())
+		previous := route.tier
+		result, err := f.uploadFileOnce(ctx, &attempt, cb)
+		if err != nil && previous == route.tier {
+			advanceUploadRoute(ctx, err)
+		}
+		return result, err
 	})
 }
 
@@ -247,14 +264,26 @@ func (f *File) cleanPartLimit() {
 }
 
 func (f *File) initiateMultipartUploadResp(ctx context.Context, req *third.InitiateMultipartUploadReq) (*third.InitiateMultipartUploadResp, error) {
-	return api.ObjectInitiateMultipartUpload.Invoke(ctx, req)
+	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	response, err := api.ObjectInitiateMultipartUpload.Invoke(requestCtx, req)
+	if err != nil && requestCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		return nil, &uploadHTTPError{status: 408}
+	}
+	return response, err
 }
 
 func (f *File) authSign(ctx context.Context, req *third.AuthSignReq) (*third.AuthSignResp, error) {
 	if len(req.PartNumbers) == 0 {
 		return nil, errs.ErrArgs.WrapMsg("partNumbers is empty")
 	}
-	return api.ObjectAuthSign.Invoke(ctx, req)
+	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	response, err := api.ObjectAuthSign.Invoke(requestCtx, req)
+	if err != nil && requestCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
+		return nil, &uploadHTTPError{status: 408}
+	}
+	return response, err
 }
 
 func (f *File) completeMultipartUpload(ctx context.Context, req *third.CompleteMultipartUploadReq) (*third.CompleteMultipartUploadResp, error) {
@@ -441,6 +470,9 @@ func (f *File) getLocalUploadInfo(ctx context.Context, req *third.InitiateMultip
 			}
 		}
 	}()
+	if strings.HasPrefix(dbUpload.UploadID, "hk:") != strings.HasPrefix(strings.TrimPrefix(req.Name, f.loginUserID+"/"), "__cos_hk__/") {
+		return nil
+	}
 	if dbUpload.UploadID == "" || dbUpload.ExpireTime-3600*1000 < time.Now().UnixMilli() {
 		return nil
 	}
@@ -509,8 +541,36 @@ func (f *File) getUpload(ctx context.Context, req *third.InitiateMultipartUpload
 }
 
 func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, header http.Header, reader io.Reader, size int64) error {
+	url, header, err := selectUploadRoute(ctx, url, header)
+	if err != nil {
+		return err
+	}
 	rawURL := url.String()
-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, rawURL, reader)
+	method := http.MethodPut
+	if header.Get(uploadFallbackHeader) != "" {
+		method = http.MethodPost
+	}
+	key := url.Host
+	if method == http.MethodPost {
+		var target uploadFallbackTarget
+		if json.Unmarshal([]byte(header.Get(uploadFallbackHeader)), &target) == nil {
+			if targetURL, e := parseUploadURL(target.URL); e == nil {
+				key += "/" + targetURL.Host
+			}
+		}
+	}
+	state, _ := ctx.Value(uploadRouteKey{}).(*uploadRouteState)
+	if state != nil && state.available {
+		if state.circuit.blocked(key) {
+			state.currentKey = ""
+			return advanceUploadRoute(ctx, &uploadHTTPError{status: 503})
+		}
+		state.currentKey = key
+	}
+	attemptCtx, watchedReader, cancel, idleTimeout := uploadIdleContext(ctx, reader, 8*time.Second)
+	reader = watchedReader
+	defer cancel()
+	req, err := http.NewRequestWithContext(attemptCtx, method, rawURL, reader)
 	if err != nil {
 		return err
 	}
@@ -519,9 +579,17 @@ func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, hea
 	}
 	req.ContentLength = size
 	log.ZDebug(ctx, "do put req", "host", url.Host, "contentLength", size)
-	resp, err := client.Do(req)
+	// Signed PUTs and authenticated relay requests must not follow redirects.
+	uploadClient := *client
+	uploadClient.Transport = uploadTransport(client.Transport)
+	defer uploadClient.CloseIdleConnections()
+	uploadClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	resp, err := uploadClient.Do(req)
 	if err != nil {
-		return uploadTransportError(err)
+		if (idleTimeout.Load() || attemptCtx.Err() == context.DeadlineExceeded) && ctx.Err() == nil {
+			return advanceUploadRoute(ctx, &uploadHTTPError{status: http.StatusRequestTimeout})
+		}
+		return advanceUploadRoute(ctx, uploadTransportError(err))
 	}
 	defer func() {
 		_ = resp.Body.Close()
@@ -529,10 +597,21 @@ func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, hea
 	log.ZDebug(ctx, "do put resp status", "host", url.Host, "status", resp.StatusCode)
 	_, err = io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
 	if err != nil {
-		return err
+		if (idleTimeout.Load() || attemptCtx.Err() == context.DeadlineExceeded) && ctx.Err() == nil {
+			return advanceUploadRoute(ctx, &uploadHTTPError{status: http.StatusRequestTimeout})
+		}
+		return advanceUploadRoute(ctx, err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return &uploadHTTPError{status: resp.StatusCode}
+		return advanceUploadRoute(ctx, &uploadHTTPError{status: resp.StatusCode})
+	}
+	// Authentication middleware may return HTTP 200 with a JSON error envelope.
+	// Only the relay's explicit no-content acknowledgement commits a part.
+	if method == http.MethodPost && resp.StatusCode != http.StatusNoContent {
+		return &uploadHTTPError{status: http.StatusUnauthorized}
+	}
+	if state != nil {
+		state.circuit.mark(key, false)
 	}
 	return nil
 }

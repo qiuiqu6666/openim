@@ -16,6 +16,7 @@ type MetadataProgress struct {
 	mu          sync.Mutex
 	completed   map[string]time.Time
 	items       map[string]map[string]bool
+	states      map[metadataStateKey]any
 	checkpoints atomic.Int64
 }
 
@@ -104,7 +105,8 @@ func RunMetadataStage(ctx context.Context, name string, run func(context.Context
 	return nil
 }
 
-// RecordMetadataCheckpoint counts committed batches, not requests or bytes.
+// RecordMetadataCheckpoint counts committed batches or retained snapshot pages,
+// not requests or bytes. A retained page survives cancellation of an attempt.
 func RecordMetadataCheckpoint(ctx context.Context) {
 	if progress, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress); progress != nil {
 		progress.checkpoints.Add(1)

@@ -17,6 +17,16 @@ func (g *Group) syncMemberRequests(ctx context.Context, scope string, requests [
 		}
 		responses, err := g.getIncrementalGroupMemberBatch(ctx, requests)
 		if err != nil {
+			if errs.ErrNoPermission.Is(err) {
+				pending, recoveryErr := g.retireDepartedMemberRequests(ctx, scope, requests)
+				if recoveryErr != nil {
+					return recoveryErr
+				}
+				if len(pending) < len(requests) {
+					requests = pending
+					continue
+				}
+			}
 			return err
 		}
 		// The existing server skips dismissed groups. An entirely empty success

@@ -40,6 +40,7 @@ func (c *Third) uploadLogs(ctx context.Context, line int, ex string, progress Pr
 	if err != nil {
 		return err
 	}
+	orderLogEntries(entrys)
 	files := make([]string, 0, len(entrys))
 	switch line {
 	case 0:

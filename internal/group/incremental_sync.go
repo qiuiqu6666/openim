@@ -276,6 +276,17 @@ func (g *Group) IncrSyncJoinGroup(ctx context.Context) error {
 }
 
 func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error) {
+	snapshot := common.MetadataState[joinedGroupSnapshot](ctx, "joined-groups:"+g.loginUserID)
+	if err := snapshot.gate.LockContext(ctx); err != nil {
+		return nil, err
+	}
+	defer snapshot.gate.Unlock()
+	// The initial version request and full-list pages need the same bounded
+	// opportunity to progress as member batches in both recovery schedulers.
+	finish := common.BeginMetadataBatch(ctx)
+	defer finish()
+	var serverVersion joinedGroupVersion
+	fullSnapshotApplied := false
 	joinedGroupSyncer := syncer.VersionSynchronizer[*model_struct.LocalGroup, *group.GetIncrementalJoinGroupResp]{
 		Ctx:       ctx,
 		DB:        g.db,
@@ -288,11 +299,15 @@ func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error
 			return g.db.GetJoinedGroupListDB(ctx)
 		},
 		Server: func(version *model_struct.LocalVersionSync) (*group.GetIncrementalJoinGroupResp, error) {
-			return g.getIncrementalJoinGroup(ctx, &group.GetIncrementalJoinGroupReq{
+			resp, err := g.getIncrementalJoinGroup(ctx, &group.GetIncrementalJoinGroupReq{
 				UserID:    g.loginUserID,
 				Version:   version.Version,
 				VersionID: version.VersionID,
 			})
+			if err == nil {
+				serverVersion = joinedVersion(resp)
+			}
+			return resp, err
 		},
 		Full: func(resp *group.GetIncrementalJoinGroupResp) bool {
 			return resp.Full
@@ -313,19 +328,14 @@ func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error
 			return g.groupSyncer.Sync(ctx, server, local, nil)
 		},
 		FullSyncer: func(ctx context.Context) error {
-			// Fetch all pages before touching local rows. Differential application
-			// preserves group callbacks, conversation profile updates and retries.
-			server, err := g.getServerJoinGroup(ctx)
-			if err != nil {
-				return err
-			}
-			local, err := g.db.GetJoinedGroupListDB(ctx)
-			if err != nil {
-				return err
-			}
-			return g.groupSyncer.Sync(ctx, datautil.Batch(ServerGroupToLocalGroup, server), local, nil)
+			err := g.syncJoinedGroupSnapshot(ctx, snapshot, serverVersion)
+			fullSnapshotApplied = err == nil
+			return err
 		},
 		FullID: func(ctx context.Context) ([]string, error) {
+			if fullSnapshotApplied {
+				return snapshot.ids, nil
+			}
 			resp, err := g.getFullJoinGroupIDs(ctx, &group.GetFullJoinGroupIDsReq{
 				UserID: g.loginUserID,
 			})
@@ -345,6 +355,7 @@ func (g *Group) IncrSyncJoinGroupAndGetIDs(ctx context.Context) ([]string, error
 	if err := joinedGroupSyncer.IncrementalSync(); err != nil {
 		return nil, err
 	}
+	snapshot.reset(joinedGroupVersion{})
 	lvs, err := g.db.GetVersionSync(ctx, g.groupTableName(), g.loginUserID)
 	if err != nil && !errs.ErrRecordNotFound.Is(err) {
 		return nil, err
