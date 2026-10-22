@@ -1,3 +1,5 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -13,6 +15,42 @@ import 'package:voice_note_kit/voice_note_kit.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  testWidgets(
+      'recording waits for voice release and keeps media blocked until native stop',
+      (tester) async {
+    final harness = await _VoiceGestureHarness.mount(tester);
+    final release = (await tester.runAsync(() async => Completer<void>()))!;
+    final voice = await tester.runAsync(() => MediaCoordinator.instance
+        .acquire(MediaKind.voice, () => release.future));
+    addTearDown(() {
+      if (!release.isCompleted) release.complete();
+    });
+    final gesture = (await tester.runAsync(
+        () => tester.startGesture(harness.microphoneCenter, pointer: 11)))!;
+    await harness.waitForNative(() => MediaCoordinator.instance.recording);
+    expect(voice!.valid, isFalse);
+    expect(harness.native.startCalls, 0);
+    await tester.runAsync(() async {
+      release.complete();
+    });
+    await harness.waitForNative(() => harness.native.started.isCompleted);
+    expect(
+        await MediaCoordinator.instance.acquire(MediaKind.voice, () async {}),
+        isNull);
+    expect(
+        await MediaCoordinator.instance.acquire(MediaKind.video, () async {}),
+        isNull);
+    await harness.cancel(gesture);
+    expect(MediaCoordinator.instance.recording, isFalse);
+    expect(MediaCoordinator.instance.activeKind, isNull);
+    harness.expectNoDelivery();
+  });
 
   testWidgets('pressing the microphone immediately opens the recording overlay',
       (tester) async {

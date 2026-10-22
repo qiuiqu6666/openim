@@ -1,3 +1,5 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -13,12 +15,15 @@ class _Platform extends VideoPlayerPlatform {
   final disposed = <int>[];
   final seeks = <Duration>[];
   final speeds = <double>[];
+  final playing = <int>{};
   Completer<void>? speedGate;
   bool failLocal = false;
   bool hang = false;
 
   @override
   Future<void> init() async {}
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {}
   @override
   Future<int?> createWithOptions(VideoCreationOptions options) async {
     sources.add(options.dataSource);
@@ -46,6 +51,7 @@ class _Platform extends VideoPlayerPlatform {
   @override
   Future<void> dispose(int id) async {
     disposed.add(id);
+    playing.remove(id);
     await events[id]?.close();
   }
 
@@ -54,9 +60,15 @@ class _Platform extends VideoPlayerPlatform {
   @override
   Future<void> setVolume(int id, double volume) async {}
   @override
-  Future<void> play(int id) async {}
+  Future<void> play(int id) async {
+    playing.add(id);
+  }
+
   @override
-  Future<void> pause(int id) async {}
+  Future<void> pause(int id) async {
+    playing.remove(id);
+  }
+
   @override
   Future<void> seekTo(int id, Duration position) async => seeks.add(position);
   @override
@@ -81,12 +93,19 @@ Future<void> mount(WidgetTester tester, {String? url}) async {
     autoPlay: true,
     muted: false,
   ))));
-  await tester
-      .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
-  await tester.pump();
+  for (var i = 0; i < 8; i++) {
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pump();
+  }
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
   late VideoPlayerPlatform previous;
   late _Platform platform;
   setUp(() {
@@ -95,6 +114,76 @@ void main() {
     VideoPlayerPlatform.instance = platform;
   });
   tearDown(() => VideoPlayerPlatform.instance = previous);
+
+  testWidgets(
+      'unplayed video preview leaves voice ownership and player untouched',
+      (tester) async {
+    var voiceStops = 0;
+    final voice = await tester.runAsync(
+        () => MediaCoordinator.instance.acquire(MediaKind.voice, () async {
+              voiceStops++;
+            }));
+    await tester.pumpWidget(MaterialApp(
+        home: NativeMediaVideo(
+            file: File('openim_common/assets/images/ic_archive_99chat.png'),
+            autoPlay: false,
+            muted: false)));
+    await tester.pump();
+    expect(voice!.valid, isTrue);
+    expect(voiceStops, 0);
+    expect(platform.sources, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() => voice.release());
+  });
+
+  testWidgets(
+      'video start stops voice and new voice pauses video without resume',
+      (tester) async {
+    var voiceStops = 0;
+    final voice = await tester.runAsync(
+        () => MediaCoordinator.instance.acquire(MediaKind.voice, () async {
+              voiceStops++;
+            }));
+    await mount(tester);
+    expect(voiceStops, 1);
+    expect(voice!.valid, isFalse);
+    expect(platform.playing, {1});
+    final next = await tester.runAsync(
+        () => MediaCoordinator.instance.acquire(MediaKind.voice, () async {}));
+    expect(platform.playing, isEmpty);
+    await tester.runAsync(() => next!.release());
+    await tester.pump();
+    expect(platform.playing, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
+  testWidgets('recording prevents video from starting', (tester) async {
+    final recording = await tester.runAsync(() =>
+        MediaCoordinator.instance.acquire(MediaKind.recording, () async {}));
+    await mount(tester);
+    expect(platform.playing, isEmpty);
+    expect(recording!.valid, isTrue);
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() => recording.release(stopped: true));
+  });
+
+  testWidgets('preempted video preparation cannot retry a remote source over new voice', (tester) async {
+    platform.hang = true;
+    await mount(tester, url: 'https://example.test/fallback.mp4');
+    expect(platform.sources, hasLength(1));
+    final voice = await tester.runAsync(() => MediaCoordinator.instance.acquire(MediaKind.voice, () async {}));
+    await tester.pump(const Duration(seconds: 21));
+    for (var i = 0; i < 4; i++) {
+      await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
+    expect(voice!.valid, isTrue);
+    expect(platform.sources, hasLength(1));
+    expect(platform.playing, isEmpty);
+    await tester.pumpWidget(const SizedBox());
+    await tester.runAsync(() => voice.release());
+  });
 
   for (final right in [false, true]) {
     testWidgets('edge hold restores chosen speed (right: $right)',
@@ -283,8 +372,11 @@ void main() {
     await tester.pump();
     expect(find.text('视频加载失败，点击重试'), findsOneWidget);
     await tester.tap(find.byType(TextButton));
-    await tester.pump();
-    await tester.pump();
+    for (var i = 0; i < 8; i++) {
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 10)));
+      await tester.pump();
+    }
     expect(platform.sources.last.sourceType, DataSourceType.network);
     expect(find.byType(Slider), findsOneWidget);
     await tester.pumpWidget(const SizedBox());

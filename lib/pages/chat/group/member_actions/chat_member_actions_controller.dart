@@ -3,6 +3,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart' show graphemeTrim;
 
 import 'chat_member_action_policy.dart';
+import '../permissions/group_mute.dart';
 import 'chat_member_action_sources.dart';
 
 typedef ChatMemberActionLoading = Future<T> Function<T>(
@@ -104,7 +105,9 @@ class ChatMemberActionsController {
   List<ChatMemberAction> _actions(
       ChatMemberActionSnapshot snapshot, String accountID) {
     final self = snapshot.self;
-    final snapshotMuted = (self?.muteEndTime ?? 0) > _nowSeconds() ||
+    final snapshotMuted = (self?.roleLevel != GroupRoleLevel.owner &&
+            GroupMute.active(self?.muteEndTime,
+                nowMilliseconds: _nowSeconds() * 1000)) ||
         (self?.roleLevel == GroupRoleLevel.member &&
             snapshot.group?.status == 3);
     List<ChatMemberAction> allowed(ChatMemberActionSnapshot state) =>
@@ -248,7 +251,8 @@ class ChatMemberActionsController {
               return;
             }
             final updated = GroupMembersInfo.fromJson(target.toJson())
-              ..muteEndTime = seconds == 0 ? 0 : _nowSeconds() + seconds;
+              ..muteEndTime = GroupMute.afterSeconds(seconds,
+                  nowMilliseconds: _nowSeconds() * 1000);
             _acceptedMutes[targetID] = updated;
             memberUpdated(updated);
             showFeedback(seconds == 0 ? '已解除禁言' : '已禁言');

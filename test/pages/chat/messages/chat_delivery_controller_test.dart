@@ -87,6 +87,29 @@ void main() {
         .setMockMethodCallHandler(sdkChannel, null);
   });
 
+  for (final failCreation in [true, false]) {
+    test('failed-send hint SDK error is contained creation=$failCreation',
+        () async {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(sdkChannel, (call) async {
+        if (call.method == 'createCustomMessage' && !failCreation) {
+          return jsonEncode(
+              Message(clientMsgID: 'hint', contentType: MessageType.custom)
+                  .toJson());
+        }
+        throw PlatformException(code: 'test_hint_failure');
+      });
+      final message = _outgoing('rejected');
+      final pending = delivery.send(message);
+      transport
+          .completeError(PlatformException(code: '${SDKErrorCode.notFriend}'));
+      await pending;
+      await _flush();
+      expect(message.status, MessageStatus.failed);
+      expect(messages.first, same(message));
+    });
+  }
+
   test('successful delivery updates the existing bubble once', () async {
     final message = _outgoing('one');
     final pending = delivery.send(message);

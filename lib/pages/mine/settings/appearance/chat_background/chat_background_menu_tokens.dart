@@ -1,6 +1,29 @@
 import 'package:flutter/material.dart';
 
 abstract final class ChatBackgroundMenuTokens {
+  static const dualPaneWidth = 760.0;
+  static const previewHeight = 168.0;
+  static const bubbleWidth = 190.0;
+  static const gridGap = 14.0;
+  static const bannerLight = Color(0xFFF0F4FA);
+  static const bannerDark = Color(0xFF23262D);
+  static const colors = <Color>[
+    Color(0xFFF1F1F1),
+    Color(0xFFCFECCB),
+    Color(0xFFBEDBFF),
+    Color(0xFFF9C9D2),
+    Color(0xFFFFF3B6),
+    Color(0xFFD9B8E8),
+  ];
+  static const colorNamesZh = ['浅灰', '浅绿', '浅蓝', '浅粉', '浅黄', '浅紫'];
+  static const colorNamesEn = [
+    'Light gray',
+    'Light green',
+    'Light blue',
+    'Light pink',
+    'Light yellow',
+    'Light purple'
+  ];
   static const background = Color(0xFFEDEDED);
   static const dividerWidth = 0.5;
   static const actionWidth = 80.0;

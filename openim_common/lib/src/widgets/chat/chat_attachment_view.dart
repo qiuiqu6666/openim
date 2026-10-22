@@ -11,6 +11,7 @@ import 'package:get/get.dart';
 import 'package:just_waveform/just_waveform.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:openim_common/openim_common.dart';
+import '../../res/chat_voice_tokens.dart';
 
 typedef ChatFileMessageBuilder = Widget Function(
   BuildContext context, {
@@ -273,7 +274,6 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
   bool _heard = false;
   bool get _current =>
       _playback.current?.clientMsgID == widget.message.clientMsgID;
-  bool get _loading => _current && _playback.loading;
   bool get _playing => _current && _playback.playing;
   bool get _failed => _current && _playback.failed;
 
@@ -382,59 +382,66 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
       behavior: HitTestBehavior.opaque,
       onTap: widget.readOnly ? null : () => _playback.toggle(widget.message),
       child: Semantics(
+        explicitChildNodes: true,
         button: !widget.readOnly,
         label: _playing ? 'attachmentPause'.tr : 'attachmentPlay'.tr,
         child: SizedBox(
             width: bubbleContentWidth,
-            child: Row(children: [
-              Container(
-                width: 24.w,
-                height: 24.w,
-                decoration: BoxDecoration(
-                    color: Styles.c_0089FF, shape: BoxShape.circle),
-                alignment: Alignment.center,
-                child: _loading
-                    ? SizedBox(
-                        width: 18.w,
-                        height: 18.w,
-                        child: const CircularProgressIndicator(
-                            strokeWidth: 2, color: Colors.white))
-                    : Icon(
-                        _failed
-                            ? Icons.refresh_rounded
-                            : _playing
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
-                        color: Colors.white,
-                        size: 18.w),
-              ),
-              6.horizontalSpace,
-              Expanded(
-                  child: StreamBuilder<Duration>(
-                stream: _current ? _playback.positionStream : null,
-                builder: (_, snapshot) => CustomPaint(
-                  size: Size(double.infinity, 18.w),
-                  painter: _VoiceWavePainter(
-                    levels: _waveform,
-                    color: Styles.c_8E9AB0,
-                    playedColor: Styles.c_0089FF,
-                    progress: _playing && duration > 0
-                        ? ((snapshot.data?.inMilliseconds ?? 0) /
-                                (duration * 1000))
-                            .clamp(0.0, 1.0)
-                        : 0,
+            child: Stack(
+              clipBehavior: Clip.none,
+              alignment: Alignment.center,
+              children: [
+                Row(children: [
+                  Container(
+                    width: 24.w,
+                    height: 24.w,
+                    decoration: BoxDecoration(
+                        color: Styles.c_0089FF, shape: BoxShape.circle),
+                    alignment: Alignment.center,
+                    child: Icon(
+                            _failed
+                                ? Icons.refresh_rounded
+                                : _playing
+                                    ? Icons.pause_rounded
+                                    : Icons.play_arrow_rounded,
+                            color: Colors.white,
+                            size: 18.w),
                   ),
-                ),
-              )),
-              6.horizontalSpace,
-              Text('$duration″',
-                  style: Styles.ts_0C1C33_17sp
-                      .copyWith(fontSize: 12.sp, fontWeight: FontWeight.w500)),
-              if (!widget.isOutgoing && !_heard) ...[
-                const SizedBox(width: 6),
-                Icon(Icons.circle, size: 6, color: Styles.c_0089FF),
+                  6.horizontalSpace,
+                  Expanded(
+                      child: StreamBuilder<Duration>(
+                    stream: _current ? _playback.positionStream : null,
+                    builder: (_, snapshot) => CustomPaint(
+                      size: Size(double.infinity, 18.w),
+                      painter: _VoiceWavePainter(
+                        levels: _waveform,
+                        color: Styles.c_8E9AB0,
+                        playedColor: Styles.c_0089FF,
+                        progress: _playing && duration > 0
+                            ? ((snapshot.data?.inMilliseconds ?? 0) /
+                                    (duration * 1000))
+                                .clamp(0.0, 1.0)
+                            : 0,
+                      ),
+                    ),
+                  )),
+                  6.horizontalSpace,
+                  Text('$duration″',
+                      style: Styles.ts_0C1C33_17sp.copyWith(
+                          fontSize: 12.sp, fontWeight: FontWeight.w500)),
+                ]),
+                if (!widget.isOutgoing && !_heard)
+                  Positioned(
+                    right: -(ChatBubbleTokens.compactHorizontalPadding.w +
+                        ChatBubbleTokens.incomingBorderWidth +
+                        ChatVoiceTokens.unreadDotGap +
+                        ChatVoiceTokens.unreadDotSize),
+                    child: Icon(Icons.circle,
+                        size: ChatVoiceTokens.unreadDotSize,
+                        color: Styles.c_FF381F),
+                  ),
               ],
-            ])),
+            )),
       ),
     );
   }

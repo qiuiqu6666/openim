@@ -34,6 +34,13 @@ Message _message({bool voice = false}) => Message.fromJson({
 /// unnecessarily register route/SDK dependencies for a message-row test.
 class _TileLogic extends GetxController implements ChatLogic {
   @override
+  Message resolveGroupNotice(Message message) => message;
+  @override
+  bool get isChannel => false;
+  @override
+  bool get isChannelSubscriber => false;
+
+  @override
   final messageReadUpdates = ChatMessageReadUpdates();
 
   _TileLogic(Message message, {Future<String> Function()? transcript}) {

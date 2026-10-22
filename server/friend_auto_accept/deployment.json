@@ -1,0 +1,113 @@
+{
+  "chat": {
+    "baseline": "/home/ubuntu/otp-latency-20261021/chat",
+    "source": "/home/ubuntu/friend-auto-accept-release-20261021/chat",
+    "files": {
+      "internal/rpc/chat/friend_auto_accept.go": {
+        "baseline_sha256": null,
+        "result_sha256": "ad6d93d9f8901ef8e01576e62b22a5e172c963ea14642ccf5365072a31d3046f"
+      },
+      "internal/rpc/chat/friend_auto_accept_test.go": {
+        "baseline_sha256": null,
+        "result_sha256": "da681adb9944dc9de6f6d8c565d9c1f7d27d791b725ce95c5492e51e2410f362"
+      },
+      "internal/rpc/chat/friend_grant.go": {
+        "baseline_sha256": "e1a7e2121031101c88941bf73ce63c0fda0d995e182b840dc6986fb0d6a6be2e",
+        "result_sha256": "7c7cf22859ac3561e178db3b4a43b692d54b17efcbdfb88a87ed5e02b35da609"
+      },
+      "internal/rpc/chat/update.go": {
+        "baseline_sha256": "80305ff3ab3c31dc2c01906dd68cecac8e867882a8b96d7e37ba5f89ef2ca425",
+        "result_sha256": "5ed7c6f0a8a63ae4e0f63eb7f1985dfd00aed178861643db0f7e73a42196062f"
+      },
+      "internal/rpc/chat/utils.go": {
+        "baseline_sha256": "20e394a112be44da8a8f4316d1de31280fe763aab9a464c29f8d5e34b6e07817",
+        "result_sha256": "8cf15da42b4e9b2a91634313b3f22d9881e7a518dee91c938fc2f12f165add88"
+      },
+      "pkg/common/db/database/chat.go": {
+        "baseline_sha256": "14cf348185d3e7c9356b3d613f11b3bf64de5a971e26ebc34e470b32879c6f28",
+        "result_sha256": "73e2aa2505965c2fdf3d7609687218b22d246d4384908fe84ee752af8ad78fd6"
+      },
+      "pkg/common/db/database/friend_grant.go": {
+        "baseline_sha256": "09c5ab63ec2ec2aa33635f87ba95421a1512928ee624032843f85e57d7dcebd2",
+        "result_sha256": "2d6c53adf339c1710b108591e2ac40165b300ff968a93f6e542b86a0398bd7e4"
+      },
+      "pkg/common/db/model/chat/friend_grant.go": {
+        "baseline_sha256": "ac79940feb1915eecc84751e985436f0e5112a2e2405596ffc7c03790b1000bd",
+        "result_sha256": "fc62f711a41a1a76df44ed475576b30393b97e19c27f83a12ad5ba5ac1c2a9bb"
+      },
+      "pkg/common/db/table/chat/attribute.go": {
+        "baseline_sha256": "4e5ef04f7d56343926b549c4b1ef2aa62fa6f7c6b0675c3f1b1615ae72fd7fe5",
+        "result_sha256": "54f472f90556820104a71f26f39727f72eccc3dcb1d13f7745c778b409aac2ac"
+      },
+      "pkg/common/db/table/chat/friend_grant.go": {
+        "baseline_sha256": "bc5588c0d5e52d4d695e0a365f6ac80440c152cb15758f12d683e11d29ad1692",
+        "result_sha256": "a19247bbd4f0312a5fc7f13856e2b25f6e6963153afdfa9cd147ef7eaa11f4d1"
+      },
+      "pkg/common/imapi/caller.go": {
+        "baseline_sha256": "e0041965ae0da18bfaebf3142b401eff06659be774ed08bbf86571ac3005eab2",
+        "result_sha256": "195814d1be6dfc49999968f6562421f3b410053f3d85437e83350434880f7e36"
+      },
+      "pkg/common/imapi/friend_auto_accept.go": {
+        "baseline_sha256": null,
+        "result_sha256": "fefa1c3c3e4f98d410eca87947b8f85901973bf36d75d8cb8721d2bfd58822da"
+      },
+      "pkg/common/imapi/friend_auto_accept_test.go": {
+        "baseline_sha256": null,
+        "result_sha256": "b46e78864c26b0a88e8bded5585a9742a52ab08659d50bee55200d1266287df6"
+      },
+      "pkg/protocol/chat/chat.pb.go": {
+        "baseline_sha256": "e8425443de25bfc0ffbd5167e4aac479dbcb9592708f353277062aeaaa7c200b",
+        "result_sha256": "b3eb0cf0fd4f3e4971e5302e89d00c4c5a7bd9368d8612aee355319bc776c14c"
+      },
+      "pkg/protocol/chat/chat.proto": {
+        "baseline_sha256": "2527e9dfcc979cf6640219dd68fa09190a4eec1dc24f68efca9844a00000da2b",
+        "result_sha256": "f025eb367b621fc093492d16f80eb6ac50e97015c617fc17da59f58adb93fc47"
+      },
+      "pkg/protocol/common/common.pb.go": {
+        "baseline_sha256": "43992df9ca4e8156467a1b870bda8677d2d636dc487c9d146d44d19b76fe095f",
+        "result_sha256": "0ef04d030883e80c1fc1576fe7b6916e2b120ba9397c48b64fc94d9571c4beef"
+      },
+      "pkg/protocol/common/common.proto": {
+        "baseline_sha256": "05022c37ea147b86200cb8efb4d1f1308102ed359cb18cc4ceebf8fe684cb922",
+        "result_sha256": "5c46864a5f8425ef151c30c5d403c64a668287fbc8ff6635156042024f97344c"
+      },
+      "internal/rpc/chat/friend_auto_accept_flow_test.go": {
+        "baseline_sha256": null,
+        "result_sha256": "c2b3156d34e2c8e6fcbc5a47f1d7662f7fa824e89acb470019f617b2b5d6ac3e"
+      },
+      "pkg/common/imapi/friend_auto_accept_operation.go": {
+        "baseline_sha256": null,
+        "result_sha256": "57ec619bf61db1b56a754878a147a81f421e34cac0677fec85348696b5547c73"
+      }
+    }
+  },
+  "api": {
+    "baseline": "/home/ubuntu/fund-risk-unified-20261021",
+    "source": "/home/ubuntu/friend-auto-accept-release-20261021/api",
+    "files": {
+      "pkg/protocol/chat/chat.pb.go": {
+        "baseline_sha256": "3ecb592d809ff4cbd4529e983e1092ba13e228d95821669e285738fba8febbbe",
+        "result_sha256": "32cb5b32e56f92210c2b91f72cbb78e0ce860c5227c1920dbe5325e8689741c9"
+      },
+      "pkg/protocol/chat/chat.proto": {
+        "baseline_sha256": "18eb5d4bafedbf42cff9fb8bceeaa77b049878ce565cc10938ca49af076ca7a2",
+        "result_sha256": "08ae0d067bfd6f45ab30cb057836d3aee90eb1934499b59d9a65aac7acd91809"
+      },
+      "pkg/protocol/common/common.pb.go": {
+        "baseline_sha256": "43992df9ca4e8156467a1b870bda8677d2d636dc487c9d146d44d19b76fe095f",
+        "result_sha256": "0ef04d030883e80c1fc1576fe7b6916e2b120ba9397c48b64fc94d9571c4beef"
+      },
+      "pkg/protocol/common/common.proto": {
+        "baseline_sha256": "05022c37ea147b86200cb8efb4d1f1308102ed359cb18cc4ceebf8fe684cb922",
+        "result_sha256": "5c46864a5f8425ef151c30c5d403c64a668287fbc8ff6635156042024f97344c"
+      }
+    }
+  },
+  "deployed_at": "2026-10-21T18:49:19+08:00",
+  "backup": "/srv/99chat-production/backups/friend-auto-accept-20261021-184915",
+  "binary_sha256": [
+    "408b04ff9b64014a3f03b3cdaac0760c67ee791b93ddab728503e312f96ab734  /srv/99chat-production/rpc-release-20261019/bin/chat-owner",
+    "742f26f307dc13019a0959ef7b73d437fb3b2671bd8991c03835ec057371a007  /srv/99chat-production/rpc-release-20261019/bin/chat-api",
+    "28b2336b4eaaa3566170485b6ee41617225a4b93ba453c09c63df77a8fd62f72  /srv/99chat-production/rpc-release-20261019/bin/chat-rpc"
+  ]
+}

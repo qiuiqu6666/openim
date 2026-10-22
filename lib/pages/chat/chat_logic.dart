@@ -71,6 +71,7 @@ import 'messages/selection/message_selection_controller.dart';
 import 'navigation/chat_message_navigation.dart';
 import 'navigation/chat_message_focus_controller.dart';
 import 'receipts/chat_read_receipts.dart';
+import 'receipts/chat_entry_read.dart';
 import 'scrolling/chat_new_message_tracker.dart';
 import 'scrolling/chat_latest_scroll_controller.dart';
 import 'stickers/chat_sticker_controller.dart';
@@ -81,7 +82,10 @@ import 'voice/voice_to_text_service.dart';
 import 'voice/voice_transcription_controller.dart';
 
 class ChatLogic extends SuperController {
-  ChatLogic({DateTime Function()? receiptNow}) : _receiptNow = receiptNow;
+  ChatLogic({DateTime Function()? receiptNow, ChatGroupQueries? groupQueries})
+      : _receiptNow = receiptNow,
+        _groupQueries = groupQueries;
+  final ChatGroupQueries? _groupQueries;
 
   final DateTime Function()? _receiptNow;
   final messageReadUpdates = ChatMessageReadUpdates();
@@ -284,6 +288,7 @@ class ChatLogic extends SuperController {
     attachmentBusy: () => _media.pickingAttachment,
   );
   late final ChatMediaController _media = ChatMediaController(
+    onPendingAdded: () => scrollBottom(),
     acceptSendTask: () => ChatMediaOutbox.instance.accept(FavoriteTarget(
         conversationID: conversationInfo.conversationID,
         userID: userID,
@@ -463,6 +468,7 @@ class ChatLogic extends SuperController {
   bool get rtcIsBusy => _calling.rtcIsBusy;
 
   late final _group = ChatGroupController(
+    queries: _groupQueries,
     im: imLogic,
     groupID: () => groupID,
     messages: messageList,
@@ -686,11 +692,21 @@ class ChatLogic extends SuperController {
       _dateWindow.jumpToMessage(message);
 
   Route<dynamic>? _messageRoute;
+  ChatEntryRead? _entryRead;
+  void _submitEntryRead() {
+    _entryRead?.enter(
+        active: !_sessionInactive && _messageRoute?.isCurrent == true &&
+            (WidgetsBinding.instance.lifecycleState == null ||
+             WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed),
+        send: imLogic.conversationEntryReadSubject.addSafely);
+  }
   bool get isMessageNavigationCurrent => !_sessionInactive;
   Route<dynamic>? get messageRoute => _messageRoute;
   void bindMessageRoute(Route<dynamic>? route) {
     if (_sessionInactive) return;
     _messageRoute = route;
+    // Route mounting is enough; history, sync and message paint are independent.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _submitEntryRead());
     final current = route?.isCurrent != false;
     if (!current && _routeWasCurrent && newMessages.awayFromLatest.value) {
       _backgroundMessageRecovery.suspend();
@@ -1087,6 +1103,9 @@ class ChatLogic extends SuperController {
     entryTrace = arguments['chatEntryTrace'] as ChatEntryTrace?;
     entryTrace?.mark('init_start');
     conversationInfo = arguments['conversationInfo'];
+    _entryRead = ChatEntryRead.capture(conversationInfo,
+        historyEntry: arguments['searchMessage'] != null,
+        accountID: OpenIM.iMManager.userID);
     pendingForward = PendingForwardStore.shared.conversation(
       accountID: OpenIM.iMManager.userID,
       sessionToken: DataSp.imToken,
@@ -1213,6 +1232,12 @@ class ChatLogic extends SuperController {
 
       if (!_sessionInactive && obj != null) {
         conversationInfo = obj;
+        if (isSingleChat) {
+          // The SDK also reconciles profiles through conversation updates
+          // during recovery; a friend callback is not required for this path.
+          nickname.value = obj.showName ?? nickname.value;
+          faceUrl.value = obj.faceURL ?? faceUrl.value;
+        }
         _latestMessageRecovery.conversationChanged();
         _receipts.conversationChanged();
       }
@@ -1260,6 +1285,7 @@ class ChatLogic extends SuperController {
       if (userID == value.userID) {
         nickname.value = value.getShowName();
         faceUrl.value = value.faceURL ?? '';
+        conversationInfo.faceURL = value.faceURL;
 
         for (var msg in messageList) {
           if (msg.sendID == value.userID) {
@@ -1718,8 +1744,13 @@ class ChatLogic extends SuperController {
     return remark ?? _group.nicknameFor(message);
   }
 
-  String? getNewestFaceURL(Message message) =>
-      isSingleChat ? message.senderFaceUrl : _group.avatarFor(message);
+  String? getNewestFaceURL(Message message) {
+    if (!isSingleChat) return _group.avatarFor(message);
+    if (message.sendID == userID && conversationInfo.faceURL != null) {
+      return faceUrl.value;
+    }
+    return message.senderFaceUrl;
+  }
 
   bool get isInvalidGroup => _group.isInvalidGroup;
 
@@ -1953,7 +1984,9 @@ class ChatLogic extends SuperController {
 
   @override
   void onResumed() {
+    _submitEntryRead();
     _group.recover(resetAttempts: true);
+    unawaited(_group.refreshProfileAfterSync());
     unawaited(_loadHistoryForSyncEnd());
     _historyRecovery.request(resetAttempts: true, source: 'app_resumed');
     _latestMessageRecovery.conversationChanged(resetAttempts: true);

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:dio/dio.dart' as dio;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -18,6 +19,7 @@ import 'package:openim/pages/contacts/user_profile_panel/user_profile _panel_log
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/routes/app_pages.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim_common/src/utils/http_util.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _group = 'group-account-test';
@@ -185,6 +187,106 @@ void main() {
     }));
     await tester.pumpAndSettle();
   }
+
+  testWidgets(
+      'member avatar event updates profile without replacing global name',
+      (tester) async {
+    await open(tester);
+    logic.userInfo.update((user) {
+      user?.nickname = 'Personal name';
+      user?.faceURL = 'old-avatar';
+    });
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group,
+        userID: _peer,
+        nickname: 'Group alias',
+        faceURL: 'new-avatar',
+        roleLevel: GroupRoleLevel.member));
+    await tester.pump();
+    expect(logic.groupUserNickname.value, 'Group alias');
+    expect(logic.userInfo.value.nickname, 'Personal name');
+    expect(logic.userInfo.value.faceURL, 'new-avatar');
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group,
+        userID: _peer,
+        nickname: 'Newest alias',
+        faceURL: '',
+        roleLevel: GroupRoleLevel.member));
+    await tester.pump();
+    expect(logic.userInfo.value.faceURL, '');
+  });
+
+  testWidgets(
+      'late member and friend reads cannot roll back live member identity',
+      (tester) async {
+    final originalDio = http.dio;
+    http.dio = dio.Dio()
+      ..interceptors.add(dio.InterceptorsWrapper(
+        onRequest: (request, handler) => handler.resolve(dio.Response(
+          requestOptions: request,
+          statusCode: 200,
+          data: {
+            'errCode': 0,
+            'data': {'users': []}
+          },
+        )),
+      ));
+    addTearDown(() {
+      http.dio.close(force: true);
+      http.dio = originalDio;
+    });
+    final memberReply = Completer<String>();
+    final friendReply = Completer<String>();
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(sdk, (call) async {
+      if (call.method == 'getGroupMembersInfo') return memberReply.future;
+      if (call.method == 'getFriendsInfo') return friendReply.future;
+      if (call.method == 'getBlacklist') return '[]';
+      throw PlatformException(code: 'optional-profile-unavailable');
+    });
+    await open(tester);
+    // Establish the role first, so the later rename does not invalidate the
+    // permission query and accidentally hide the independent identity race.
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group,
+        userID: _peer,
+        nickname: 'First alias',
+        roleLevel: GroupRoleLevel.member));
+    await tester.pump();
+    logic.loadInitialMetadata();
+    await tester.pump();
+    im.memberInfoChangedSubject.add(GroupMembersInfo(
+        groupID: _group,
+        userID: _peer,
+        nickname: 'Latest alias',
+        faceURL: 'latest-avatar',
+        roleLevel: GroupRoleLevel.member));
+    await tester.pump();
+    memberReply.complete(jsonEncode([
+      {
+        'groupID': _group,
+        'userID': _peer,
+        'nickname': 'Old alias',
+        'faceURL': 'old-avatar',
+        'roleLevel': GroupRoleLevel.member,
+        'joinTime': 123
+      },
+      {
+        'groupID': _group,
+        'userID': 'im_me',
+        'roleLevel': GroupRoleLevel.member
+      },
+    ]));
+    friendReply.complete(jsonEncode([
+      {'userID': _peer, 'nickname': 'Personal name', 'faceURL': 'old-avatar'},
+    ]));
+    await tester.pumpAndSettle();
+    expect(logic.groupUserNickname.value, 'Latest alias');
+    expect(logic.groupMembersInfo?.nickname, 'Latest alias');
+    expect(logic.userInfo.value.faceURL, 'latest-avatar');
+    expect(logic.userInfo.value.nickname, 'Personal name');
+    expect(logic.joinGroupTime.value, 123);
+  });
 
   Future<void> openChat(WidgetTester tester,
       {String? account = '@ab12cd34ef'}) async {

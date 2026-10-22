@@ -64,12 +64,26 @@ class _ObservedCapture extends SingleChildRenderObjectWidget {
 class _ObservedCaptureBoundary extends RenderRepaintBoundary {
   _ObservedCaptureBoundary(this.onCaptured);
   VoidCallback? onCaptured;
+  bool _capturing = false;
+
+  @override
+  bool get debugNeedsPaint {
+    // Flutter's toImage checks this in an assert. Application code must not
+    // read this debug-only getter: it throws when assertions are disabled.
+    if (!_capturing) throw StateError('debugNeedsPaint is debug-only');
+    return super.debugNeedsPaint;
+  }
 
   @override
   Future<ui.Image> toImage({double pixelRatio = 1.0}) async {
-    final image = await super.toImage(pixelRatio: pixelRatio);
-    onCaptured?.call();
-    return image;
+    _capturing = true;
+    try {
+      final image = await super.toImage(pixelRatio: pixelRatio);
+      onCaptured?.call();
+      return image;
+    } finally {
+      _capturing = false;
+    }
   }
 }
 
@@ -156,16 +170,18 @@ void _expectOpaquePngAndJpeg(Uint8List bytes, Color background) {
 }
 
 void _testMobileWidgets(String name, WidgetTesterCallback body) {
-  testWidgets(name, (tester) async {
-    final previous = debugDefaultTargetPlatformOverride;
-    debugDefaultTargetPlatformOverride = TargetPlatform.android;
-    try {
-      await body(tester);
-    } finally {
-      // Flutter checks this invariant before package:test runs tearDown.
-      debugDefaultTargetPlatformOverride = previous;
-    }
-  });
+  for (final target in [TargetPlatform.android, TargetPlatform.iOS]) {
+    testWidgets('$name ($target)', (tester) async {
+      final previous = debugDefaultTargetPlatformOverride;
+      debugDefaultTargetPlatformOverride = target;
+      try {
+        await body(tester);
+      } finally {
+        // Flutter checks this invariant before package:test runs tearDown.
+        debugDefaultTargetPlatformOverride = previous;
+      }
+    });
+  }
 }
 
 void main() {
@@ -231,6 +247,44 @@ void main() {
         codec.dispose();
       }
     });
+  });
+
+  _testMobileWidgets('sharing waits for a pending repaint before capture',
+      (tester) async {
+    final boundary = GlobalKey();
+    var captured = false;
+    final context =
+        await _card(tester, boundary, onCaptured: () => captured = true);
+    boundary.currentContext!.findRenderObject()!.markNeedsPaint();
+    final result = await tester.runAsync(() async {
+      final pending =
+          service.shareSystemImage(context, boundary, isCurrent: () => true);
+      expect(captured, isFalse);
+      expect(platform.calls, 0);
+      await tester.pump();
+      return pending;
+    });
+    expect(captured, isTrue);
+    expect(result, WalletSystemShareResult.success);
+    expect(platform.calls, 1);
+  });
+
+  _testMobileWidgets(
+      'deposit invalidated while waiting never captures or shares',
+      (tester) async {
+    final boundary = GlobalKey();
+    var captured = false;
+    var current = true;
+    final context =
+        await _card(tester, boundary, onCaptured: () => captured = true);
+    boundary.currentContext!.findRenderObject()!.markNeedsPaint();
+    final pending =
+        service.shareSystemImage(context, boundary, isCurrent: () => current);
+    current = false;
+    await tester.pump();
+    expect(await pending, WalletSystemShareResult.dismissed);
+    expect(captured, isFalse);
+    expect(platform.calls, 0);
   });
 
   _testMobileWidgets('an already stale deposit never launches system sharing',

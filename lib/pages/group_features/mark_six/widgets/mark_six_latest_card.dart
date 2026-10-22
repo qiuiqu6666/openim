@@ -18,10 +18,17 @@ Color markSixWaveColor(String wave) => switch (wave) {
 
 class MarkSixNumberBall extends StatelessWidget {
   const MarkSixNumberBall(
-      {super.key, required this.number, required this.wave, this.size = 32});
+      {super.key,
+      required this.number,
+      required this.wave,
+      this.size = 32,
+      this.tint});
   final String number;
   final String wave;
   final double size;
+
+  /// Optional color variant applied to the artwork only, preserving the number.
+  final Color? tint;
   @override
   Widget build(BuildContext context) {
     final asset = switch (wave) {
@@ -34,7 +41,16 @@ class MarkSixNumberBall extends StatelessWidget {
         dimension: size,
         child: Stack(alignment: Alignment.center, children: [
           if (asset != null)
-            Image.asset('$markSixAssetPath$asset', width: size, height: size)
+            if (tint != null)
+              ClipOval(
+                  // Hue blending can color the transparent image corners.
+                  // Clip after filtering to keep every variant circular.
+                  child: ColorFiltered(
+                      colorFilter: ColorFilter.mode(tint!, BlendMode.hue),
+                      child: Image.asset('$markSixAssetPath$asset',
+                          width: size, height: size)))
+            else
+              Image.asset('$markSixAssetPath$asset', width: size, height: size)
           else
             DecoratedBox(
                 decoration: BoxDecoration(

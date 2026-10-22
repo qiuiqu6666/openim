@@ -6,7 +6,9 @@ import '../models/mark_six_draw.dart';
 import 'mark_six_style.dart';
 
 class MarkSixOpenedStatistics extends StatelessWidget {
-  const MarkSixOpenedStatistics({super.key, required this.draws});
+  const MarkSixOpenedStatistics(
+      {super.key, required this.draws, this.includeTies = false});
+  final bool includeTies;
   final List<MarkSixDraw> draws;
   @override
   Widget build(BuildContext context) {
@@ -17,7 +19,11 @@ class MarkSixOpenedStatistics extends StatelessWidget {
         ('parity', AppCopy.text('单'), MarkSixStyle.blue),
         ('parity', AppCopy.text('双'), MarkSixStyle.red),
         ('size', '大', MarkSixStyle.red),
-        ('size', '小', MarkSixStyle.blue)
+        ('size', '小', MarkSixStyle.blue),
+        if (includeTies) ...[
+          ('size', '平', null),
+          ('parity', '平', null),
+        ],
       ]),
       _section(context, sample, AppCopy.text('组合类型'), [
         ('combination', AppCopy.text('小单'), MarkSixStyle.blue),

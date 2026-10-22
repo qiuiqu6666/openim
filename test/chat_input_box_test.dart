@@ -9,6 +9,37 @@ import 'package:openim_common/src/widgets/chat/chat_emoji_panel.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  testWidgets('voice, emoji and more notify the chat to return to latest',
+      (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    var actions = 0;
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => GetMaterialApp(
+        translations: TranslationService(),
+        locale: const Locale('zh', 'CN'),
+        home: Scaffold(
+          body: ChatInputBox(
+            toolbox: const SizedBox(),
+            voiceRecordBar: const SizedBox(),
+            onTapVoice: () {},
+            onTapComposerAction: () => actions++,
+          ),
+        ),
+      ),
+    ));
+
+    await tester.tap(find.byTooltip(StrRes.voiceCapture));
+    await tester.pump();
+    expect(actions, 1);
+    await tester.tap(find.byTooltip('表情面板'));
+    await tester.pump();
+    expect(actions, 2);
+    await tester.tap(find.byTooltip(StrRes.add));
+    await tester.pump();
+    expect(actions, 3);
+  });
+
   testWidgets('common emoji can be inserted and the panel can be closed',
       (tester) async {
     SharedPreferences.setMockInitialValues({});

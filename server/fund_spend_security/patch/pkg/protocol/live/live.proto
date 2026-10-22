@@ -1,0 +1,83 @@
+syntax = "proto3";
+package openim.chat.live;
+option go_package = "github.com/openimsdk/chat/pkg/protocol/live";
+
+message GetLiveConfigReq {}
+message LiveConfig {
+  string pushDomain = 1;
+  string playDomain = 2;
+  string appName = 3;
+  int64 authTTLSeconds = 4;
+  int64 disconnectGraceSeconds = 5;
+  bool authKeySet = 6;
+  bool secretIdSet = 7;
+  bool secretKeySet = 8;
+  bool pushAuthKeySet = 9;
+  bool playAuthKeySet = 10;
+  bool callbackKeySet = 11;
+  string region = 12;
+}
+message PutLiveConfigReq {
+  string pushDomain = 1;
+  string playDomain = 2;
+  string appName = 3;
+  int64 authTTLSeconds = 4;
+  int64 disconnectGraceSeconds = 5;
+  string authKey = 6;
+  string secretId = 7;
+  string secretKey = 8;
+  string pushAuthKey = 9;
+  string playAuthKey = 10;
+  string callbackKey = 11;
+  string region = 12;
+}
+message LivePayload {
+  string json = 1;
+}
+message GroupReq {
+  string groupID = 1;
+}
+message SessionReq {
+  string sessionID = 1;
+}
+message AuthorizeLiveReq {
+  string groupID = 1;
+  string roomName = 2;
+  string anchorUserId = 3;
+  string description = 4;
+  string scheduledStartAt = 5;
+}
+message ScheduleLiveReq {
+  string groupID = 1;
+  string roomName = 2;
+  string scheduledStartAt = 3;
+}
+message TipLiveReq {
+  string verifyChallengeID = 7;
+  string verifyCode = 8;
+  string sessionID = 1;
+  string currency = 2;
+  int64 amount = 3;
+  string payPin = 4;
+  string clientOrderId = 5;
+  string memo = 6;
+}
+message TencentCallbackReq {
+  bytes body = 1;
+}
+
+service live {
+  rpc GetLiveConfig(GetLiveConfigReq) returns (LiveConfig);
+  rpc PutLiveConfig(PutLiveConfigReq) returns (LiveConfig);
+  rpc FeatureCapabilities(GroupReq) returns (LivePayload);
+  rpc CurrentLive(GroupReq) returns (LivePayload);
+  rpc AuthorizeLive(AuthorizeLiveReq) returns (LivePayload);
+  rpc ScheduleLive(ScheduleLiveReq) returns (LivePayload);
+  rpc StopLive(GroupReq) returns (LivePayload);
+  rpc RevokeLive(GroupReq) returns (LivePayload);
+  rpc GetLiveSession(SessionReq) returns (LivePayload);
+  rpc PlayInfo(SessionReq) returns (LivePayload);
+  rpc PushInfo(SessionReq) returns (LivePayload);
+  rpc TipLive(TipLiveReq) returns (LivePayload);
+  rpc TencentLiveCallback(TencentCallbackReq) returns (LivePayload);
+}

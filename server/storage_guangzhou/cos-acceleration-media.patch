@@ -1,0 +1,129 @@
+--- a/pkg/common/stickermedia/store.go
++++ b/pkg/common/stickermedia/store.go
+@@ -6,6 +6,7 @@
+ 	"crypto/sha256"
+ 	"encoding/hex"
+ 	"io"
++	"strings"
+ 	"time"
+ 
+ 	"github.com/minio/minio-go/v7"
+@@ -30,12 +31,13 @@
+ }
+ 
+ type MinioStore struct {
+-	client *minio.Client
+-	bucket string
+-	coll   *mongo.Collection
+-	engine string
+-	cdn    string
+-	legacy *MinioStore
++	uploadClient *minio.Client
++	client       *minio.Client
++	bucket       string
++	coll         *mongo.Collection
++	engine       string
++	cdn          string
++	legacy       *MinioStore
+ }
+ 
+ func NewMinioStore(db *mongo.Database, cfg config.StickerMinio) (*MinioStore, error) {
+@@ -46,11 +48,18 @@
+ 	if err != nil {
+ 		return nil, err
+ 	}
++	uploadClient := client
++	if cfg.Engine == "cos" && strings.TrimSpace(cfg.ExternalAddress) != "" {
++		uploadClient, err = NewStorageClient(cfg.ExternalAddress, cfg)
++		if err != nil {
++			return nil, err
++		}
++	}
+ 	var coll *mongo.Collection
+ 	if db != nil {
+ 		coll = db.Collection("s3")
+ 	}
+-	store := &MinioStore{client: client, bucket: cfg.Bucket, coll: coll, engine: engineMinio}
++	store := &MinioStore{uploadClient: uploadClient, client: client, bucket: cfg.Bucket, coll: coll, engine: engineMinio}
+ 	if cfg.Engine == "cos" {
+ 		if err := ValidateCDN(cfg.CDN); err != nil {
+ 			return nil, err
+@@ -232,7 +241,11 @@
+ }
+ 
+ func (s *MinioStore) PresignPut(ctx context.Context, key string, expiry time.Duration) (string, error) {
+-	u, err := s.client.PresignedPutObject(ctx, s.bucket, key, expiry)
++	client := s.uploadClient
++	if client == nil {
++		client = s.client
++	}
++	u, err := client.PresignedPutObject(ctx, s.bucket, key, expiry)
+ 	if err != nil {
+ 		return "", err
+ 	}
+--- /dev/null
++++ b/pkg/common/stickermedia/acceleration_test.go
+@@ -0,0 +1,41 @@
++package stickermedia
++
++import (
++	"context"
++	"github.com/openimsdk/chat/pkg/common/config"
++	"net/url"
++	"testing"
++	"time"
++)
++
++func TestCOSPresignUsesPublicAcceleration(t *testing.T) {
++	cfg := config.StickerMinio{Engine: "cos", Bucket: "test-123", Region: "ap-guangzhou", InternalAddress: "https://cos.ap-guangzhou.myqcloud.com", ExternalAddress: "https://cos.accelerate.myqcloud.com", CDN: "https://test-123.cos.accelerate.myqcloud.com", AccessKeyID: "test", SecretAccessKey: "test"}
++	s, e := NewMinioStore(nil, cfg)
++	if e != nil {
++		t.Fatal(e)
++	}
++	raw, e := s.PresignPut(context.Background(), "favorite/test", time.Minute)
++	if e != nil {
++		t.Fatal(e)
++	}
++	u, e := url.Parse(raw)
++	if e != nil || u.Host != "test-123.cos.accelerate.myqcloud.com" {
++		t.Fatal("wrong upload host", u, e)
++	}
++	if s.client.EndpointURL().Host != "cos.ap-guangzhou.myqcloud.com" {
++		t.Fatal("source reader changed")
++	}
++	cfg.ExternalAddress = ""
++	s, e = NewMinioStore(nil, cfg)
++	if e != nil {
++		t.Fatal(e)
++	}
++	raw, e = s.PresignPut(context.Background(), "favorite/test", time.Minute)
++	if e != nil {
++		t.Fatal(e)
++	}
++	u, _ = url.Parse(raw)
++	if u.Host != "test-123.cos.ap-guangzhou.myqcloud.com" {
++		t.Fatal("legacy fallback changed")
++	}
++}
+--- /dev/null
++++ b/pkg/common/stickermedia/acceleration_live_test.go
+@@ -0,0 +1,19 @@
++package stickermedia
++import("bytes";"context";"crypto/rand";"encoding/hex";"io";"net/http";"net/url";"os";"testing";"time";"github.com/minio/minio-go/v7";"github.com/openimsdk/chat/pkg/common/config";"gopkg.in/yaml.v3")
++func TestCOSAccelerationLive(t *testing.T){
++ if os.Getenv("COS_ACCELERATION_LIVE")!="1"{t.Skip("explicit live test required")}
++ raw,e:=os.ReadFile("/srv/99chat-production/rpc-release-20261019/config-owner/chat-rpc-chat.yml");if e!=nil{t.Fatal(e)}
++ var v map[string]interface{};if e=yaml.Unmarshal(raw,&v);e!=nil{t.Fatal(e)}
++ a:=v["sticker"].(map[string]interface{})["minio"].(map[string]interface{})
++ str:=func(k string)string{s,_:=a[k].(string);return s}
++ cfg:=config.StickerMinio{Engine:"cos",Bucket:str("bucket"),Region:str("region"),InternalAddress:str("internalAddress"),ExternalAddress:"https://cos.accelerate.myqcloud.com",CDN:str("cdn"),AccessKeyID:str("accessKeyID"),SecretAccessKey:str("secretAccessKey")}
++ s,e:=NewMinioStore(nil,cfg);if e!=nil{t.Fatal(e)}
++ random:=make([]byte,16);rand.Read(random);key:="diagnostics/direct-acceleration-"+hex.EncodeToString(random);data:=[]byte("99chat direct acceleration upload")
++ ctx,cancel:=context.WithTimeout(context.Background(),30*time.Second);defer cancel()
++ u,e:=s.PresignPut(ctx,key,time.Minute);if e!=nil{t.Fatal(e)}
++ parsed,_:=url.Parse(u);if parsed.Host!=cfg.Bucket+".cos.accelerate.myqcloud.com"{t.Fatal("wrong signing host")}
++ req,_:=http.NewRequestWithContext(ctx,"PUT",u,bytes.NewReader(data));res,e:=http.DefaultClient.Do(req);if e!=nil{t.Fatal("upload transport failed")};io.Copy(io.Discard,res.Body);res.Body.Close();if res.StatusCode!=200{t.Fatalf("upload status %d",res.StatusCode)}
++ defer func(){if e:=s.client.RemoveObject(context.Background(),cfg.Bucket,key,minio.RemoveObjectOptions{});e!=nil{t.Error("cleanup failed")}}()
++ res,e=http.Get(CDNObjectURL(cfg.CDN,key));if e!=nil{t.Fatal("read transport failed")};got,e:=io.ReadAll(res.Body);res.Body.Close();if e!=nil||res.StatusCode!=200||!bytes.Equal(got,data){t.Fatal("read mismatch")}
++ t.Log("accelerated presigned upload and public download verified")
++}

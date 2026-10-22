@@ -705,6 +705,11 @@ class ChatHistoryLoader {
     for (final message in values) {
       final id = message.clientMsgID;
       if (id != null && removedIDs.contains(id)) continue;
+      final previous = unique[id ?? message];
+      if (previous?.contentType == MessageType.revokeMessageNotification &&
+          message.contentType != MessageType.revokeMessageNotification) {
+        continue;
+      }
       unique[id ?? message] = message;
     }
     // List.sort is not stable. Preserve arrival order explicitly when neither

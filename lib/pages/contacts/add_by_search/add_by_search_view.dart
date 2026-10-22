@@ -38,17 +38,32 @@ class AddContactsBySearchPage extends StatelessWidget {
           ),
           Divider(color: Styles.c_E8EAEF, height: 1.h),
           Obx(() => Expanded(
-                child: logic.isSearchUser
-                    ? (logic.isNotFoundUser
-                        ? _buildNotFoundView()
-                        : _buildUserListView())
-                    : (logic.isNotFoundGroup
-                        ? _buildNotFoundView()
-                        : (Column(
-                            children: logic.groupInfoList
-                                .map((e) => _buildItemView(e))
-                                .toList(),
-                          ))),
+                child: logic.status.value == ContactSearchStatus.loading ||
+                        logic.status.value == ContactSearchStatus.waiting
+                    ? _buildStatusView(Get.locale?.languageCode == 'zh'
+                        ? '正在搜索…'
+                        : 'Searching…')
+                    : logic.status.value == ContactSearchStatus.error
+                        ? Align(
+                            alignment: Alignment.topCenter,
+                            child: TextButton(
+                              onPressed: logic.search,
+                              child: Text(Get.locale?.languageCode == 'zh'
+                                  ? '搜索失败，点击重试'
+                                  : 'Search failed. Tap to retry.'),
+                            ),
+                          )
+                        : logic.isSearchUser
+                            ? (logic.isNotFoundUser
+                                ? _buildNotFoundView()
+                                : _buildUserListView())
+                            : (logic.isNotFoundGroup
+                                ? _buildNotFoundView()
+                                : (Column(
+                                    children: logic.groupInfoList
+                                        .map((e) => _buildItemView(e))
+                                        .toList(),
+                                  ))),
               ))
         ],
       ),
@@ -107,10 +122,13 @@ class AddContactsBySearchPage extends StatelessWidget {
         ),
       );
 
-  Widget _buildNotFoundView() => Container(
+  Widget _buildNotFoundView() => _buildStatusView(
+      logic.isSearchUser ? StrRes.noFoundUser : StrRes.noFoundGroup);
+
+  Widget _buildStatusView(String message) => Semantics(
+      liveRegion: true,
+      child: Container(
         padding: EdgeInsets.symmetric(vertical: 12.h),
-        child: (logic.isSearchUser ? StrRes.noFoundUser : StrRes.noFoundGroup)
-            .toText
-          ..style = Styles.ts_8E9AB0_17sp,
-      );
+        child: message.toText..style = Styles.ts_8E9AB0_17sp,
+      ));
 }

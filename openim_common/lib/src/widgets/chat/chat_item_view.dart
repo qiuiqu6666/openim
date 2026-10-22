@@ -16,6 +16,7 @@ import 'chat_structured_message.dart';
 import 'contact_card/contact_card_identity_view.dart';
 import 'markdown/chat_message_text_source.dart';
 import 'quote/chat_quote_card.dart';
+import 'voice/voice_speed_accessory.dart';
 
 double maxWidth = 247.w;
 double pictureWidth = 90.w;
@@ -192,10 +193,17 @@ class ChatItemView extends StatefulWidget {
 
 class _ChatItemViewState extends State<ChatItemView> {
   final _menuController = CustomPopupMenuController();
+  VoicePlaybackController? _ownedVoicePlayback;
+  VoicePlaybackController get _voicePlayback => widget.voicePlayback ??
+      (_ownedVoicePlayback ??= VoicePlaybackController(
+        messages: () => [widget.message],
+        onPlayed: (_) async { await widget.onVoicePlayed?.call(); },
+      ));
 
   @override
   void dispose() {
     _menuController.dispose();
+    _ownedVoicePlayback?.dispose();
     super.dispose();
   }
 
@@ -337,7 +345,7 @@ class _ChatItemViewState extends State<ChatItemView> {
           isOutgoing: _isISend,
           readOnly: widget.ignorePointer,
           onPlayed: widget.onVoicePlayed,
-          playback: widget.voicePlayback);
+          playback: _voicePlayback);
       if (widget.voiceTranscription != null) {
         child = SizedBox(
           width: maxWidth,
@@ -496,6 +504,7 @@ class _ChatItemViewState extends State<ChatItemView> {
           _message.contentType !=
               MessageType.groupInfoSetAnnouncementNotification,
       isSending: _message.status == MessageStatus.sending,
+      centerSendingStatus: _message.isVideoType && !widget.isStickerMedia,
       isSendFailed: _message.status == MessageStatus.failed,
       isBubbleBg: isBubbleBg,
       avatarSize: widget.avatarSize ??
@@ -535,6 +544,13 @@ class _ChatItemViewState extends State<ChatItemView> {
               MessageType.groupInfoSetAnnouncementNotification,
       childWithStatusBuilder:
           cardWithStatus == null ? null : interactiveContent,
+      bubbleWrapper: _message.isVoiceType && !widget.ignorePointer
+          ? (bubble) => VoiceSpeedAccessory(
+              playback: _voicePlayback,
+              messageID: _message.clientMsgID!,
+              outgoing: _isISend && !widget.alignLeft,
+              child: bubble)
+          : null,
       embeddedStatusColor: _message.contentType == MessageType.location
           ? Colors.white
           : _message.contentType == MessageType.merger

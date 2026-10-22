@@ -153,7 +153,7 @@ void main() {
     final h = _Harness()..action = ChatMemberAction.mute;
     await h.open();
     expect(h.updated.single.muteEndTime,
-        h.now + ChatMemberActionsController.muteSeconds);
+        (h.now + ChatMemberActionsController.muteSeconds) * 1000);
     expect(h.feedback, ['已禁言']);
     expect(h.target!.muteEndTime, isNull);
     h.action = ChatMemberAction.unmute;

@@ -1,0 +1,159 @@
+--- a/internal/rpc/third/third.go
++++ b/internal/rpc/third/third.go
+@@ -50,6 +50,7 @@
+ 	third.UnimplementedThirdServer
+ 	thirdDatabase controller.ThirdDatabase
+ 	s3dataBase    controller.S3Database
++	backupStorage *backupStorage
+ 	defaultExpire time.Duration
+ 	config        *Config
+ 	s3            s3.Interface
+@@ -115,6 +116,7 @@
+ 		o = &objectstorage.NamedEngine{Interface: o, Name: config.RpcConfig.Object.Cos.EngineName}
+ 	}
+ 	store := controller.NewS3Database(rdb, o, s3db)
++	var backup *backupStorage
+ 	if enable == "cos" && config.RpcConfig.Object.Cos.Legacy != nil {
+ 		old := config.RpcConfig.Object.Cos.Legacy
+ 		legacy, legacyErr := objectstorage.NewCOS(*old.Build(), old.CDN)
+@@ -129,6 +131,20 @@
+ 			return fmt.Errorf("COS buckets must use distinct engine names")
+ 		}
+ 		store = &legacyReadStore{S3Database: store, legacy: controller.NewS3Database(rdb, reader, s3db)}
++		if old.BucketURL == "https://99chat-1416337673.cos.ap-hongkong.myqcloud.com" {
++			conf := *old.Build()
++			conf.BucketURL = "https://99chat-1416337673.cos.accelerate.myqcloud.com"
++			hk, err := objectstorage.NewCOSWithRuntime(ctx, conf, old.BucketURL, config.RpcConfig.Object.Upload, rdb)
++			if err != nil {
++				return err
++			}
++			var backend s3.Interface = hk
++			if old.EngineName != "" {
++				backend = &objectstorage.NamedEngine{Interface: hk, Name: old.EngineName}
++			}
++			backup = &backupStorage{store: controller.NewS3Database(rdb, backend, s3db), backend: backend}
++		}
++
+ 	}
+ 
+ 	if enable == "cos" && config.RpcConfig.Object.Oss.Bucket != "" {
+@@ -151,6 +167,7 @@
+ 	third.RegisterThirdServer(server, &thirdServer{
+ 		thirdDatabase: controller.NewThirdDatabase(redis.NewThirdCache(rdb), logdb),
+ 		s3dataBase:    store,
++		backupStorage: backup,
+ 		defaultExpire: time.Hour * 24 * 7,
+ 		config:        config,
+ 		s3:            o,
+--- a/internal/rpc/third/s3.go
++++ b/internal/rpc/third/s3.go
+@@ -59,8 +59,15 @@
+ }
+ 
+ func (t *thirdServer) InitiateMultipartUpload(ctx context.Context, req *third.InitiateMultipartUploadReq) (*third.InitiateMultipartUploadResp, error) {
++	routed, uploadID, routeErr := t.forUploadStorage(req.Name, "")
++	if routeErr != nil {
++		return nil, routeErr
++	}
++	t = routed
++	_ = uploadID
++
+ 	if err := t.checkUploadName(ctx, req.Name); err != nil {
+-		return nil, err
++		return nil, storageAttemptError(err)
+ 	}
+ 	expireTime := time.Now().Add(t.defaultExpire)
+ 	result, err := t.s3dataBase.InitiateMultipartUpload(ctx, req.Hash, req.Size, t.defaultExpire, int(req.MaxParts))
+@@ -77,15 +84,18 @@
+ 				CreateTime:  time.Now(),
+ 			}
+ 			if err := t.s3dataBase.SetObject(ctx, obj); err != nil {
+-				return nil, err
++				return nil, storageAttemptError(err)
+ 			}
+ 			url, err := t.uploadedObjectURL(ctx, req.UrlPrefix, obj)
+ 			if err != nil {
+-				return nil, err
++				return nil, storageAttemptError(err)
+ 			}
+ 			return &third.InitiateMultipartUploadResp{Url: url}, nil
+ 		}
+-		return nil, err
++		return nil, storageAttemptError(err)
++	}
++	if hongKongName(req.Name) {
++		result.UploadID = hongKongUploadPrefix + result.UploadID
+ 	}
+ 	var sign *third.AuthSignParts
+ 	if result.Sign != nil && len(result.Sign.Parts) > 0 {
+@@ -115,10 +125,19 @@
+ }
+ 
+ func (t *thirdServer) AuthSign(ctx context.Context, req *third.AuthSignReq) (*third.AuthSignResp, error) {
++	routed, uploadID, routeErr := t.forUploadStorage("", req.UploadID)
++	if routeErr != nil {
++		return nil, routeErr
++	}
++	t = routed
++	copyReq := *req
++	copyReq.UploadID = uploadID
++	req = &copyReq
++
+ 	partNumbers := datautil.Slice(req.PartNumbers, func(partNumber int32) int { return int(partNumber) })
+ 	result, err := t.s3dataBase.AuthSign(ctx, req.UploadID, partNumbers)
+ 	if err != nil {
+-		return nil, err
++		return nil, storageAttemptError(err)
+ 	}
+ 	resp := &third.AuthSignResp{
+ 		Url:    result.URL,
+@@ -138,12 +157,21 @@
+ }
+ 
+ func (t *thirdServer) CompleteMultipartUpload(ctx context.Context, req *third.CompleteMultipartUploadReq) (*third.CompleteMultipartUploadResp, error) {
++	routed, uploadID, routeErr := t.forUploadStorage(req.Name, req.UploadID)
++	if routeErr != nil {
++		return nil, routeErr
++	}
++	t = routed
++	copyReq := *req
++	copyReq.UploadID = uploadID
++	req = &copyReq
++
+ 	if err := t.checkUploadName(ctx, req.Name); err != nil {
+-		return nil, err
++		return nil, storageAttemptError(err)
+ 	}
+ 	result, err := t.s3dataBase.CompleteMultipartUpload(ctx, req.UploadID, req.Parts)
+ 	if err != nil {
+-		return nil, err
++		return nil, storageAttemptError(err)
+ 	}
+ 	obj := &model.Object{
+ 		Name:        req.Name,
+@@ -156,16 +184,23 @@
+ 		CreateTime:  time.Now(),
+ 	}
+ 	if err := t.s3dataBase.SetObject(ctx, obj); err != nil {
+-		return nil, err
++		return nil, storageAttemptError(err)
+ 	}
+ 	url, err := t.uploadedObjectURL(ctx, req.UrlPrefix, obj)
+ 	if err != nil {
+-		return nil, err
++		return nil, storageAttemptError(err)
+ 	}
+ 	return &third.CompleteMultipartUploadResp{Url: url}, nil
+ }
+ 
+ func (t *thirdServer) AccessURL(ctx context.Context, req *third.AccessURLReq) (*third.AccessURLResp, error) {
++	routed, uploadID, routeErr := t.forUploadStorage(req.Name, "")
++	if routeErr != nil {
++		return nil, routeErr
++	}
++	t = routed
++	_ = uploadID
++
+ 	expire := t.defaultExpire
+ 	// Callers such as the admin SDK-log downloader may require a shorter
+ 	// signature lifetime. This option never extends the default lifetime.

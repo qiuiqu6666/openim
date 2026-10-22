@@ -1,0 +1,117 @@
+--- a/pkg/common/storage/objectstorage/cos.go
++++ b/pkg/common/storage/objectstorage/cos.go
+@@ -16,6 +16,7 @@
+ // COS uses the origin for all signed uploads and the optional CDN for public reads.
+ type COS struct {
+ 	*cos.Cos
++	copyBackend *cos.Cos
+ 	origin      string
+ 	cdn         string
+ 	config      Config
+@@ -48,7 +49,24 @@
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	c := &COS{Cos: backend, origin: strings.TrimRight(conf.BucketURL, "/"), cdn: strings.TrimRight(readCDN, "/"), config: cfg, lifetime: ctx}
++	copyBackend := backend
++	if cfg.COSCopyOrigin != "" {
++		target, e := url.Parse(conf.BucketURL)
++		copyURL, ce := url.Parse(cfg.COSCopyOrigin)
++		if e != nil || ce != nil || copyURL.Scheme != "https" || copyURL.User != nil || copyURL.RawQuery != "" || copyURL.Fragment != "" || copyURL.Path != "" ||
++			!strings.HasSuffix(target.Host, ".cos.accelerate.myqcloud.com") ||
++			!strings.HasPrefix(copyURL.Host, strings.TrimSuffix(target.Host, ".cos.accelerate.myqcloud.com")+".cos.") ||
++			!strings.HasSuffix(copyURL.Host, ".myqcloud.com") || strings.Contains(copyURL.Host, ".accelerate.") {
++			return nil, fmt.Errorf("COS copy origin must address the same bucket through its regional endpoint")
++		}
++		copyConf := conf
++		copyConf.BucketURL = cfg.COSCopyOrigin
++		copyBackend, err = cos.NewCos(copyConf)
++		if err != nil {
++			return nil, err
++		}
++	}
++	c := &COS{Cos: backend, copyBackend: copyBackend, origin: strings.TrimRight(conf.BucketURL, "/"), cdn: strings.TrimRight(readCDN, "/"), config: cfg, lifetime: ctx}
+ 	if rdb != nil {
+ 		queue := newCleanupQueue(rdb, "tencent-cos/"+c.origin, c.deleteNow)
+ 		c.cleanup = queue
+@@ -68,7 +86,7 @@
+ func (c *COS) CopyObject(ctx context.Context, src, dst string) (*s3.CopyObjectInfo, error) {
+ 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.OperationTimeoutMS)*time.Millisecond)
+ 	defer cancel()
+-	return c.Cos.CopyObject(ctx, src, dst)
++	return c.copyBackend.CopyObject(ctx, src, dst)
+ }
+ 
+ func (c *COS) CompleteMultipartUpload(ctx context.Context, uploadID, name string, parts []s3.Part) (*s3.CompleteMultipartUploadResult, error) {
+--- a/pkg/common/storage/objectstorage/config.go
++++ b/pkg/common/storage/objectstorage/config.go
+@@ -5,13 +5,14 @@
+ // Config controls server-to-OSS metadata requests, not client file transfers.
+ // Zero values retain defaults so existing installations need no config migration.
+ type Config struct {
+-	MaxConcurrent       int `mapstructure:"maxConcurrent"`
+-	MaxQueued           int `mapstructure:"maxQueued"`
+-	QueueTimeoutMS      int `mapstructure:"queueTimeoutMS"`
+-	ConnectTimeoutMS    int `mapstructure:"connectTimeoutMS"`
+-	OperationTimeoutMS  int `mapstructure:"operationTimeoutMS"`
+-	CompletionTimeoutMS int `mapstructure:"completionTimeoutMS"`
+-	CleanupWorkers      int `mapstructure:"cleanupWorkers"`
++	COSCopyOrigin       string `mapstructure:"cosCopyOrigin"`
++	MaxConcurrent       int    `mapstructure:"maxConcurrent"`
++	MaxQueued           int    `mapstructure:"maxQueued"`
++	QueueTimeoutMS      int    `mapstructure:"queueTimeoutMS"`
++	ConnectTimeoutMS    int    `mapstructure:"connectTimeoutMS"`
++	OperationTimeoutMS  int    `mapstructure:"operationTimeoutMS"`
++	CompletionTimeoutMS int    `mapstructure:"completionTimeoutMS"`
++	CleanupWorkers      int    `mapstructure:"cleanupWorkers"`
+ }
+ 
+ func (c Config) defaults() (Config, error) {
+--- /dev/null
++++ b/pkg/common/storage/objectstorage/cos_acceleration_test.go
+@@ -0,0 +1,45 @@
++package objectstorage
++
++import (
++	"context"
++	"github.com/openimsdk/tools/s3/cos"
++	"io"
++	"net/http"
++	"net/url"
++	"strings"
++	"testing"
++	"time"
++)
++
++type accelerationTransport func(*http.Request) (*http.Response, error)
++
++func (f accelerationTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
++func TestCOSAccelerationCopyUsesRegionalBucket(t *testing.T) {
++	conf := cos.Config{BucketURL: "https://bucket-123.cos.accelerate.myqcloud.com", SecretID: "test", SecretKey: "test", PublicRead: true}
++	c, e := NewCOSWithRuntime(context.Background(), conf, "", Config{COSCopyOrigin: "https://bucket-123.cos.ap-guangzhou.myqcloud.com"}, nil)
++	if e != nil {
++		t.Fatal(e)
++	}
++	old := http.DefaultTransport
++	t.Cleanup(func() { http.DefaultTransport = old })
++	http.DefaultTransport = accelerationTransport(func(r *http.Request) (*http.Response, error) {
++		if r.URL.Host != "bucket-123.cos.ap-guangzhou.myqcloud.com" {
++			t.Error("wrong copy target")
++		}
++		if !strings.HasPrefix(r.Header.Get("x-cos-copy-source"), "bucket-123.cos.ap-guangzhou.myqcloud.com/") {
++			t.Error("accelerated copy source")
++		}
++		return &http.Response{StatusCode: 200, Header: http.Header{}, Body: io.NopCloser(strings.NewReader("<CopyObjectResult><ETag>abc</ETag></CopyObjectResult>")), Request: r}, nil
++	})
++	if _, e = c.CopyObject(context.Background(), "source", "target"); e != nil {
++		t.Fatal(e)
++	}
++	read, e := c.AccessURL(context.Background(), "key", time.Minute, nil)
++	if e != nil {
++		t.Fatal(e)
++	}
++	u, _ := url.Parse(read)
++	if u.Host != "bucket-123.cos.accelerate.myqcloud.com" {
++		t.Error("access domain changed")
++	}
++}

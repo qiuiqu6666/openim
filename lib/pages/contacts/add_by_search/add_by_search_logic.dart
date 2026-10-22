@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -15,6 +17,8 @@ enum SearchType {
   group,
 }
 
+enum ContactSearchStatus { idle, waiting, loading, success, error }
+
 class AddContactsBySearchLogic extends GetxController {
   AddContactsBySearchLogic({ContactSearchSource? source})
       : source = source ?? ContactSearchSource();
@@ -31,10 +35,14 @@ class AddContactsBySearchLogic extends GetxController {
   int _generation = 0;
   bool _closed = false;
   bool _loadingMore = false;
+  final status = ContactSearchStatus.idle.obs;
+  Timer? _searchTimer;
+  bool _composing = false;
 
   @override
   void onClose() {
     _closed = true;
+    _searchTimer?.cancel();
     ++_generation;
     searchCtrl.removeListener(_queryChanged);
     refreshCtrl.dispose();
@@ -53,7 +61,11 @@ class AddContactsBySearchLogic extends GetxController {
   String _inputKey = '';
   void _queryChanged() {
     final key = searchKey;
-    if (key == _inputKey) return;
+    final composing = searchCtrl.value.composing.isValid &&
+        !searchCtrl.value.composing.isCollapsed;
+    if (key == _inputKey && composing == _composing) return;
+    _composing = composing;
+    _searchTimer?.cancel();
     _inputKey = key;
     ++_generation;
     pageNo = 0;
@@ -62,7 +74,21 @@ class AddContactsBySearchLogic extends GetxController {
     groupInfoList.clear();
     _entryFields.clear();
     _addSources.clear();
+    status.value = ContactSearchStatus.idle;
     if (key.isEmpty) focusNode.requestFocus();
+    // Invite links keep their explicit navigation action.
+    if (isSearchUser &&
+        key.isNotEmpty &&
+        !composing &&
+        parseFriendInvite(key) == null) {
+      status.value = ContactSearchStatus.waiting;
+      final generation = _generation;
+      final account = OpenIM.iMManager.userID;
+      final token = DataSp.chatToken;
+      _searchTimer = Timer(const Duration(milliseconds: 350), () {
+        if (_active(generation, key, account, token)) searchUser();
+      });
+    }
   }
 
   bool _active(int generation, String keyword, String account, String? token) =>
@@ -76,11 +102,18 @@ class AddContactsBySearchLogic extends GetxController {
 
   String get searchKey => searchCtrl.text.trim();
 
-  bool get isNotFoundUser => userInfoList.isEmpty && searchKey.isNotEmpty;
+  bool get isNotFoundUser =>
+      status.value == ContactSearchStatus.success &&
+      userInfoList.isEmpty &&
+      searchKey.isNotEmpty;
 
-  bool get isNotFoundGroup => groupInfoList.isEmpty && searchKey.isNotEmpty;
+  bool get isNotFoundGroup =>
+      status.value == ContactSearchStatus.success &&
+      groupInfoList.isEmpty &&
+      searchKey.isNotEmpty;
 
   void search() {
+    _searchTimer?.cancel();
     if (_closed || searchKey.isEmpty) return;
     final invite = parseFriendInvite(searchKey);
     if (isSearchUser && invite != null) {
@@ -103,8 +136,10 @@ class AddContactsBySearchLogic extends GetxController {
   Future<void> loadMoreUser() => _queryUsers(true);
 
   Future<void> _queryUsers(bool append) async {
+    if (!append) _searchTimer?.cancel();
     if (_closed ||
         searchKey.isEmpty ||
+        !append && status.value == ContactSearchStatus.loading ||
         append && (_loadingMore || pageNo == 0)) {
       return;
     }
@@ -117,36 +152,37 @@ class AddContactsBySearchLogic extends GetxController {
       _loadingMore = true;
     } else {
       pageNo = 0;
+      status.value = ContactSearchStatus.loading;
     }
     try {
-      final list = await LoadingView.singleton.wrap(
-          asyncFunction: () => _active(generation, keyword, account, token)
-              ? source.users(keyword, page)
-              : Future.value(<UserFullInfo>[]));
+      final list = await source.users(keyword, page);
       if (!_active(generation, keyword, account, token)) return;
+      if (list == null) throw StateError('Invalid contact search response');
       if (!append) {
         _entryFields.clear();
         _addSources.clear();
       }
-      _rememberSources(keyword, list ?? []);
+      _rememberSources(keyword, list);
       if (append) {
         final known = userInfoList.map((user) => user.userID).toSet();
-        userInfoList
-            .addAll((list ?? []).where((user) => known.add(user.userID)));
+        userInfoList.addAll(list.where((user) => known.add(user.userID)));
       } else {
-        userInfoList.value = list ?? [];
+        userInfoList.value = list;
       }
+      status.value = ContactSearchStatus.success;
       pageNo = page;
       refreshCtrl.refreshCompleted();
-      if (list == null || list.length < 20) {
+      if (list.length < 20) {
         refreshCtrl.loadNoData();
       } else {
         refreshCtrl.loadComplete();
       }
     } catch (error) {
       if (_active(generation, keyword, account, token)) {
+        if (!append) status.value = ContactSearchStatus.error;
         refreshCtrl.loadFailed();
-        if (!handleSessionAuthFailure(error, account: account, token: token)) {
+        if (!handleSessionAuthFailure(error, account: account, token: token) &&
+            append) {
           IMViews.showErrorToast(error);
         }
       }
@@ -178,12 +214,16 @@ class AddContactsBySearchLogic extends GetxController {
     final generation = ++_generation;
     final account = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
+    status.value = ContactSearchStatus.loading;
     try {
       final list = await source.groups(keyword);
-      if (_active(generation, keyword, account, token))
+      if (_active(generation, keyword, account, token)) {
         groupInfoList.value = list;
+        status.value = ContactSearchStatus.success;
+      }
     } catch (error) {
       if (_active(generation, keyword, account, token)) {
+        status.value = ContactSearchStatus.error;
         IMViews.showErrorToast(error);
       }
     }
@@ -222,8 +262,11 @@ class AddContactsBySearchLogic extends GetxController {
                   child: Text(AppCopy.text('确定')))
             ]));
         controller.dispose();
-        if (isClosed || code == null || !RegExp(r'^\+\d{1,4}$').hasMatch(code))
+        if (isClosed ||
+            code == null ||
+            !RegExp(r'^\+\d{1,4}$').hasMatch(code)) {
           return;
+        }
         fields['areaCode'] = code;
       }
       AppNavigator.startUserProfilePane(
@@ -241,7 +284,7 @@ class AddContactsBySearchLogic extends GetxController {
     }
   }
 
-  String getShowTitle(info) {
+  String getShowTitle(dynamic info) {
     if (!isSearchUser) {
       return sprintf(StrRes.searchGroupNicknameIs, [getShowName(info)]);
     }

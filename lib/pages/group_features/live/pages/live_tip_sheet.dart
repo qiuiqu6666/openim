@@ -164,7 +164,9 @@ class _LiveTipFormState extends State<_LiveTipForm>
             .toList(growable: false);
     final selected =
         _currencies.where((value) => value.code == _currency?.code);
-    _currency = selected.firstOrNull ?? _currencies.firstOrNull;
+    _currency = selected.firstOrNull ??
+        _currencies.where((value) => value.code == 'BI99').firstOrNull ??
+        _currencies.firstOrNull;
   }
 
   void _permissionsChanged() {

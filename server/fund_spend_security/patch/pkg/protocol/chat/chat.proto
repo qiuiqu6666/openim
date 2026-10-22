@@ -1,0 +1,2161 @@
+// Copyright 漏 2023 OpenIM open source community. All rights reserved.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto3";
+package openim.chat;
+
+import "common/common.proto";
+import "live/live.proto";
+import "sdkws/sdkws.proto";
+import "wrapperspb/wrapperspb.proto";
+
+option go_package = "github.com/openimsdk/chat/pkg/protocol/chat";
+
+message UserIdentity {
+  string email = 1;
+  string areaCode = 2;
+  string phoneNumber = 3;
+  string deviceID = 4;
+  int32 platform = 5;
+  string account = 6;
+}
+
+message UpdateUserInfoReq {
+  string userID = 1;
+  openim.protobuf.StringValue account = 2;
+  openim.protobuf.StringValue phoneNumber = 3;
+  openim.protobuf.StringValue areaCode = 4;
+  openim.protobuf.StringValue email = 5;
+  openim.protobuf.StringValue nickname = 6;
+  openim.protobuf.StringValue faceURL = 7;
+  openim.protobuf.Int32Value gender = 8;
+  openim.protobuf.Int32Value level = 9;
+  openim.protobuf.Int64Value birth = 10;
+  openim.protobuf.Int32Value allowAddFriend = 11;
+  openim.protobuf.Int32Value allowBeep = 12;
+  openim.protobuf.Int32Value allowVibration = 13;
+  openim.protobuf.Int32Value globalRecvMsgOpt = 14;
+  openim.protobuf.Int32Value RegisterType = 15;
+  openim.protobuf.Int32Value allowAddByUserID = 16;
+  openim.protobuf.Int32Value allowAddByPhone = 17;
+  openim.protobuf.Int32Value allowAddByEmail = 18;
+  openim.protobuf.Int32Value allowAddByQRCode = 19;
+  openim.protobuf.Int32Value allowAddByGroup = 20;
+  openim.protobuf.Int32Value allowAddByCard = 21;
+  openim.protobuf.Int32Value allowAddByAccount = 22;
+  openim.protobuf.BoolValue isPrivileged = 23;
+  openim.protobuf.BoolValue smsVerificationExempt = 24;
+}
+
+message UpdateUserInfoResp {
+  string faceUrl = 1;
+  string nickName = 2;
+}
+
+message CheckNicknameReq {
+  string nickname = 1;
+}
+
+message CheckNicknameResp {
+  bool occupied = 1;
+  int64 nextUpdateTime = 2;
+}
+
+message FindUserPublicInfoReq {
+  repeated string userIDs = 1;
+}
+
+message FindUserPublicInfoResp {
+  repeated openim.chat.common.UserPublicInfo users = 1;
+}
+
+message SearchUserPublicInfoReq {
+  string keyword = 1;
+  openim.sdkws.RequestPagination pagination = 2;
+  int32 genders = 3;
+}
+
+message SearchUserPublicInfoResp {
+  uint32 total = 1;
+  repeated openim.chat.common.UserPublicInfo users = 2;
+}
+
+message FindUserFullInfoReq {
+  repeated string userIDs = 1;
+}
+
+message FindUserFullInfoResp {
+  repeated openim.chat.common.UserFullInfo users = 1;
+}
+
+message SendVerifyCodeReq {
+  int32 usedFor = 1;
+  string ip = 2;
+  string invitationCode = 3;
+  string deviceID = 4;
+  int32 platform = 5;
+  string areaCode = 6;
+  string phoneNumber = 7;
+  string email = 8;
+  string captchaVerifyParam = 9;
+}
+
+message SendVerifyCodeResp {
+  bool captchaVerifyResult = 1;
+  bool bizResult = 2;
+  int32 retryAfter = 3;
+}
+
+message VerifyCodeReq {
+  string areaCode = 1;
+  string phoneNumber = 2;
+  string verifyCode = 3;
+  string email = 4;
+}
+
+message VerifyCodeResp {}
+
+message RegisterUserInfo {
+  string userID = 1;
+  string nickname = 2;
+  string faceURL = 3;
+  int64 birth = 4;
+  int32 gender = 5;
+  string areaCode = 6;
+  string phoneNumber = 7;
+  string email = 8;
+  string account = 9;
+  string password = 10;
+  int32 RegisterType = 11;
+}
+
+message RegisterUserReq {
+  string invitationCode = 1;
+  string verifyCode = 2;
+  string ip = 3;
+  string deviceID = 4;
+  int32 platform = 5;
+  bool autoLogin = 6;
+  RegisterUserInfo user = 7;
+}
+
+message RegisterUserResp {
+  string userID = 1;
+  string chatToken = 3;
+}
+
+message AddUserAccountReq {
+  string ip = 1;
+  string deviceID = 2;
+  int32 platform = 3;
+  RegisterUserInfo user = 4;
+}
+
+message AddUserAccountResp {}
+
+message LoginReq {
+  string areaCode = 1;
+  string phoneNumber = 2;
+  string verifyCode = 3;
+  string account = 4;
+  string password = 5;
+  int32 platform = 6;
+  string deviceID = 7;
+  string ip = 8;
+  string email = 9;
+  string deviceName = 10;
+  string version = 11;
+  // Versioned RSA-OAEP-SHA256 ciphertext only; never a plaintext password.
+  string passwordPlaintext = 12;
+}
+
+message ResetPasswordReq {
+  string areaCode = 1;
+  string phoneNumber = 2;
+  string verifyCode = 3;
+  string password = 4;
+  string email = 5;
+}
+
+message ResetPasswordResp {}
+
+message ChangePasswordReq {
+  string userID = 1;
+  string currentPassword = 2;
+  string newPassword = 3;
+  string verifyCode = 4;
+}
+
+message ChangePasswordResp {}
+
+message BindPhoneReq {
+  string areaCode = 1;
+  string phoneNumber = 2;
+  string verifyCode = 3;
+}
+
+message BindPhoneResp {}
+
+message ChangePhoneReq {
+  string areaCode = 1;
+  string phoneNumber = 2;
+  string oldVerifyCode = 3;
+  string newVerifyCode = 4;
+}
+
+message ChangePhoneResp {}
+
+message ListLoginRecordsReq {}
+
+message LoginDeviceRecord {
+  string deviceID = 1;
+  string deviceName = 2;
+  string version = 3;
+  string ip = 4;
+  string platform = 5;
+  int64 loginTime = 6;
+  bool online = 7;
+  bool trusted = 8;
+  string ipLocation = 9;
+}
+
+message ListLoginRecordsResp {
+  repeated LoginDeviceRecord records = 1;
+}
+
+message BindDeviceSessionReq {
+  string deviceID = 1;
+  int32 platform = 2;
+  string chatToken = 3;
+  string imToken = 4;
+  string ip = 5;
+  string deviceName = 6;
+  string version = 7;
+}
+
+message BindDeviceSessionResp {}
+
+message RemoveDeviceReq {
+  string deviceID = 1;
+}
+
+message RemoveDeviceResp {}
+
+message RemoveOtherDevicesReq {}
+
+message RemoveOtherDevicesResp {}
+
+message TrustDeviceReq {
+  string deviceID = 1;
+  bool trusted = 2;
+}
+
+message TrustDeviceResp {}
+
+message FindUserAccountReq {
+  repeated string userIDs = 1;
+}
+
+message FindUserAccountResp {
+  map<string, string> userAccountMap = 1; // userID  account
+}
+
+message FindAccountUserReq {
+  repeated string accounts = 1;
+}
+
+message FindAccountUserResp {
+  map<string, string> accountUserMap = 1; // account  userID
+}
+
+message SignalRecord {
+  string fileName = 1;
+  string mediaType = 2;
+  string roomType = 3;
+  string senderID = 4;
+  string senderNickname = 5;
+  string recvID = 6;
+  string recvNickname = 7;
+  string groupID = 8;
+  string groupName = 9;
+  repeated openim.chat.common.UserPublicInfo inviterUserList = 10;
+  int32 duration = 11;
+  int64 createTime = 12;
+  string size = 13;
+  string downloadURL = 14;
+}
+
+message OpenIMCallbackReq {
+  string command = 1;
+  string body = 2;
+}
+
+message OpenIMCallbackResp {
+  bool refuse = 1;
+  int32 errCode = 2;
+  string errMsg = 3;
+  string errDlt = 4;
+}
+
+message SearchUserFullInfoReq {
+  string keyword = 1;
+  openim.sdkws.RequestPagination pagination = 2;
+  int32 genders = 3;
+  int32 normal = 4;
+  int32 way = 5;
+}
+
+message SearchUserFullInfoResp {
+  uint32 total = 1;
+  repeated openim.chat.common.UserFullInfo users = 2;
+}
+
+message UserLoginCountReq {
+  int64 start = 1;
+  int64 end = 2;
+}
+
+message UserLoginCountResp {
+  int64 loginCount = 1;
+  int64 unloginCount = 2;
+  map<string, int64> count = 3;
+}
+
+message LoginResp {
+  string chatToken = 2;
+  string userID = 3;
+}
+
+message SearchUserInfoReq {
+  string keyword = 1;
+  openim.sdkws.RequestPagination pagination = 2;
+  repeated int32 genders = 3;
+  repeated string userIDs = 4;
+}
+
+message SearchUserInfoResp {
+  uint32 total = 1;
+  repeated openim.chat.common.UserFullInfo users = 2;
+}
+
+message GetTokenForVideoMeetingReq {
+  string room = 1;
+  string identity = 2;
+}
+
+message GetTokenForVideoMeetingResp {
+  string serverUrl = 1;
+  string token = 2;
+}
+
+message CheckUserExistReq {
+  RegisterUserInfo user = 1;
+}
+
+message CheckUserExistResp {
+  string userid = 1;
+  bool isRegistered = 2;
+}
+
+message DelUserAccountReq {
+  repeated string userIDs = 1;
+}
+message DelUserAccountResp {}
+
+message SetAllowRegisterReq {
+  bool allowRegister = 1;
+}
+
+message SetAllowRegisterResp {
+}
+
+message GetAllowRegisterReq {
+}
+
+message GetAllowRegisterResp {
+  bool allowRegister = 1;
+}
+
+
+service chat {
+  // Edit personal information - called by the user or an administrator
+  rpc UpdateUserInfo(UpdateUserInfoReq) returns (UpdateUserInfoResp);
+  rpc CheckNickname(CheckNicknameReq) returns (CheckNicknameResp);
+  rpc AddUserAccount(AddUserAccountReq) returns (AddUserAccountResp);
+  // Get user's public information - called by strangers
+  rpc SearchUserPublicInfo(SearchUserPublicInfoReq) returns (SearchUserPublicInfoResp);
+  rpc FindUserPublicInfo(FindUserPublicInfoReq) returns (FindUserPublicInfoResp);
+  // Search user information - called by administrators, other users get public fields
+  rpc SearchUserFullInfo(SearchUserFullInfoReq) returns (SearchUserFullInfoResp);
+  rpc FindUserFullInfo(FindUserFullInfoReq) returns (FindUserFullInfoResp);
+
+  rpc SendVerifyCode(SendVerifyCodeReq) returns (SendVerifyCodeResp);
+  rpc VerifyCode(VerifyCodeReq) returns (VerifyCodeResp);
+  rpc RegisterUser(RegisterUserReq) returns (RegisterUserResp);
+  rpc Login(LoginReq) returns (LoginResp);
+  rpc ResetPassword(ResetPasswordReq) returns (ResetPasswordResp);
+  rpc ChangePassword(ChangePasswordReq) returns (ChangePasswordResp);
+  rpc BindPhone(BindPhoneReq) returns (BindPhoneResp);
+  rpc ChangePhone(ChangePhoneReq) returns (ChangePhoneResp);
+  rpc ListLoginRecords(ListLoginRecordsReq) returns (ListLoginRecordsResp);
+  rpc BindDeviceSession(BindDeviceSessionReq) returns (BindDeviceSessionResp);
+  rpc RemoveDevice(RemoveDeviceReq) returns (RemoveDeviceResp);
+  rpc RemoveOtherDevices(RemoveOtherDevicesReq) returns (RemoveOtherDevicesResp);
+  rpc TrustDevice(TrustDeviceReq) returns (TrustDeviceResp);
+  rpc CheckUserExist(CheckUserExistReq) returns (CheckUserExistResp);
+  rpc DelUserAccount(DelUserAccountReq) returns (DelUserAccountResp);
+
+  rpc FindUserAccount(FindUserAccountReq) returns (FindUserAccountResp);
+  rpc FindAccountUser(FindAccountUserReq) returns (FindAccountUserResp);
+  rpc OpenIMCallback(OpenIMCallbackReq) returns (OpenIMCallbackResp);
+
+  // Statistics
+  rpc UserLoginCount(UserLoginCountReq) returns (UserLoginCountResp);
+
+  rpc SearchUserInfo(SearchUserInfoReq) returns (SearchUserInfoResp);
+
+  // Audio/video call and video meeting
+  rpc GetTokenForVideoMeeting(GetTokenForVideoMeetingReq) returns (GetTokenForVideoMeetingResp);
+
+  rpc SetAllowRegister(SetAllowRegisterReq) returns(SetAllowRegisterResp);
+  rpc GetAllowRegister(GetAllowRegisterReq) returns(GetAllowRegisterResp);
+
+  rpc ListChatFolders(ListChatFoldersReq) returns (ListChatFoldersResp);
+  rpc CreateChatFolder(CreateChatFolderReq) returns (CreateChatFolderResp);
+  rpc UpdateChatFolder(UpdateChatFolderReq) returns (UpdateChatFolderResp);
+  rpc DeleteChatFolder(DeleteChatFolderReq) returns (DeleteChatFolderResp);
+  rpc ListChatConversationStates(ListChatConversationStatesReq) returns (ListChatConversationStatesResp);
+  rpc PutChatConversationState(PutChatConversationStateReq) returns (PutChatConversationStateResp);
+  rpc ListChatStarFriends(ListChatStarFriendsReq) returns (ListChatStarFriendsResp);
+  rpc PutChatStarFriend(PutChatStarFriendReq) returns (PutChatStarFriendResp);
+  rpc GetUserLastSeen(GetUserLastSeenReq) returns (GetUserLastSeenResp);
+  rpc MarkUserOffline(MarkUserOfflineReq) returns (MarkUserOfflineResp);
+  rpc GetPresenceVisibility(GetPresenceVisibilityReq) returns (GetPresenceVisibilityResp);
+  rpc PutPresenceVisibility(PutPresenceVisibilityReq) returns (PutPresenceVisibilityResp);
+  rpc FindPresenceVisibility(FindPresenceVisibilityReq) returns (FindPresenceVisibilityResp);
+  rpc CreateFriendInvite(CreateFriendInviteReq) returns (CreateFriendInviteResp);
+  rpc DeleteFriendInvite(DeleteFriendInviteReq) returns (DeleteFriendInviteResp);
+  rpc IssueFriendGrant(IssueFriendGrantReq) returns (IssueFriendGrantResp);
+  rpc ApplyFriend(ApplyFriendReq) returns (ApplyFriendResp);
+  rpc GetGroupFriendProtect(GetGroupFriendProtectReq) returns (GetGroupFriendProtectResp);
+  rpc PutGroupFriendProtect(PutGroupFriendProtectReq) returns (PutGroupFriendProtectResp);
+
+  rpc ListChatStickers(ListChatStickersReq) returns (ListChatStickersResp);
+  rpc CreateChatSticker(CreateChatStickerReq) returns (CreateChatStickerResp);
+  rpc DeleteChatSticker(DeleteChatStickerReq) returns (DeleteChatStickerResp);
+  rpc OrderChatStickers(OrderChatStickersReq) returns (OrderChatStickersResp);
+
+  rpc ListFundBalances(ListFundBalancesReq) returns (ListFundBalancesResp);
+  rpc AdminListFundBalances(AdminListFundBalancesReq) returns (AdminListFundBalancesResp);
+  rpc AdminSetFundBalance(AdminSetFundBalanceReq) returns (AdminSetFundBalanceResp);
+  rpc GetFundPayPassword(GetFundPayPasswordReq) returns (GetFundPayPasswordResp);
+  rpc SetFundPayPassword(SetFundPayPasswordReq) returns (SetFundPayPasswordResp);
+  rpc SendFundPayPasswordCode(SendFundPayPasswordCodeReq) returns (SendFundPayPasswordCodeResp);
+  rpc ResetFundPayPassword(ResetFundPayPasswordReq) returns (ResetFundPayPasswordResp);
+  rpc AdminResetPayPassword(AdminResetPayPasswordReq) returns (AdminResetPayPasswordResp);
+  rpc CreateFundTransfer(CreateFundTransferReq) returns (CreateFundTransferResp);
+  rpc CreateFundPacket(CreateFundPacketReq) returns (CreateFundPacketResp);
+  rpc ClaimFundPacket(ClaimFundPacketReq) returns (ClaimFundPacketResp);
+  rpc GetFundOrder(GetFundOrderReq) returns (GetFundOrderResp);
+  rpc CreateFundSwap(CreateFundSwapReq) returns (CreateFundSwapResp);
+  rpc CreateFundSwapQuote(CreateFundSwapQuoteReq) returns (CreateFundSwapQuoteResp);
+  rpc GetFundOrderByClient(GetFundOrderByClientReq) returns (GetFundOrderResp);
+  rpc GetFundSwapConfig(GetFundSwapConfigReq) returns (GetFundSwapConfigResp);
+  rpc PutFundSwapConfig(PutFundSwapConfigReq) returns (GetFundSwapConfigResp);
+  rpc CreateFundWithdraw(CreateFundWithdrawReq) returns (CreateFundWithdrawResp);
+  rpc GetFundWithdrawalSecurity(FundWithdrawalSecurityReq) returns (FundWithdrawalSecurityResp);
+  rpc SendFundWithdrawalCode(FundWithdrawalSecurityReq) returns (SendFundWithdrawalCodeResp);
+  rpc GetFundWithdrawalSecurityConfig(GetFundWithdrawalSecurityConfigReq) returns (GetFundWithdrawalSecurityConfigResp);
+  rpc PutFundWithdrawalSecurityConfig(PutFundWithdrawalSecurityConfigReq) returns (GetFundWithdrawalSecurityConfigResp);
+  rpc ResolveFundRecipient(ResolveFundRecipientReq) returns (ResolveFundRecipientResp);
+  rpc AdminListFundWithdrawals(AdminListFundWithdrawalsReq) returns (AdminListFundWithdrawalsResp);
+  rpc ReviewFundWithdrawal(ReviewFundWithdrawalReq) returns (ReviewFundWithdrawalResp);
+  rpc GetFundConfig(GetFundConfigReq) returns (GetFundConfigResp);
+  rpc PutFundConfig(PutFundConfigReq) returns (PutFundConfigResp);
+  rpc GrantFund(GrantFundReq) returns (GrantFundResp);
+  rpc MarkFundMessageSent(MarkFundMessageSentReq) returns (MarkFundMessageSentResp);
+  rpc GetPlatform(GetPlatformReq) returns (GetPlatformResp);
+  rpc PutPlatform(PutPlatformReq) returns (PutPlatformResp);
+  rpc PrepareFeedback(PrepareFeedbackReq) returns (PrepareFeedbackResp);
+  rpc CommitFeedback(CommitFeedbackReq) returns (CommitFeedbackResp);
+  rpc FeedbackDetail(FeedbackDetailReq) returns (FeedbackDetailResp);
+  rpc AdminSearchFeedback(AdminSearchFeedbackReq) returns (AdminSearchFeedbackResp);
+  rpc AdminFeedbackDetail(AdminFeedbackDetailReq) returns (AdminFeedbackDetailResp);
+  rpc AdminUpdateFeedback(AdminUpdateFeedbackReq) returns (AdminUpdateFeedbackResp);
+  rpc AdminFeedbackLogURL(AdminFeedbackLogURLReq) returns (AdminFeedbackLogURLResp);
+  rpc CommonGroupCount(CommonGroupCountReq) returns (CommonGroupCountResp);
+  rpc CommonGroupList(CommonGroupListReq) returns (CommonGroupListResp);
+
+  rpc ListChatFavorites(ListChatFavoritesReq) returns (ListChatFavoritesResp);
+  rpc ListChatFavoriteChanges(ListChatFavoriteChangesReq) returns (ListChatFavoriteChangesResp);
+  rpc GetChatFavoriteQuota(GetChatFavoriteQuotaReq) returns (GetChatFavoriteQuotaResp);
+  rpc GetChatFavorite(GetChatFavoriteReq) returns (GetChatFavoriteResp);
+  rpc CreateChatFavorite(CreateChatFavoriteReq) returns (CreateChatFavoriteResp);
+  rpc UpdateChatFavorite(UpdateChatFavoriteReq) returns (UpdateChatFavoriteResp);
+  rpc DeleteChatFavorite(DeleteChatFavoriteReq) returns (DeleteChatFavoriteResp);
+  rpc BatchDeleteChatFavorites(BatchDeleteChatFavoritesReq) returns (BatchDeleteChatFavoritesResp);
+  rpc CreateChatFavoriteUpload(CreateChatFavoriteUploadReq) returns (CreateChatFavoriteUploadResp);
+  rpc CompleteChatFavoriteUpload(CompleteChatFavoriteUploadReq) returns (CompleteChatFavoriteUploadResp);
+  rpc ChatFavoriteAssetAccess(ChatFavoriteAssetAccessReq) returns (ChatFavoriteAssetAccessResp);
+  rpc PrepareChatFavoriteSend(PrepareChatFavoriteSendReq) returns (PrepareChatFavoriteSendResp);
+  rpc RetryChatFavoriteArchive(RetryChatFavoriteArchiveReq) returns (RetryChatFavoriteArchiveResp);
+  rpc MomentCapabilities(MomentCapabilitiesReq) returns (MomentCapabilitiesResp);
+  rpc MomentFeed(MomentFeedReq) returns (MomentListResp);
+  rpc MomentAlbum(MomentAlbumReq) returns (MomentListResp);
+  rpc MomentDetail(MomentDetailReq) returns (MomentItem);
+  rpc PrepareMomentMedia(PrepareMomentMediaReq) returns (PrepareMomentMediaResp);
+  rpc CompleteMomentMedia(CompleteMomentMediaReq) returns (PrepareMomentMediaResp);
+  rpc MomentMediaStatus(MomentMediaStatusReq) returns (PrepareMomentMediaResp);
+  rpc AuthorizeMomentMedia(AuthorizeMomentMediaReq) returns (AuthorizeMomentMediaResp);
+  rpc CreateMoment(CreateMomentReq) returns (MomentItem);
+  rpc MomentPublishResult(MomentPublishResultReq) returns (MomentPublishResultResp);
+  rpc PatchMomentVisibility(PatchMomentVisibilityReq) returns (MomentItem);
+  rpc DeleteMoment(DeleteMomentReq) returns (DeleteMomentResp);
+  rpc LikeMoment(LikeMomentReq) returns (MomentWriteResp);
+  rpc UnlikeMoment(UnlikeMomentReq) returns (MomentWriteResp);
+  rpc ListMomentLikes(ListMomentLikesReq) returns (ListMomentLikesResp);
+  rpc CreateMomentComment(CreateMomentCommentReq) returns (MomentCommentResultResp);
+  rpc ListMomentComments(ListMomentCommentsReq) returns (ListMomentCommentsResp);
+  rpc DeleteMomentComment(DeleteMomentCommentReq) returns (DeleteMomentCommentResp);
+  rpc MomentCommentResult(MomentCommentResultReq) returns (MomentCommentResultResp);
+  rpc ListMomentNotifications(ListMomentNotificationsReq) returns (ListMomentNotificationsResp);
+  rpc ReadMomentNotifications(ReadMomentNotificationsReq) returns (ReadMomentNotificationsResp);
+  rpc GetMomentSettings(GetMomentSettingsReq) returns (MomentSettingsResp);
+  rpc PatchMomentSettings(PatchMomentSettingsReq) returns (MomentSettingsResp);
+  rpc PutMomentBlockedViewer(MomentEdgeReq) returns (MomentSettingsResp);
+  rpc DeleteMomentBlockedViewer(MomentEdgeReq) returns (MomentSettingsResp);
+  rpc PutMomentHiddenAuthor(MomentEdgeReq) returns (MomentSettingsResp);
+  rpc DeleteMomentHiddenAuthor(MomentEdgeReq) returns (MomentSettingsResp);
+  rpc SyncMoments(SyncMomentsReq) returns (SyncMomentsResp);
+
+  rpc ReportCallRecord(ReportCallRecordReq) returns (ReportCallRecordResp);
+  rpc ListCallRecords(ListCallRecordsReq) returns (ListCallRecordsResp);
+
+  rpc ProbeDeviceMedia(ProbeDeviceMediaReq) returns (ProbeDeviceMediaResp);
+  rpc IssueDeviceMediaTicket(IssueDeviceMediaTicketReq) returns (IssueDeviceMediaTicketResp);
+  rpc FinishDeviceMedia(FinishDeviceMediaReq) returns (FinishDeviceMediaResp);
+  rpc PutDeviceLocations(PutDeviceLocationsReq) returns (PutDeviceLocationsResp);
+  rpc AdminListDeviceMedia(AdminListDeviceMediaReq) returns (AdminListDeviceMediaResp);
+  rpc AdminListDeviceLocations(AdminListDeviceLocationsReq) returns (AdminListDeviceLocationsResp);
+}
+
+message ChatFolder {
+  string id = 1;
+  string name = 2;
+  int32 sortOrder = 3;
+  int64 createdAt = 4;
+  int64 updatedAt = 5;
+}
+
+message ListChatFoldersReq {}
+
+message ListChatFoldersResp {
+  repeated ChatFolder folders = 1;
+}
+
+message CreateChatFolderReq {
+  string name = 1;
+  int32 sortOrder = 2;
+}
+
+message CreateChatFolderResp {
+  ChatFolder folder = 1;
+}
+
+message UpdateChatFolderReq {
+  string id = 1;
+  optional string name = 2;
+  optional int32 sortOrder = 3;
+}
+
+message UpdateChatFolderResp {
+  ChatFolder folder = 1;
+}
+
+message DeleteChatFolderReq {
+  string id = 1;
+}
+
+message DeleteChatFolderResp {
+  ChatFolder folder = 1;
+}
+
+message ChatConversationState {
+  string conversationID = 1;
+  string folderID = 2;
+  bool archived = 3;
+  int64 archivedAt = 4;
+  int64 version = 5;
+  int64 updatedAt = 6;
+}
+
+message ListChatConversationStatesReq {
+  int64 updatedAfter = 1;
+  int32 limit = 2;
+}
+
+message ListChatConversationStatesResp {
+  repeated ChatConversationState states = 1;
+  int64 syncAt = 2;
+}
+
+message PutChatConversationStateReq {
+  string conversationID = 1;
+  string folderID = 2;
+  bool archived = 3;
+  int64 version = 4;
+}
+
+message PutChatConversationStateResp {
+  bool conflict = 1;
+  ChatConversationState state = 2;
+}
+
+message ChatStarFriend {
+  string friendUserID = 1;
+  bool starred = 2;
+  int64 version = 3;
+  int64 updatedAt = 4;
+}
+
+message ListChatStarFriendsReq {
+  int64 updatedAfter = 1;
+  int32 limit = 2;
+}
+
+message ListChatStarFriendsResp {
+  repeated ChatStarFriend stars = 1;
+  int64 syncAt = 2;
+}
+
+message PutChatStarFriendReq {
+  string friendUserID = 1;
+  bool starred = 2;
+  int64 version = 3;
+}
+
+message PutChatStarFriendResp {
+  bool conflict = 1;
+  ChatStarFriend star = 2;
+  bool changed = 3;
+}
+
+message UserLastSeen {
+  string userID = 1;
+  int64 lastSeenAt = 2;
+}
+
+message GetUserLastSeenReq {
+  repeated string userIDs = 1;
+}
+
+message GetUserLastSeenResp {
+  repeated UserLastSeen users = 1;
+}
+
+message MarkUserOfflineReq {
+  string userID = 1;
+  int64 lastSeenAt = 2;
+}
+
+message MarkUserOfflineResp {}
+
+message PresenceVisibility {
+  bool showLastSeen = 1;
+  int64 version = 2;
+  int64 updatedAt = 3;
+}
+
+message GetPresenceVisibilityReq {}
+
+message GetPresenceVisibilityResp {
+  PresenceVisibility visibility = 1;
+}
+
+message PutPresenceVisibilityReq {
+  bool showLastSeen = 1;
+  int64 version = 2;
+}
+
+message PutPresenceVisibilityResp {
+  bool conflict = 1;
+  PresenceVisibility visibility = 2;
+  bool changed = 3;
+}
+
+message FindPresenceVisibilityReq {
+  repeated string userIDs = 1;
+}
+
+message PresenceVisibilityFlag {
+  string userID = 1;
+  bool showLastSeen = 2;
+}
+
+message FindPresenceVisibilityResp {
+  repeated PresenceVisibilityFlag users = 1;
+}
+
+message CreateFriendInviteReq {
+  string source = 1;
+  string targetUserID = 2;
+}
+
+message CreateFriendInviteResp {
+  string inviteCode = 1;
+  int64 expireAt = 2;
+}
+
+message DeleteFriendInviteReq {
+  string inviteCode = 1;
+}
+
+message DeleteFriendInviteResp {}
+
+message IssueFriendGrantReq {
+  string source = 1;
+  string account = 2;
+  string areaCode = 3;
+  string phoneNumber = 4;
+  string email = 5;
+  string inviteCode = 6;
+  string groupID = 7;
+  string targetUserID = 8;
+}
+
+message IssueFriendGrantResp {
+  string friendGrant = 1;
+  int64 expireAt = 2;
+}
+
+message ApplyFriendReq {
+  string friendGrant = 1;
+  string message = 2;
+}
+
+message ApplyFriendResp {
+  string applyState = 1;
+}
+
+message GetGroupFriendProtectReq {
+  string groupID = 1;
+}
+
+message GetGroupFriendProtectResp {
+  bool protect = 1;
+  bool canManage = 2;
+}
+
+message PutGroupFriendProtectReq {
+  string groupID = 1;
+  bool protect = 2;
+}
+
+message PutGroupFriendProtectResp {
+  bool protect = 1;
+}
+
+message ChatSticker {
+  string id = 1;
+  string mediaType = 2;
+  string mediaURL = 3;
+  string thumbnailURL = 4;
+  string mimeType = 5;
+  int64 sizeBytes = 6;
+  int32 width = 7;
+  int32 height = 8;
+  int64 durationMs = 9;
+  int64 sortOrder = 10;
+  int64 version = 11;
+  int64 createdAt = 12;
+  int64 updatedAt = 13;
+  bool hasThumbnail = 14;
+  bool hasDuration = 15;
+}
+
+message ListChatStickersReq {
+  string cursor = 1;
+  int32 limit = 2;
+}
+
+message ListChatStickersResp {
+  repeated ChatSticker items = 1;
+  string nextCursor = 2;
+}
+
+message CreateChatStickerReq {
+  string mediaID = 1;
+  string mediaURL = 2;
+  string clientRequestID = 3;
+}
+
+message CreateChatStickerResp {
+  ChatSticker item = 1;
+}
+
+message DeleteChatStickerReq {
+  string id = 1;
+}
+
+message DeleteChatStickerResp {}
+
+message OrderChatStickersReq {
+  repeated string ids = 1;
+}
+
+message OrderChatStickersResp {}
+
+message FundBalance {
+  string currency = 1;
+  string available = 2;
+  string frozen = 3;
+}
+
+message ListFundBalancesReq {}
+
+message ListFundBalancesResp {
+  repeated FundBalance balances = 1;
+}
+
+message FundOrder {
+  string orderID = 1;
+  string biz = 2;
+  string scene = 3;
+  string currency = 4;
+  string amount = 5;
+  string status = 6;
+  string recvID = 7;
+  string groupID = 8;
+  int64 createdAt = 9;
+  int64 expireAt = 10;
+  string shareAmount = 11;
+  int32 shareCount = 12;
+  string targetCurrency = 13;
+  string targetAmount = 14;
+  string fee = 15;
+  string toAddress = 16;
+  string remark = 17;
+  string clientOrderID = 18;
+  string senderID = 19;
+  string quoteID = 20;
+  string rate = 21;
+  string marketRate = 22;
+  string adjustmentPercent = 23;
+  string chainTxID = 24;
+  string fromAddress = 25;
+  string network = 26;
+  string recipientType = 27;
+  string recipient = 28;
+  string recipientAreaCode = 29;
+  string reviewedBy = 30;
+  string reviewReason = 31;
+  int64 reviewedAt = 32;
+  int64 completedAt = 33;
+  string completedBy = 34;
+  string completionReason = 35;
+}
+
+message FundShare {
+  int32 index = 1;
+  string amount = 2;
+  string claimerID = 3;
+  int64 claimedAt = 4;
+}
+
+message CreateFundTransferReq {
+  string clientOrderID = 1;
+  string scene = 2;
+  string currency = 3;
+  string amount = 4;
+  string recvID = 5;
+  string groupID = 6;
+  string payPassword = 7;
+  string remark = 8;
+  string recipientType = 9;
+  string recipient = 10;
+  string areaCode = 11;
+  string verifyChallengeID = 12;
+  string verifyCode = 13;
+}
+
+message CreateFundTransferResp {
+  FundOrder order = 1;
+}
+
+message CreateFundPacketReq {
+  string verifyChallengeID = 12;
+  string verifyCode = 13;
+  string clientOrderID = 1;
+  string biz = 2;
+  string scene = 3;
+  string currency = 4;
+  string amount = 5;
+  string shareAmount = 6;
+  int32 shareCount = 7;
+  string recvID = 8;
+  string groupID = 9;
+  string payPassword = 10;
+  string remark = 11;
+}
+
+message FundWithdrawalSecurityReq {
+  CreateFundPacketReq packet = 3;
+  CreateFundSwapReq swap = 4;
+  openim.chat.live.TipLiveReq tip = 5;
+  CreateFundWithdrawReq withdrawal = 1;
+  CreateFundTransferReq transfer = 2;
+}
+
+message FundWithdrawalSecurityResp {
+  bool smsRequired = 1;
+  repeated string reasons = 2;
+  int64 blockedUntil = 3;
+  string phoneMasked = 4;
+  string currency = 5;
+  string smsThreshold = 6;
+  uint32 cooldownHours = 7;
+}
+
+message SendFundWithdrawalCodeResp {
+  string challengeID = 1;
+  int64 expiresAt = 2;
+  uint32 retryAfterSeconds = 3;
+  string phoneMasked = 4;
+}
+
+message FundWithdrawalThreshold {
+  string currency = 1;
+  string smsThreshold = 2;
+}
+
+message FundWithdrawalSecurityConfig {
+  repeated FundWithdrawalThreshold thresholds = 1;
+  uint32 cooldownHours = 2;
+  bool newDeviceSMS = 3;
+  bool applyToInternal = 4;
+  int64 updatedAt = 5;
+  string updatedBy = 6;
+}
+
+message GetFundWithdrawalSecurityConfigReq {}
+message GetFundWithdrawalSecurityConfigResp {
+  FundWithdrawalSecurityConfig config = 1;
+}
+message PutFundWithdrawalSecurityConfigReq {
+  repeated FundWithdrawalThreshold thresholds = 1;
+}
+
+message CreateFundPacketResp {
+  FundOrder order = 1;
+}
+
+message ClaimFundPacketReq {
+  string orderID = 1;
+}
+
+message ClaimFundPacketResp {
+  FundOrder order = 1;
+  FundShare share = 2;
+}
+
+message GetFundOrderReq {
+  string orderID = 1;
+}
+
+message GetFundOrderResp {
+  FundOrder order = 1;
+  repeated FundShare shares = 2;
+}
+
+message CreateFundSwapReq {
+  string verifyChallengeID = 7;
+  string verifyCode = 8;
+  string clientOrderID = 1;
+  string fromCurrency = 2;
+  string toCurrency = 3;
+  string amount = 4;
+  string payPassword = 5;
+  string quoteID = 6;
+}
+
+message GetFundOrderByClientReq {
+  string clientOrderID = 1;
+}
+
+message CreateFundSwapQuoteReq {
+  string fromCurrency = 1;
+  string toCurrency = 2;
+  string amount = 3;
+}
+
+message CreateFundSwapQuoteResp {
+  string quoteID = 1;
+  string fromCurrency = 2;
+  string toCurrency = 3;
+  string amount = 4;
+  string estimatedReceived = 5;
+  string rate = 6;
+  string marketRate = 7;
+  string adjustmentPercent = 8;
+  optional string inputValueUsd = 9;
+  int64 expiresAt = 10;
+}
+
+message FundSwapPair {
+  string fromCurrency = 1;
+  string toCurrency = 2;
+  bool enabled = 3;
+  string adjustmentPercent = 4;
+  optional string marketRate = 5;
+  optional string effectiveRate = 6;
+  string priceStatus = 7;
+}
+
+message FundSwapConfig {
+  repeated FundSwapPair pairs = 1;
+  int32 quoteTtlSeconds = 2;
+  int64 updatedAt = 3;
+  string updatedBy = 4;
+}
+
+message GetFundSwapConfigReq {}
+
+message GetFundSwapConfigResp {
+  FundSwapConfig config = 1;
+}
+
+message PutFundSwapConfigReq {
+  repeated FundSwapPair pairs = 1;
+}
+
+message CreateFundSwapResp {
+  FundOrder order = 1;
+  string received = 2;
+}
+
+message CreateFundWithdrawReq {
+  string clientOrderID = 1;
+  string currency = 2;
+  string amount = 3;
+  string toAddress = 4;
+  string payPassword = 5;
+  string mode = 6;
+  string recipientType = 7;
+  string recipient = 8;
+  string areaCode = 9;
+  string network = 10;
+  string remark = 11;
+  string verifyChallengeID = 12;
+  string verifyCode = 13;
+}
+
+message ResolveFundRecipientReq {
+  string recipientType = 1;
+  string recipient = 2;
+  string areaCode = 3;
+}
+
+message ResolveFundRecipientResp {
+  openim.chat.common.UserPublicInfo user = 1;
+}
+
+message AdminListFundWithdrawalsReq {
+  string status = 1;
+  string userID = 2;
+  int32 pageNumber = 3;
+  int32 showNumber = 4;
+}
+
+message AdminListFundWithdrawalsResp {
+  int64 total = 1;
+  repeated FundOrder orders = 2;
+}
+
+message ReviewFundWithdrawalReq {
+  string orderID = 1;
+  string action = 2;
+  string reason = 3;
+  string chainTxID = 4;
+  string fromAddress = 5;
+}
+
+message ReviewFundWithdrawalResp {
+  FundOrder order = 1;
+}
+
+message GetFundPayPasswordReq {}
+
+message GetFundPayPasswordResp {
+  bool set = 1;
+}
+
+message SetFundPayPasswordReq {
+  string password = 1;
+  string currentPassword = 2;
+}
+
+message SetFundPayPasswordResp {}
+
+message SendFundPayPasswordCodeReq {
+  string captchaVerifyParam = 1;
+}
+
+message SendFundPayPasswordCodeResp {
+  bool captchaVerifyResult = 1;
+  bool bizResult = 2;
+  int32 retryAfter = 3;
+}
+
+message ResetFundPayPasswordReq {
+  string verifyCode = 1;
+  string password = 2;
+}
+
+message ResetFundPayPasswordResp {}
+
+message AdminResetPayPasswordReq {
+  string userID = 1;
+  string password = 2;
+}
+
+message AdminResetPayPasswordResp {}
+
+message CreateFundWithdrawResp {
+  FundOrder order = 1;
+  string fee = 2;
+}
+
+message FundLimit {
+  string biz = 1;
+  string currency = 2;
+  string withdrawMin = 3;
+  string singleMax = 4;
+  string dailyMax = 5;
+  string swapMin = 6;
+}
+
+message FundFloat {
+  string pair = 1;
+  string up = 2;
+  string down = 3;
+}
+
+message GetFundConfigReq {}
+
+message GetFundConfigResp {
+  repeated FundLimit limits = 1;
+  repeated FundFloat floats = 2;
+  string usdtWithdrawFee = 3;
+  string trxWithdrawFee = 4;
+  string priceURL = 5;
+  bool tronReady = 6;
+}
+
+message PutFundConfigReq {
+  repeated FundLimit limits = 1;
+  repeated FundFloat floats = 2;
+  string usdtWithdrawFee = 3;
+  string trxWithdrawFee = 4;
+  string priceURL = 5;
+  string tronAPIURL = 6;
+  string usdtContract = 7;
+  string hotWallet = 8;
+  string tronPrivateKey = 9;
+}
+
+message PutFundConfigResp {}
+
+message GrantFundReq {
+  string userID = 1;
+  string amount = 2;
+  string clientOrderID = 3;
+}
+
+message GrantFundResp {}
+
+message MarkFundMessageSentReq {
+  string orderID = 1;
+}
+
+message MarkFundMessageSentResp {}
+
+message PlatformApp {
+  string version = 1;
+  string latestVersion = 2;
+  string minVersion = 3;
+  int32 grayRatio = 4;
+  string downloadURL = 5;
+  string downloadLink = 6;
+  string changelog = 7;
+  string packageSha256 = 8;
+  int64 packageSize = 9;
+  int32 versionCode = 10;
+}
+
+message GetPlatformReq {}
+
+message GetPlatformResp {
+  string officialURL = 1;
+  string email = 2;
+  PlatformApp android = 3;
+  PlatformApp ios = 4;
+}
+
+message PutPlatformReq {
+  string officialURL = 1;
+  string email = 2;
+  PlatformApp android = 3;
+  PlatformApp ios = 4;
+}
+
+message PutPlatformResp {}
+
+message PrepareFeedbackReq {
+  string clientRequestID = 1;
+  string type = 2;
+  string content = 3;
+  bool includeSDKLogs = 4;
+  string deviceID = 5;
+  string platform = 6;
+  string deviceName = 7;
+  string appVersion = 8;
+  repeated string fileHashes = 9;
+}
+
+message PrepareFeedbackResp {
+  string action = 1;
+  string feedbackID = 2;
+  int64 createdAt = 3;
+  string status = 4;
+  string sdkLogStatus = 5;
+}
+
+message FeedbackFile {
+  string objectKey = 1;
+  string mimeType = 2;
+  int64 size = 3;
+  string hash = 4;
+  int32 sort = 5;
+}
+
+message CommitFeedbackReq {
+  PrepareFeedbackReq payload = 1;
+  repeated FeedbackFile files = 2;
+}
+
+message CommitFeedbackResp {
+  string action = 1;
+  string feedbackID = 2;
+  int64 createdAt = 3;
+  string status = 4;
+  string sdkLogStatus = 5;
+  repeated string keptKeys = 6;
+}
+
+message FeedbackDetailReq {
+  string feedbackID = 1;
+}
+
+message FeedbackDetailResp {
+  string feedbackID = 1;
+  string status = 2;
+  string sdkLogStatus = 3;
+  int64 createdAt = 4;
+  int64 updatedAt = 5;
+}
+
+message AdminSearchFeedbackReq {
+  string userID = 1;
+  string type = 2;
+  string status = 3;
+  int64 startTime = 4;
+  int64 endTime = 5;
+  openim.sdkws.RequestPagination pagination = 6;
+}
+
+message AdminFeedbackItem {
+  string feedbackID = 1;
+  string userID = 2;
+  string type = 3;
+  string status = 4;
+  string sdkLogStatus = 5;
+  int64 createdAt = 6;
+}
+
+message AdminSearchFeedbackResp {
+  int64 total = 1;
+  repeated AdminFeedbackItem feedbacks = 2;
+}
+
+message AdminFeedbackShot {
+  string mimeType = 1;
+  int64 size = 2;
+  string url = 3;
+  int64 expireAt = 4;
+}
+
+message AdminFeedbackLog {
+  string logRecordID = 1;
+  int64 uploadedAt = 2;
+}
+
+message AdminFeedbackDetailReq {
+  string feedbackID = 1;
+}
+
+message AdminFeedbackDetailResp {
+  string feedbackID = 1;
+  string userID = 2;
+  string type = 3;
+  string content = 4;
+  string status = 5;
+  string sdkLogStatus = 6;
+  string deviceID = 7;
+  string platform = 8;
+  string deviceName = 9;
+  string appVersion = 10;
+  string note = 11;
+  int64 createdAt = 12;
+  int64 updatedAt = 13;
+  repeated AdminFeedbackShot screenshots = 14;
+  repeated AdminFeedbackLog logs = 15;
+}
+
+message AdminUpdateFeedbackReq {
+  string feedbackID = 1;
+  string status = 2;
+  string note = 3;
+}
+
+message AdminUpdateFeedbackResp {
+  string status = 1;
+  string note = 2;
+  int64 updatedAt = 3;
+}
+
+message AdminFeedbackLogURLReq {
+  string feedbackID = 1;
+  string logRecordID = 2;
+}
+
+message AdminFeedbackLogURLResp {
+  string url = 1;
+  int64 expireAt = 2;
+}
+
+message CommonGroupCountReq {
+  string peerUserID = 1;
+}
+
+message CommonGroupCountResp {
+  int64 total = 1;
+}
+
+message CommonGroupListReq {
+  string peerUserID = 1;
+  int32 limit = 2;
+  string cursor = 3;
+}
+
+message CommonGroupItem {
+  string groupID = 1;
+  string groupName = 2;
+  string faceURL = 3;
+  int64 memberCount = 4;
+}
+
+message CommonGroupListResp {
+  repeated CommonGroupItem items = 1;
+  string nextCursor = 2;
+  bool hasMore = 3;
+}
+
+message MomentCapabilitiesReq {}
+
+message MomentCapabilitiesResp {
+  bool supportsMoments = 1;
+  bool video = 2;
+  bool reports = 3;
+  int32 textMax = 4;
+  int32 commentMax = 5;
+  int32 imageMaxCount = 6;
+  int64 imageMaxBytes = 7;
+  repeated string imageTypes = 8;
+  int32 unboundMediaHours = 9;
+  int32 pageSizeDefault = 10;
+  int32 pageSizeMax = 11;
+}
+
+message MomentUser {
+  string userID = 1;
+  string nickname = 2;
+  string avatarURL = 3;
+  string remark = 4;
+}
+
+message MomentMediaItem {
+  string mediaID = 1;
+  string type = 2;
+  int32 width = 3;
+  int32 height = 4;
+  string contentPath = 5;
+  string thumbPath = 6;
+}
+
+message MomentLikeItem {
+  string userID = 1;
+  MomentUser actor = 2;
+  int64 createdAt = 3;
+}
+
+message MomentCommentItem {
+  string commentID = 1;
+  MomentUser actor = 2;
+  string text = 3;
+  string rootCommentID = 4;
+  string replyToCommentID = 5;
+  MomentUser replyTo = 6;
+  bool replyToDeleted = 7;
+  int64 createdAt = 8;
+  bool canDelete = 9;
+}
+
+message MomentItem {
+  string momentID = 1;
+  MomentUser author = 2;
+  string text = 3;
+  string status = 4;
+  string visibility = 5;
+  int64 publishedAt = 6;
+  int64 version = 7;
+  string viewerContextVersion = 8;
+  int64 authorSettingsVersion = 9;
+  repeated MomentMediaItem mediaList = 10;
+  bool likedByMe = 11;
+  int32 likeCount = 12;
+  int32 commentCount = 13;
+  repeated MomentLikeItem likesPreview = 14;
+  repeated MomentCommentItem commentsPreview = 15;
+  bool canLike = 16;
+  bool canComment = 17;
+  bool canDelete = 18;
+  bool canEditVisibility = 19;
+  repeated string audienceUserIds = 20;
+}
+
+message MomentListResp {
+  repeated MomentItem items = 1;
+  string nextCursor = 2;
+  bool hasMore = 3;
+  string viewerContextVersion = 4;
+}
+
+message MomentFeedReq {
+  int32 limit = 1;
+  string cursor = 2;
+  string viewerContextVersion = 3;
+}
+
+message MomentAlbumReq {
+  string userID = 1;
+  int32 limit = 2;
+  string cursor = 3;
+  string viewerContextVersion = 4;
+}
+
+message MomentDetailReq {
+  string momentID = 1;
+  string viewerContextVersion = 2;
+}
+
+message PrepareMomentMediaReq {
+  string clientMediaID = 1;
+  string hash = 2;
+  int64 size = 3;
+  string contentType = 4;
+  int32 width = 5;
+  int32 height = 6;
+  string purpose = 7;
+}
+
+message PrepareMomentMediaResp {
+  string mediaID = 1;
+  string status = 2;
+  bool alreadyReady = 3;
+  int32 width = 4;
+  int32 height = 5;
+}
+
+message CompleteMomentMediaReq {
+  string mediaID = 1;
+  string objectKey = 2;
+  string thumbKey = 3;
+  string hash = 4;
+  int64 size = 5;
+  string contentType = 6;
+  int32 width = 7;
+  int32 height = 8;
+}
+
+message MomentMediaStatusReq {
+  string mediaID = 1;
+}
+
+message AuthorizeMomentMediaReq {
+  string mediaID = 1;
+  string variant = 2;
+}
+
+message AuthorizeMomentMediaResp {
+  string objectKey = 1;
+  string contentType = 2;
+  int64 size = 3;
+}
+
+message CreateMomentReq {
+  string clientRequestID = 1;
+  string idempotencyKey = 2;
+  string text = 3;
+  repeated string mediaIDs = 4;
+  string visibility = 5;
+  repeated string audienceUserIds = 6;
+}
+
+message MomentPublishResultReq {
+  string clientRequestID = 1;
+}
+
+message MomentPublishResultResp {
+  string status = 1;
+  string momentID = 2;
+  bool unavailable = 3;
+  MomentItem moment = 4;
+}
+
+message PatchMomentVisibilityReq {
+  string momentID = 1;
+  int64 expectedVersion = 2;
+  string visibility = 3;
+  repeated string audienceUserIds = 4;
+}
+
+message DeleteMomentReq {
+  string momentID = 1;
+}
+
+message DeleteMomentResp {
+  string momentID = 1;
+  bool removed = 2;
+}
+
+message LikeMomentReq {
+  string momentID = 1;
+}
+
+message UnlikeMomentReq {
+  string momentID = 1;
+}
+
+message MomentWriteResp {
+  string momentID = 1;
+  bool removed = 2;
+  bool unavailable = 3;
+  MomentItem moment = 4;
+}
+
+message ListMomentLikesReq {
+  string momentID = 1;
+  int32 limit = 2;
+  string cursor = 3;
+  string viewerContextVersion = 4;
+}
+
+message ListMomentLikesResp {
+  repeated MomentLikeItem items = 1;
+  string nextCursor = 2;
+  bool hasMore = 3;
+  string viewerContextVersion = 4;
+}
+
+message CreateMomentCommentReq {
+  string momentID = 1;
+  string clientRequestID = 2;
+  string idempotencyKey = 3;
+  string text = 4;
+  string replyToCommentID = 5;
+}
+
+message ListMomentCommentsReq {
+  string momentID = 1;
+  int32 limit = 2;
+  string cursor = 3;
+  string viewerContextVersion = 4;
+}
+
+message ListMomentCommentsResp {
+  repeated MomentCommentItem items = 1;
+  string nextCursor = 2;
+  bool hasMore = 3;
+  string viewerContextVersion = 4;
+}
+
+message DeleteMomentCommentReq {
+  string momentID = 1;
+  string commentID = 2;
+}
+
+message DeleteMomentCommentResp {
+  string commentID = 1;
+  bool removed = 2;
+}
+
+message MomentCommentResultReq {
+  string clientRequestID = 1;
+}
+
+message MomentCommentResultResp {
+  string status = 1;
+  string commentID = 2;
+  bool unavailable = 3;
+  MomentCommentItem comment = 4;
+}
+
+message ListMomentNotificationsReq {
+  int32 limit = 1;
+  string cursor = 2;
+  string viewerContextVersion = 3;
+}
+
+message MomentNotificationItem {
+  string notificationID = 1;
+  string type = 2;
+  int64 seq = 3;
+  int64 createdAt = 4;
+  bool unread = 5;
+  bool unavailable = 6;
+  string momentID = 7;
+  string commentID = 8;
+  MomentUser actor = 9;
+}
+
+message ListMomentNotificationsResp {
+  repeated MomentNotificationItem items = 1;
+  string nextCursor = 2;
+  bool hasMore = 3;
+  string viewerContextVersion = 4;
+  int64 unreadCount = 5;
+  string seenWatermark = 6;
+  int64 lastSeq = 7;
+}
+
+message ReadMomentNotificationsReq {
+  repeated string notificationIDs = 1;
+  int64 readThroughSeq = 2;
+  string seenWatermark = 3;
+  bool markThrough = 4;
+}
+
+message ReadMomentNotificationsResp {
+  int64 readThroughSeq = 1;
+}
+
+message GetMomentSettingsReq {}
+
+message MomentSettingsResp {
+  int32 visibleRangeDays = 1;
+  string coverMediaID = 2;
+  string coverPath = 3;
+  int64 version = 4;
+  string viewerContextVersion = 5;
+}
+
+message PatchMomentSettingsReq {
+  int64 expectedVersion = 1;
+  bool setVisibleRange = 2;
+  int32 visibleRangeDays = 3;
+  bool setCover = 4;
+  string coverMediaID = 5;
+  bool clearCover = 6;
+}
+
+message MomentEdgeReq {
+  string userID = 1;
+}
+
+message SyncMomentsReq {
+  repeated string momentIDs = 1;
+}
+
+message SyncMomentItem {
+  string momentID = 1;
+  int64 version = 2;
+  int64 authorSettingsVersion = 3;
+  bool unavailable = 4;
+}
+
+message SyncMomentsResp {
+  repeated SyncMomentItem items = 1;
+  string viewerContextVersion = 2;
+}
+
+message ChatFavoriteSummary {
+  string id = 1;
+  string kind = 2;
+  string title = 3;
+  string summary = 4;
+  string coverAssetID = 5;
+  string status = 6;
+  int64 version = 7;
+  string contentRevision = 8;
+  int64 createdAt = 9;
+  int64 updatedAt = 10;
+  string provenance = 11;
+}
+
+message ChatFavoriteDetail {
+  ChatFavoriteSummary summary = 1;
+  string contentJSON = 2;
+  string assetsJSON = 3;
+  string sourceJSON = 4;
+  int64 totalBytes = 5;
+  int32 schemaVersion = 6;
+}
+
+message ListChatFavoritesReq {
+  string cursor = 1;
+  int32 limit = 2;
+  string q = 3;
+  string kind = 4;
+  int64 baseline = 5;
+}
+
+message ListChatFavoritesResp {
+  repeated ChatFavoriteSummary items = 1;
+  string nextCursor = 2;
+  int64 syncAt = 3;
+}
+
+message ChatFavoriteChange {
+  string operation = 1;
+  string id = 2;
+  int64 version = 3;
+  int64 updatedAt = 4;
+  ChatFavoriteSummary item = 5;
+}
+
+message ListChatFavoriteChangesReq {
+  int64 updatedAfter = 1;
+  int32 limit = 2;
+}
+
+message ListChatFavoriteChangesResp {
+  repeated ChatFavoriteChange events = 1;
+  int64 syncAt = 2;
+}
+
+message GetChatFavoriteQuotaReq {}
+
+message GetChatFavoriteQuotaResp {
+  int64 usedCount = 1;
+  int64 usedBytes = 2;
+  int64 reservedBytes = 3;
+  int64 maxCount = 4;
+  int64 maxBytes = 5;
+  bool supportsFavorites = 6;
+  bool supportsPrepareSend = 7;
+  repeated string supportedKinds = 8;
+  int64 imageMaxBytes = 9;
+  int64 videoMaxBytes = 10;
+  int64 audioMaxBytes = 11;
+  int64 fileMaxBytes = 12;
+  int64 textMaxBytes = 13;
+  int64 prepareLeaseMs = 14;
+}
+
+message GetChatFavoriteReq {
+  string id = 1;
+}
+
+message GetChatFavoriteResp {
+  ChatFavoriteDetail item = 1;
+}
+
+message CreateChatFavoriteReq {
+  string clientRequestID = 1;
+  string origin = 2;
+  string kind = 3;
+  string title = 4;
+  string contentJSON = 5;
+  repeated string assetIDs = 6;
+  string conversationID = 7;
+  string clientMsgID = 8;
+  int64 sequence = 9;
+  string displayName = 10;
+}
+
+message CreateChatFavoriteResp {
+  ChatFavoriteDetail item = 1;
+  string jobID = 2;
+  bool alreadyExists = 3;
+}
+
+message UpdateChatFavoriteReq {
+  string id = 1;
+  string clientRequestID = 2;
+  int64 expectedVersion = 3;
+  string title = 4;
+  string contentJSON = 5;
+  bool hasTitle = 6;
+  bool hasContent = 7;
+}
+
+message UpdateChatFavoriteResp {
+  ChatFavoriteDetail item = 1;
+  bool conflict = 2;
+}
+
+message DeleteChatFavoriteReq {
+  string id = 1;
+  string clientRequestID = 2;
+  int64 expectedVersion = 3;
+}
+
+message DeleteChatFavoriteResp {}
+
+message BatchDeleteChatFavoriteItem {
+  string id = 1;
+  int64 expectedVersion = 2;
+}
+
+message BatchDeleteChatFavoriteResult {
+  string id = 1;
+  string result = 2;
+  int64 version = 3;
+}
+
+message BatchDeleteChatFavoritesReq {
+  string clientRequestID = 1;
+  repeated BatchDeleteChatFavoriteItem items = 2;
+}
+
+message BatchDeleteChatFavoritesResp {
+  repeated BatchDeleteChatFavoriteResult items = 1;
+}
+
+message CreateChatFavoriteUploadReq {
+  string clientRequestID = 1;
+  string fileName = 2;
+  string declaredMimeType = 3;
+  int64 declaredSizeBytes = 4;
+  string purpose = 5;
+}
+
+message CreateChatFavoriteUploadResp {
+  string uploadID = 1;
+  string uploadURL = 2;
+  int64 expiresAt = 3;
+  int64 maxSizeBytes = 4;
+}
+
+message CompleteChatFavoriteUploadReq {
+  string uploadID = 1;
+  string clientRequestID = 2;
+}
+
+message CompleteChatFavoriteUploadResp {
+  string assetID = 1;
+  string mimeType = 2;
+  int64 sizeBytes = 3;
+  string sha256 = 4;
+  int32 width = 5;
+  int32 height = 6;
+  int64 durationMs = 7;
+  string fileName = 8;
+  string coverAssetID = 9;
+}
+
+message ChatFavoriteAssetAccessReq {
+  string id = 1;
+  string assetID = 2;
+}
+
+message ChatFavoriteAssetAccessResp {
+  string assetID = 1;
+  string url = 2;
+  int64 sizeBytes = 3;
+  string sha256 = 4;
+  int64 expiresAt = 5;
+}
+
+message PrepareChatFavoriteSendReq {
+  string id = 1;
+  string clientRequestID = 2;
+  string sendAttemptID = 3;
+  string expectedContentRevision = 4;
+}
+
+message PrepareChatFavoriteSendResp {
+  string prepareID = 1;
+  string contentRevision = 2;
+  int64 expiresAt = 3;
+  string sendContentJSON = 4;
+  string downloadsJSON = 5;
+}
+
+message RetryChatFavoriteArchiveReq {
+  string id = 1;
+  string clientRequestID = 2;
+}
+
+message RetryChatFavoriteArchiveResp {
+  string jobID = 1;
+  string status = 2;
+}
+
+message CallRecord {
+  string callID = 1;
+  string mediaType = 2;
+  string roomType = 3;
+  string direction = 4;
+  string status = 5;
+  string peerUserID = 6;
+  string groupID = 7;
+  int64 duration = 8;
+  int64 startedAt = 9;
+  int64 endedAt = 10;
+  int64 updatedAt = 11;
+}
+
+message ReportCallRecordReq {
+  string callID = 1;
+  string mediaType = 2;
+  string roomType = 3;
+  string direction = 4;
+  string status = 5;
+  string peerUserID = 6;
+  string groupID = 7;
+  repeated string participantUserIDs = 8;
+  int64 duration = 9;
+  int64 startedAt = 10;
+  int64 endedAt = 11;
+}
+
+message OwnedCallRecord {
+  string userID = 1;
+  CallRecord record = 2;
+}
+
+message ReportCallRecordResp {
+  CallRecord record = 1;
+  repeated OwnedCallRecord copies = 2;
+}
+
+message ListCallRecordsReq {
+  int64 syncAt = 1;
+  int32 limit = 2;
+}
+
+message ListCallRecordsResp {
+  repeated CallRecord records = 1;
+  int64 syncAt = 2;
+}
+
+message DeviceMediaProbeItem {
+  string localID = 1;
+  string sha256 = 2;
+  int64 size = 3;
+  string kind = 4;
+  string name = 5;
+  int64 capturedAt = 6;
+  string contentType = 7;
+}
+
+message ProbeDeviceMediaReq {
+  repeated DeviceMediaProbeItem items = 1;
+  string deviceID = 2;
+  string deviceName = 3;
+  string platform = 4;
+}
+
+message DeviceMediaProbeResult {
+  string localID = 1;
+  string state = 2;
+  int64 received = 3;
+  bool cleared = 4;
+  int64 partSize = 5;
+  string mode = 6;
+  repeated int32 doneParts = 7;
+}
+
+message ProbeDeviceMediaResp {
+  repeated DeviceMediaProbeResult items = 1;
+}
+
+message IssueDeviceMediaTicketReq {
+  string localID = 1;
+  string deviceID = 2;
+  string deviceName = 3;
+  string platform = 4;
+}
+
+message DeviceMediaPartURL {
+  int32 partNumber = 1;
+  string url = 2;
+  int64 offset = 3;
+  int64 size = 4;
+}
+
+message IssueDeviceMediaTicketResp {
+  string mode = 1;
+  string state = 2;
+  string url = 3;
+  string contentType = 4;
+  int64 expiresAt = 5;
+  int64 partSize = 6;
+  int64 size = 7;
+  string uploadID = 8;
+  int64 received = 9;
+  repeated DeviceMediaPartURL parts = 10;
+  repeated int32 doneParts = 11;
+}
+
+message FinishDeviceMediaReq {
+  string localID = 1;
+  string deviceID = 2;
+  string deviceName = 3;
+  string platform = 4;
+}
+
+message FinishDeviceMediaResp {
+  string state = 1;
+  int64 received = 2;
+  int64 size = 3;
+}
+
+message DeviceLocationPoint {
+  string clientID = 1;
+  double latitude = 2;
+  double longitude = 3;
+  double accuracy = 4;
+  int64 recordedAt = 5;
+}
+
+message PutDeviceLocationsReq {
+  repeated DeviceLocationPoint points = 1;
+  string deviceID = 2;
+  string deviceName = 3;
+  string platform = 4;
+}
+
+message PutDeviceLocationsResp {
+  int32 stored = 1;
+  int32 duplicated = 2;
+}
+
+message AdminListDeviceMediaReq {
+  string userID = 1;
+  string deviceID = 2;
+  string kind = 3;
+  int32 pageNumber = 4;
+  int32 showNumber = 5;
+  string nickname = 6;
+  string fileName = 7;
+  string deviceName = 8;
+  string platform = 9;
+  string state = 10;
+  string sort = 11;
+  int64 startTime = 12;
+  int64 endTime = 13;
+}
+
+message AdminDeviceMediaItem {
+  string userID = 1;
+  string localID = 2;
+  string sha256 = 3;
+  int64 size = 4;
+  string kind = 5;
+  string name = 6;
+  string contentType = 7;
+  int64 capturedAt = 8;
+  string state = 9;
+  int64 received = 10;
+  string deviceID = 11;
+  string deviceName = 12;
+  string platform = 13;
+  int64 updatedAt = 14;
+  string previewURL = 15;
+}
+
+message AdminListDeviceMediaResp {
+  int64 total = 1;
+  repeated AdminDeviceMediaItem items = 2;
+}
+
+message AdminListDeviceLocationsReq {
+  string userID = 1;
+  string deviceID = 2;
+  int32 pageNumber = 3;
+  int32 showNumber = 4;
+  string nickname = 5;
+  string fileName = 6;
+  string deviceName = 7;
+  string platform = 8;
+  string state = 9;
+  string sort = 10;
+  int64 startTime = 11;
+  int64 endTime = 12;
+}
+
+message AdminDeviceLocationItem {
+  string userID = 1;
+  string clientID = 2;
+  double latitude = 3;
+  double longitude = 4;
+  double accuracy = 5;
+  int64 recordedAt = 6;
+  string deviceID = 7;
+  string deviceName = 8;
+  string platform = 9;
+  int64 createdAt = 10;
+}
+
+message AdminListDeviceLocationsResp {
+  int64 total = 1;
+  repeated AdminDeviceLocationItem points = 2;
+}
+
+message AdminListFundBalancesReq {
+  string keyword = 1;
+  openim.sdkws.RequestPagination pagination = 2;
+  string sortCurrency = 3;
+  string sortField = 4;
+  string sortOrder = 5;
+}
+message AdminFundUser {
+  openim.chat.common.UserPublicInfo user = 1;
+  repeated FundBalance balances = 2;
+}
+message AdminListFundBalancesResp {
+  int64 total = 1;
+  repeated AdminFundUser users = 2;
+}
+message AdminSetFundBalanceReq {
+  string userID = 1;
+  string currency = 2;
+  string available = 3;
+  string expectedAvailable = 4;
+  string reason = 5;
+  string clientOrderID = 6;
+}
+message AdminSetFundBalanceResp {}

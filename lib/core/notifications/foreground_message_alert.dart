@@ -1,3 +1,5 @@
+import 'package:openim_common/openim_common.dart'
+    show MediaCoordinator, MediaKind, MediaLease;
 import 'dart:async';
 import 'dart:io';
 
@@ -31,6 +33,7 @@ abstract interface class ForegroundMessageAlertVibrator {
 class _NativeForegroundMessageAlertPlayer
     implements ForegroundMessageAlertPlayer {
   bool _androidAttributesPrepared = false;
+  MediaLease? _lease;
   final _player = AudioPlayer(
     handleInterruptions: false,
     handleAudioSessionActivation: false,
@@ -39,6 +42,9 @@ class _NativeForegroundMessageAlertPlayer
 
   @override
   Future<void> prepare() async {
+    _lease =
+        await MediaCoordinator.instance.acquire(MediaKind.alert, _player.stop);
+    if (_lease == null) return;
     if (Platform.isAndroid && !_androidAttributesPrepared) {
       // Only this player changes; RTC retains its focus, category and routing.
       await _player.setAndroidAudioAttributes(const AndroidAudioAttributes(
@@ -46,12 +52,6 @@ class _NativeForegroundMessageAlertPlayer
         usage: AndroidAudioUsage.notification,
       ));
       _androidAttributesPrepared = true;
-    } else if (Platform.isIOS) {
-      // Calls and media can deactivate the shared session between messages.
-      // Activate on every accepted playback, even when its asset is cached.
-      if (!await AVAudioSession().setActive(true)) {
-        throw StateError('Message audio activation denied');
-      }
     }
   }
 
@@ -67,11 +67,35 @@ class _NativeForegroundMessageAlertPlayer
   @override
   Future<void> setVolume(double volume) => _player.setVolume(volume);
   @override
-  Future<void> play() => _player.play();
+  Future<void> play() async {
+    final lease = _lease;
+    if (lease == null) return;
+    Future<void>? playback;
+    try {
+      await lease.run(() async {
+        playback = _player.play();
+        unawaited(playback!.catchError((Object _) {}));
+      });
+      await playback;
+    } finally {
+      if (identical(_lease, lease)) _lease = null;
+      await lease.release();
+    }
+  }
+
   @override
-  Future<void> stop() => _player.stop();
+  Future<void> stop() async {
+    final lease = _lease;
+    _lease = null;
+    await _player.stop();
+    await lease?.release(stopped: true);
+  }
+
   @override
-  Future<void> dispose() => _player.dispose();
+  Future<void> dispose() async {
+    await stop();
+    await _player.dispose();
+  }
 }
 
 class _NativeForegroundMessageAlertVibrator

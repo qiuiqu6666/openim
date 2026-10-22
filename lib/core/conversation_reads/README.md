@@ -19,3 +19,35 @@ SDK 全会话已读失败时，`ConversationReadRecovery` 只补偿发送前捕�
 2026-10-13：定向查询经 `ConversationLatestSync` 的读取期间变更屏障后也具备零值校准权限。普通回调的同目标零值被保护逻辑拒绝时，每个受保护目标/计数只发起一次定向校准，避免查询回调自激循环；不依赖总未读数发生变化。成功确认后仍有残留计数也会定向校准。历史与实时排序把同时间的未知序号放在已知序号之后，并保留未知序号之间的到达顺序，避免已读目标退回旧消息。
 
 产品边界参考 `reference-99chat/lib/src/services/chat_entry_read_service.dart` 的账号隔离和捕获阅读截止边界；当前实现仍使用 OpenIM，不移植腾讯 SDK 的时间/序号清理接口。补偿测试位于 `test/core/conversation_reads/`、`test/pages/chat/receipts/chat_read_recovery_boundary_test.dart`，完整返回场景位于 `test/integration/chat/chat_conversation_read_test.dart`。
+
+## 会话进入已读（2026-10-22）
+
+普通聊天路由首次处于前台时，`ChatEntryRead` 提交初始化时捕获的有效预览 seq。
+不依赖历史加载、同步结束、消息气泡绘制。搜索历史入口、私密会话、无有效 seq、
+发送中消息、会话身份不匹配的预览不走此入口；继续保留原可见性已读逻辑。
+未读数字可能来自旧缓存，因此不以该数字是否大于零作为提交条件。
+
+`ConversationLogic` 持有 `EntryConversationReads`，通过 IM 的独立事件订阅接收目标。
+聊天退出不销毁队列。长控制器只保留路由、生命周期、事件与列表投影接线，业务与
+持久化流程独立在本目录维护。
+
+- `ReadWatermarkQueue` 先保存目标，再发布本地已读投影、发送请求。按服务器 URL
+  与账号隔离保存目标和确认 seq，不保存 token。令牌或账号变化后旧实例停止发送。
+- 复用 `conversation_batch_read_api.dart` 的固定 seq 提交接口，不调用 prepare，
+  不在重试时获取更高 seq，不退回无边界的 SDK 整会话清零。
+- 超时／失败保留原目标，前台按退避重试，重连／同步结束／回前台可立即重试。
+  同账号重启从存储恢复；退出登录关闭实例后，同账号后续登录仍可恢复原待办。
+- 旧响应只能确认当次发送的 seq；请求期间入队的新目标不会被删除。
+- 已保存目标对有效消息预览的未读数施加上界 `max(0, latestSeq-targetSeq)`，
+  与 SDK 数量取较小值，不使用 seq 差推算真实未读。旧已读回调不覆盖更新的预览。
+  已确认水位保留，防止后来的旧快照恢复数字；只保存每会话两个整数水位。
+- 列表、首页单聊／群聊分类角标共享列表投影。消息级已读、语音播放标识、
+  私密消息和系统桌面总角标仍归 SDK 管理，服务器回执驱动落库；成功后请求 SDK
+  会话刷新。不会把客户端投影的数量直接减到 SDK 总数，避免回执到达后重复扣减。
+
+接口及部署记录见 `server/batch_read/README.md`。本修复不更换原生 SDK、不部署服务端。
+磁盘保存失败不会伪造成功或清掉数字，会记录错误并保留原可见性路径；后续重新进入可再提交。
+
+验证入口：`test/core/conversation_reads/`、`test/pages/chat/receipts/`、
+`test/integration/chat/chat_entry_read_cutoff_test.dart`。仍需真机核对在线／断网快速返回、
+杀进程重启、Android/iOS 双端同步和系统桌面角标的服务器回执收敛。

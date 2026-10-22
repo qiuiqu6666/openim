@@ -216,37 +216,37 @@ class _CustomerServicePageState extends State<CustomerServicePage>
         builder: (context, _) => ColoredBox(
           color: CustomerServiceTokens.background(context),
           child: LayoutBuilder(builder: (context, constraints) {
-            final scale = MediaQuery.textScalerOf(context)
-                .scale(CustomerServiceTokens.faqFontSize);
-            final inputHeight = math.min(
-                constraints.maxHeight,
-                math.max(
-                    CustomerServiceTokens.inputMinHeight, scale * 1.5 + 40));
-            final remainder =
-                math.max(0.0, constraints.maxHeight - inputHeight);
-            final headerHeight = math.min(
-                CustomerServiceCategories.preferredHeight(
-                    context, constraints.maxWidth),
-                remainder * .6);
             return Column(children: [
-              SizedBox(
-                key: const ValueKey('customer-service-header'),
-                height: headerHeight,
-                child: SingleChildScrollView(
-                  child: CustomerServiceCategories(
-                    selectedId: _controller.selectedCategoryId,
-                    onSelected: (id) {
-                      _canvasInteracted = true;
-                      _cancelFollowingLatest();
-                      _controller.selectCategory(id);
-                      if (_scroll.hasClients) _scroll.jumpTo(0);
-                    },
-                  ),
-                ),
+              Expanded(
+                child: LayoutBuilder(builder: (context, remaining) {
+                  final headerHeight = math.min(
+                      CustomerServiceCategories.preferredHeight(
+                          context, remaining.maxWidth),
+                      remaining.maxHeight * .6);
+                  return Column(children: [
+                    SizedBox(
+                      key: const ValueKey('customer-service-header'),
+                      height: headerHeight,
+                      child: SingleChildScrollView(
+                        child: CustomerServiceCategories(
+                          selectedId: _controller.selectedCategoryId,
+                          onSelected: (id) {
+                            _canvasInteracted = true;
+                            _cancelFollowingLatest();
+                            _controller.selectCategory(id);
+                            if (_scroll.hasClients) _scroll.jumpTo(0);
+                          },
+                        ),
+                      ),
+                    ),
+                    Expanded(child: _body(context)),
+                  ]);
+                }),
               ),
-              Expanded(child: _body(context)),
-              SizedBox(
-                height: inputHeight,
+              // Measure the composer before allocating the chat canvas. Only
+              // exceptionally short viewports need to scroll the input bar.
+              ConstrainedBox(
+                constraints: BoxConstraints(maxHeight: constraints.maxHeight),
                 child: SingleChildScrollView(
                   child: CustomerServiceComposer(
                     controller: _input,

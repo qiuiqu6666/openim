@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'chat_revocation_notice.dart';
 
@@ -27,6 +28,30 @@ class ChatHistoryCache {
   }
 
   static Message applyRevocation(String accountID, Message message) {
+    // A persisted recall is authoritative even if this process did not receive
+    // the live callback (offline sync, restart, or a history-only read).
+    final id = message.clientMsgID;
+    if (message.contentType == MessageType.revokeMessageNotification &&
+        id != null &&
+        id.isNotEmpty &&
+        accountID.isNotEmpty) {
+      if (!_revocations.containsKey((accountID, id))) {
+        RevokedInfo info;
+        try {
+          info = RevokedInfo.fromJson(Map<String, dynamic>.from(
+              jsonDecode(message.notificationElem?.detail ?? '{}')));
+        } catch (_) {
+          info = RevokedInfo();
+        }
+        // The row identifies the replaced message; never let a malformed
+        // notification payload revoke a different message.
+        info.clientMsgID = id;
+        _revocations[(accountID, id)] = info;
+        while (_revocations.length > 1024) {
+          _revocations.remove(_revocations.keys.first);
+        }
+      }
+    }
     final info = _revocations[(accountID, message.clientMsgID)];
     return info == null ? message : ChatRevocationNotice.replace(message, info);
   }

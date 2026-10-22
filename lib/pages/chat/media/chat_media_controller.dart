@@ -17,6 +17,7 @@ import 'upload/chat_media_outbox.dart';
 import 'upload/chat_media_upload.dart';
 import 'video/chat_video_preparation.dart';
 import 'preparation/chat_media_asset_loader.dart';
+import 'preparation/pending_chat_media.dart';
 import 'diagnostics/chat_media_diagnostics.dart';
 
 typedef MediaMessageSender = Future Function(Message message,
@@ -37,6 +38,7 @@ class ChatMediaController {
     this.onTransfer,
     this.acceptSendTask,
     this.onUploadFailed,
+    this.onPendingAdded,
     Future<List<AssetEntity>?> Function()? pickAssets,
     Future<AssetEntity?> Function()? pickCamera,
     Future<File?> Function(File)? compressImage,
@@ -69,6 +71,7 @@ class ChatMediaController {
   final void Function() closeToolbox;
   final void Function(Message, ChatTransferStatus)? onTransfer;
   final void Function(Message)? onUploadFailed;
+  final void Function()? onPendingAdded;
   final Future<List<AssetEntity>?> Function()? _pickAssets;
   final Future<AssetEntity?> Function()? _pickCamera;
   final Future<File?> Function(File) _compressImage;
@@ -131,32 +134,25 @@ class ChatMediaController {
       {bool Function()? continueLoading}) async {
     final conversation = _conversationID();
     final account = OpenIM.iMManager.userID;
+    bool current() =>
+        !isClosed &&
+        (continueLoading?.call() ?? true) &&
+        _conversationID() == conversation &&
+        OpenIM.iMManager.userID == account;
+    if (!current()) return [];
+    // Keep initial preview bounded; the grid pager requests older pages on demand.
+    final result = await OpenIM.iMManager.messageManager.searchLocalMessages(
+        conversationID: conversation,
+        messageTypeList: [MessageType.picture, MessageType.video],
+        pageIndex: 1,
+        count: 30);
+    if (!current()) return [];
     final messages = <String, Message>{};
-    for (var page = 1; !isClosed && (continueLoading?.call() ?? true); page++) {
-      final result = await OpenIM.iMManager.messageManager.searchLocalMessages(
-          conversationID: conversation,
-          messageTypeList: [MessageType.picture, MessageType.video],
-          pageIndex: page,
-          count: 200);
-      if (isClosed ||
-          !(continueLoading?.call() ?? true) ||
-          _conversationID() != conversation ||
-          OpenIM.iMManager.userID != account) {
-        return [];
-      }
-      final batch = [
-        for (final item in result.searchResultItems ?? <SearchResultItems>[])
-          ...?item.messageList,
-      ];
-      var added = 0;
-      for (final message in batch) {
+    for (final item in result.searchResultItems ?? <SearchResultItems>[]) {
+      for (final message in item.messageList ?? <Message>[]) {
         final id = message.clientMsgID;
-        if (id != null && id.isNotEmpty && !messages.containsKey(id)) {
-          messages[id] = message;
-          added++;
-        }
+        if (id != null && id.isNotEmpty) messages[id] = message;
       }
-      if (batch.length < 200 || added == 0) break;
     }
     return messages.values.toList()
       ..sort((a, b) => (a.sendTime ?? 0).compareTo(b.sendTime ?? 0));
@@ -340,6 +336,15 @@ class ChatMediaController {
     final preparationEpoch = _preparationEpoch;
     bool preparationStopped() =>
         stopped() || preparationEpoch != _preparationEpoch;
+    PendingChatMedia.entries.removeWhere((entry) => !entry.visible());
+    final pending = [
+      for (final asset in assets)
+        PendingChatMedia(asset: asset, conversationID: _conversationID(),
+            visible: () => preparationEpoch == _preparationEpoch &&
+                (task?.current ?? !isClosed)),
+    ];
+    PendingChatMedia.entries.addAll(pending);
+    onPendingAdded?.call();
     final ready = List.generate(assets.length, (_) => Completer<Message?>());
     final messages = <int, Message>{};
     preparingCount.value += assets.length;
@@ -383,6 +388,7 @@ class ChatMediaController {
           failedPreparationCount.value = _preparationRetries.length;
         }
       } finally {
+        PendingChatMedia.entries.remove(pending[index]);
         ready[index].complete(message);
         if (!_closed) preparingCount.value--;
       }

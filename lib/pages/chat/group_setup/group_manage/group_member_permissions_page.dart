@@ -3,8 +3,12 @@ import 'package:openim_common/localization.dart';
 import 'package:openim/routes/swipe_back/app_page_route.dart';
 import 'dart:async';
 import '../../../../core/controller/im_controller.dart';
+import '../../../../core/im_callback.dart';
+import '../../group/identity/group_member_identity_source.dart';
 import 'package:flutter/cupertino.dart';
 import '../group_member_order.dart';
+import 'group_member_permission_session.dart';
+import '../../group/permissions/group_mute.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -29,8 +33,16 @@ class GroupMemberPermissionsPage extends StatefulWidget {
       _GroupMemberPermissionsPageState();
 }
 
-class _GroupMemberPermissionsPageState
-    extends State<GroupMemberPermissionsPage> {
+class _GroupMemberPermissionsPageState extends State<GroupMemberPermissionsPage>
+    with WidgetsBindingObserver {
+  late final _permissions = GroupMemberPermissionSession(
+      groupID: widget.groupID, owner: widget.owner);
+  bool get _active => mounted && _permissions.active;
+  bool get _owner => _permissions.owner;
+  bool get _canManage => _permissions.canManage;
+  final _subscriptions = <StreamSubscription>[];
+  final _removed = <String>{};
+  Future<void>? _permissionRefresh;
   final members = <GroupMembersInfo>[];
   late MemberPermissionMode mode = widget.mode;
   final _selected = <String, GroupMembersInfo>{};
@@ -40,8 +52,9 @@ class _GroupMemberPermissionsPageState
       mode == MemberPermissionMode.addAdmin ||
       mode == MemberPermissionMode.addMuted;
   List<GroupMembersInfo> get displayedMembers => members.where((m) {
-        final muted = (m.muteEndTime ?? 0) >
-            DateTime.now().millisecondsSinceEpoch ~/ 1000;
+        final muted = m.roleLevel != GroupRoleLevel.owner &&
+            GroupMute.active(m.muteEndTime,
+                nowMilliseconds: DateTime.now().millisecondsSinceEpoch);
         if (mode == MemberPermissionMode.admins)
           return m.roleLevel == GroupRoleLevel.admin;
         if (mode == MemberPermissionMode.muted) return muted;
@@ -49,20 +62,22 @@ class _GroupMemberPermissionsPageState
             m.roleLevel == GroupRoleLevel.owner) return false;
         if (mode == MemberPermissionMode.addAdmin)
           return m.roleLevel == GroupRoleLevel.member;
-        return !muted && (widget.owner || m.roleLevel == GroupRoleLevel.member);
+        return !muted && (_owner || m.roleLevel == GroupRoleLevel.member);
       }).toList();
 
   Future<void> addMember() async {
+    if (!_active || !_canManage) return;
+    final permissionRevision = _permissions.revision;
     final result = await Navigator.of(context).push<List<GroupMembersInfo>>(
         AppMaterialPageRoute(
             builder: (_) => GroupMemberPermissionsPage(
                 groupID: widget.groupID,
-                owner: widget.owner,
+                owner: _owner,
                 isChannel: widget.isChannel,
                 mode: mode == MemberPermissionMode.admins
                     ? MemberPermissionMode.addAdmin
                     : MemberPermissionMode.addMuted)));
-    if (mounted) {
+    if (_active && _permissions.current(permissionRevision)) {
       for (final member in result ?? <GroupMembersInfo>[]) {
         _latestMembers[member.userID!] = member;
       }
@@ -76,20 +91,21 @@ class _GroupMemberPermissionsPageState
   final searchController = TextEditingController();
   Timer? _debounce;
   Timer? _muteExpiry;
-  StreamSubscription<GroupMembersInfo>? _memberChanges;
   final _muteOverrides = <String, int>{};
   final _latestMembers = <String, GroupMembersInfo>{};
+  final _memberRevisions = <String, int>{};
 
   void _scheduleExpiry() {
     _muteExpiry?.cancel();
-    final now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final now = DateTime.now().millisecondsSinceEpoch;
     final ends = members
-        .map((m) => m.muteEndTime ?? 0)
+        .where((m) => m.roleLevel != GroupRoleLevel.owner)
+        .map((m) => GroupMute.milliseconds(m.muteEndTime))
         .where((end) => end > now)
         .toList()
       ..sort();
     if (ends.isNotEmpty) {
-      _muteExpiry = Timer(Duration(seconds: ends.first - now), () {
+      _muteExpiry = Timer(Duration(milliseconds: ends.first - now), () {
         if (!mounted) return;
         setState(() {});
         _scheduleExpiry();
@@ -98,14 +114,25 @@ class _GroupMemberPermissionsPageState
   }
 
   void _memberChanged(GroupMembersInfo member) {
-    if (!mounted || member.groupID != widget.groupID || member.userID == null)
-      return;
+    if (!_active ||
+        member.groupID != widget.groupID ||
+        member.userID == null ||
+        _removed.contains(member.userID)) return;
+    if (_permissions.update(member)) {
+      setState(_selected.clear);
+    }
     _muteOverrides.remove(member.userID);
+    _memberRevisions.update(member.userID!, (value) => value + 1,
+        ifAbsent: () => 1);
     _latestMembers[member.userID!] = member;
     final index = members.indexWhere((m) => m.userID == member.userID);
-    if (index >= 0) {
+    if (index >= 0 || query.isEmpty) {
       setState(() {
-        members[index] = member;
+        if (index >= 0) {
+          members[index] = member;
+        } else {
+          members.add(member);
+        }
         members.sort(compareGroupMembers);
       });
       _scheduleExpiry();
@@ -131,10 +158,14 @@ class _GroupMemberPermissionsPageState
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _generation++;
     _debounce?.cancel();
     _muteExpiry?.cancel();
-    _memberChanges?.cancel();
+    _permissions.close();
+    for (final subscription in _subscriptions) {
+      subscription.cancel();
+    }
     searchController.dispose();
     super.dispose();
   }
@@ -142,16 +173,98 @@ class _GroupMemberPermissionsPageState
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (Get.isRegistered<IMController>()) {
-      _memberChanges = Get.find<IMController>()
-          .memberInfoChangedSubject
-          .listen(_memberChanged);
+      final im = Get.find<IMController>();
+      _subscriptions.addAll([
+        im.imSdkStatusPublishSubject.listen((status) {
+          if (status.status == IMSdkStatus.syncEnded) {
+            unawaited(_refreshPermission());
+          }
+        }),
+        im.memberInfoChangedSubject.listen(_memberChanged),
+        im.memberDeletedSubject.listen((member) {
+          if (!_active || member.groupID != widget.groupID) return;
+          if (member.userID == _permissions.userID) {
+            _leave();
+            return;
+          }
+          setState(() {
+            final id = member.userID;
+            if (id != null) _removed.add(id);
+            members.removeWhere((m) => m.userID == id);
+            _selected.remove(id);
+            _latestMembers.remove(id);
+            _muteOverrides.remove(id);
+          });
+          _scheduleExpiry();
+        }),
+        im.memberAddedSubject.listen((member) {
+          if (!_active || member.groupID != widget.groupID) return;
+          _removed.remove(member.userID);
+          _memberChanged(member);
+        }),
+        im.joinedGroupDeletedSubject.listen((group) {
+          if (group.groupID == widget.groupID) _leave();
+        }),
+        im.groupInfoUpdatedSubject.listen((group) {
+          if (_permissions.updateGroup(group) && mounted)
+            setState(_selected.clear);
+        }),
+      ]);
     }
     load();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) unawaited(_refreshPermission());
+  }
+
+  Future<void> _refreshPermission() => _permissionRefresh ??=
+      _readPermission().whenComplete(() => _permissionRefresh = null);
+
+  Future<void> _readPermission() async {
+    if (!_active) return;
+    final revision = _permissions.revision;
+    final source = GroupMemberIdentitySource();
+    try {
+      final joined = await source.containsMember(
+          groupID: widget.groupID, userID: _permissions.userID);
+      if (!_active || !_permissions.current(revision)) return;
+      if (!joined) {
+        _leave();
+        return;
+      }
+      final rows = await source
+          .members(groupID: widget.groupID, userIDList: [_permissions.userID]);
+      if (!_active || !_permissions.current(revision)) return;
+      for (final row in rows) {
+        _memberChanged(row);
+      }
+    } catch (_) {
+      // An unavailable authority cannot prove departure or grant a new role.
+    }
+  }
+
+  void _leave() {
+    if (!mounted) return;
+    _permissions.leave();
+    _generation++;
+    _debounce?.cancel();
+    _muteExpiry?.cancel();
+    setState(() {
+      members.clear();
+      _selected.clear();
+      _latestMembers.clear();
+      _muteOverrides.clear();
+      loading = false;
+      more = false;
+    });
+  }
+
   Future<void> load() async {
-    if (loading) return;
+    if (!_active || loading || !more) return;
     _debounce?.cancel();
     final generation = _generation;
     setState(() {
@@ -170,10 +283,13 @@ class _GroupMemberPermissionsPageState
               isSearchMemberNickname: true,
               offset: _offset,
               count: 100);
-      if (!mounted || generation != _generation) return;
+      if (!_active || generation != _generation) return;
       setState(() {
         _offset += page.length;
-        members.addAll(page.map((m) {
+        final known = members.map((m) => m.userID).toSet();
+        members.addAll(page
+            .where((m) => !_removed.contains(m.userID) && known.add(m.userID))
+            .map((m) {
           final current = _latestMembers[m.userID] ?? m;
           if (_muteOverrides.containsKey(m.userID))
             current.muteEndTime = _muteOverrides[m.userID];
@@ -197,11 +313,27 @@ class _GroupMemberPermissionsPageState
 
   Future<bool> change(GroupMembersInfo member, int action,
       {bool batch = false}) async {
-    if (busy != null) return false;
+    if (!_active ||
+        !_canManage ||
+        busy != null ||
+        _removed.contains(member.userID) ||
+        member.userID == _permissions.userID ||
+        member.roleLevel == GroupRoleLevel.owner ||
+        (action == -1
+            ? !_owner
+            : (!_owner && member.roleLevel != GroupRoleLevel.member)))
+      return false;
+    final permissionRevision = _permissions.revision;
+    final memberRevision = _memberRevisions[member.userID];
+    bool current() =>
+        _active &&
+        _permissions.current(permissionRevision) &&
+        _memberRevisions[member.userID] == memberRevision &&
+        !_removed.contains(member.userID);
     setState(() => busy = member.userID);
     try {
       if (action == -1) {
-        if (!widget.owner) return false;
+        if (!_owner) return false;
         final role = member.roleLevel == GroupRoleLevel.admin
             ? GroupRoleLevel.member
             : GroupRoleLevel.admin;
@@ -210,6 +342,7 @@ class _GroupMemberPermissionsPageState
                 groupID: widget.groupID,
                 userID: member.userID!,
                 roleLevel: role));
+        if (!current()) return false;
         final updated = GroupMembersInfo.fromJson(member.toJson())
           ..groupID = widget.groupID
           ..roleLevel = role;
@@ -224,11 +357,10 @@ class _GroupMemberPermissionsPageState
       } else {
         await OpenIM.iMManager.groupManager.changeGroupMemberMute(
             groupID: widget.groupID, userID: member.userID!, seconds: action);
-        if (!mounted) return false;
+        if (!current()) return false;
         // The SDK's immediate read may still contain the old local-cache value.
-        final end = action == 0
-            ? 0
-            : DateTime.now().millisecondsSinceEpoch ~/ 1000 + action;
+        final end = GroupMute.afterSeconds(action,
+            nowMilliseconds: DateTime.now().millisecondsSinceEpoch);
         _muteOverrides[member.userID!] = end;
         setState(() {
           for (final current
@@ -246,7 +378,7 @@ class _GroupMemberPermissionsPageState
         if (picking && mounted) Navigator.of(context).pop([updated]);
       }
     } catch (error) {
-      IMViews.showErrorToast(error);
+      if (current()) IMViews.showErrorToast(error);
       return false;
     } finally {
       if (mounted) setState(() => busy = null);
@@ -255,10 +387,10 @@ class _GroupMemberPermissionsPageState
   }
 
   Future<void> _submitAdmins() async {
-    if (_batchSubmitting || !widget.owner || _selected.isEmpty) return;
+    if (_batchSubmitting || !_owner || _selected.isEmpty) return;
     setState(() => _batchSubmitting = true);
     for (final member in _selected.values.toList()) {
-      if (!mounted) break;
+      if (!_active || !_owner) break;
       final current = _latestMembers[member.userID] ?? member;
       if (current.roleLevel != GroupRoleLevel.member ||
           await change(current, -1, batch: true)) {
@@ -267,7 +399,8 @@ class _GroupMemberPermissionsPageState
     }
     if (!mounted) return;
     setState(() => _batchSubmitting = false);
-    if (_selected.isEmpty) Navigator.of(context).pop(_completed);
+    if (_active && _owner && _selected.isEmpty)
+      Navigator.of(context).pop(_completed);
   }
 
   Widget _adminCards() {
@@ -308,8 +441,10 @@ class _GroupMemberPermissionsPageState
             if (removable &&
                 member.userID != OpenIM.iMManager.userID &&
                 member.roleLevel != GroupRoleLevel.owner &&
-                (widget.owner ||
-                    (mutedList && member.roleLevel == GroupRoleLevel.member)))
+                (_owner ||
+                    (_canManage &&
+                        mutedList &&
+                        member.roleLevel == GroupRoleLevel.member)))
               IconButton(
                 tooltip: mutedList ? '解除禁言' : AppCopy.text('移除管理员'),
                 onPressed: busy == null
@@ -330,7 +465,7 @@ class _GroupMemberPermissionsPageState
         card(
             '${mutedList ? AppCopy.text('禁言成员') : AppCopy.text('管理员')} (${admins.length})',
             [
-              if (widget.owner || mutedList)
+              if (_owner || (mutedList && _canManage))
                 InkWell(
                   onTap: busy == null ? addMember : null,
                   child: Padding(
@@ -389,10 +524,9 @@ class _GroupMemberPermissionsPageState
           actions: [
             if (mode == MemberPermissionMode.addAdmin)
               TextButton(
-                onPressed:
-                    _batchSubmitting || _selected.isEmpty || !widget.owner
-                        ? null
-                        : _submitAdmins,
+                onPressed: _batchSubmitting || _selected.isEmpty || !_owner
+                    ? null
+                    : _submitAdmins,
                 child: Text(_batchSubmitting
                     ? AppCopy.text('设置中…')
                     : AppCopy.format('确定（{#0}）', [_selected.length])),
@@ -405,7 +539,7 @@ class _GroupMemberPermissionsPageState
                 ? _adminCards()
                 : Column(children: [
                     if (!picking &&
-                        (widget.owner || mode == MemberPermissionMode.muted))
+                        (_owner || mode == MemberPermissionMode.muted))
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
                         child: SizedBox(
@@ -492,31 +626,34 @@ class _GroupMemberPermissionsPageState
                                           : const SizedBox.shrink();
                                 }
                                 final member = displayedMembers[index];
-                                final canEdit = member.userID !=
-                                        OpenIM.iMManager.userID &&
+                                final canEdit = _canManage &&
+                                    member.userID != OpenIM.iMManager.userID &&
                                     member.roleLevel != GroupRoleLevel.owner &&
-                                    (widget.owner ||
+                                    (_owner ||
                                         member.roleLevel ==
                                             GroupRoleLevel.member);
-                                final muted = (member.muteEndTime ?? 0) >
-                                    DateTime.now().millisecondsSinceEpoch ~/
-                                        1000;
+                                final muted =
+                                    member.roleLevel != GroupRoleLevel.owner &&
+                                        GroupMute.active(member.muteEndTime,
+                                            nowMilliseconds: DateTime.now()
+                                                .millisecondsSinceEpoch);
                                 final name = graphemeTrim(member.nickname ?? '')
                                         .isNotEmpty
                                     ? graphemeTrim(member.nickname!)
                                     : member.userID ?? '';
                                 final role = member.roleLevel ==
                                         GroupRoleLevel.owner
-                                    ? channelLabel(StrRes.groupOwner, channel: widget.isChannel)
+                                    ? channelLabel(StrRes.groupOwner,
+                                        channel: widget.isChannel)
                                     : member.roleLevel == GroupRoleLevel.admin
                                         ? 'sdkAdmin'.tr
-                                        : channelLabel(StrRes.groupMember, channel: widget.isChannel);
+                                        : channelLabel(StrRes.groupMember,
+                                            channel: widget.isChannel);
                                 if (mode == MemberPermissionMode.addAdmin) {
                                   final selected =
                                       _selected.containsKey(member.userID);
-                                  final enabled = !_batchSubmitting &&
-                                      widget.owner &&
-                                      canEdit;
+                                  final enabled =
+                                      !_batchSubmitting && _owner && canEdit;
                                   return Semantics(
                                     checked: selected,
                                     enabled: enabled,
@@ -676,7 +813,7 @@ class _GroupMemberPermissionsPageState
                                                     onSelected: (v) =>
                                                         change(member, v),
                                                     itemBuilder: (_) => [
-                                                          if (widget.owner &&
+                                                          if (_owner &&
                                                               (mode ==
                                                                       MemberPermissionMode
                                                                           .admins ||

@@ -81,6 +81,21 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
   }
 
   final memberList = <GroupMembersInfo>[].obs;
+  // Retain events for rows whose page/search response has not arrived yet.
+  final _memberEvents = <String, GroupMembersInfo?>{};
+
+  Iterable<GroupMembersInfo> _mergeMemberEvents(
+      Iterable<GroupMembersInfo> page) sync* {
+    for (final member in page) {
+      final id = member.userID;
+      if (!_memberEvents.containsKey(id)) {
+        yield member;
+      } else if (_memberEvents[id] case final GroupMembersInfo event) {
+        yield GroupMemberIdentityState.mergeEvent(event, member);
+      }
+    }
+  }
+
   final searchController = TextEditingController();
   final searchResults = <GroupMembersInfo>[].obs;
   final query = ''.obs;
@@ -173,8 +188,8 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
           !identity.active(identityGeneration)) return;
       _searchOffset += results.length;
       final existing = searchResults.map((member) => member.userID).toSet();
-      searchResults
-          .addAll(enriched.where((member) => existing.add(member.userID)));
+      searchResults.addAll(_mergeMemberEvents(enriched)
+          .where((member) => existing.add(member.userID)));
       searchMore.value = results.length == 50;
     } catch (_) {
       if (!isClosed &&
@@ -200,6 +215,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
   StreamSubscription? mISub;
   StreamSubscription? _groupInfoSubscription;
   StreamSubscription? _memberDeletedSubscription;
+  StreamSubscription? _memberAddedSubscription;
   StreamSubscription? _groupDeletedSubscription;
   StreamSubscription? _selfInfoSubscription;
 
@@ -236,6 +252,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
     mISub?.cancel();
     _groupInfoSubscription?.cancel();
     _memberDeletedSubscription?.cancel();
+    _memberAddedSubscription?.cancel();
     _groupDeletedSubscription?.cancel();
     _selfInfoSubscription?.cancel();
     _presenceSubscription?.cancel();
@@ -258,6 +275,14 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
         imLogic.groupInfoUpdatedSubject.listen(onGroupIdentityRulesChanged);
     _memberDeletedSubscription =
         imLogic.memberDeletedSubject.listen(onGroupMemberDeleted);
+    _memberAddedSubscription = imLogic.memberAddedSubject.listen((member) {
+      if (member.groupID != groupInfo.groupID ||
+          !identity.isCurrentSession ||
+          isClosed) return;
+      // A confirmed join is the only event that can clear a deletion marker.
+      _memberEvents.remove(member.userID);
+      onGroupMemberChanged(member);
+    });
     _groupDeletedSubscription =
         imLogic.joinedGroupDeletedSubject.listen(onJoinedGroupDeleted);
     _selfInfoSubscription =
@@ -282,6 +307,11 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
     if (isClosed ||
         !identity.isCurrentSession ||
         e.groupID != groupInfo.groupID) return;
+    if (e.userID != null) {
+      if (_memberEvents.containsKey(e.userID) &&
+          _memberEvents[e.userID] == null) return;
+      _memberEvents[e.userID!] = e;
+    }
     if (e.userID == OpenIM.iMManager.userID &&
         ((e.roleLevel != null && e.roleLevel != myGroupMemberLevel.value) ||
             (e.appManagerLevel != null &&
@@ -291,7 +321,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
       _reloadIdentity();
       return;
     }
-    for (final list in [memberList, searchResults]) {
+    for (final list in [memberList, searchResults, checkedList]) {
       final index = list.indexWhere((m) => m.userID == e.userID);
       if (index >= 0) {
         list[index] = GroupMemberIdentityState.mergeEvent(e, list[index]);
@@ -331,6 +361,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
       return;
     }
     if (userID == null || userID.isEmpty) return;
+    _memberEvents[userID] = null;
     for (final list in [memberList, searchResults, checkedList]) {
       for (final member in list.where((member) => member.userID == userID)) {
         if (member is GroupMemberIdentityInfo) member.account = null;
@@ -376,6 +407,7 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
   }
 
   void _clearIdentityState() {
+    _memberEvents.clear();
     _searchVersion++;
     _searchTimer?.cancel();
     for (final list in [memberList, searchResults, checkedList]) {
@@ -440,7 +472,9 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
       final known = memberList.map((member) => member.userID).toSet();
       // Sort only the incoming page: reordering existing rows on pagination
       // changes the member under the viewport even when its offset is retained.
-      final nextPage = list.where((member) => known.add(member.userID)).toList()
+      final nextPage = _mergeMemberEvents(list)
+          .where((member) => known.add(member.userID))
+          .toList()
         ..sort(compareGroupMembers);
       memberList.addAll(nextPage);
       ++_pageNumber;
@@ -497,11 +531,13 @@ class GroupMemberListLogic extends GetxController with WidgetsBindingObserver {
 
   Future<void> _transferGroupRight(GroupMembersInfo membersInfo) async {
     var confirm = await Get.dialog(CustomDialog(
-      title: sprintf(channelLabel(StrRes.confirmTransferGroupToUser,
-          channel: isChannelEx(groupInfo.ex)), [
-        ContactRemarkSource.displayName(membersInfo.userID,
-            nickname: membersInfo.nickname)
-      ]),
+      title: sprintf(
+          channelLabel(StrRes.confirmTransferGroupToUser,
+              channel: isChannelEx(groupInfo.ex)),
+          [
+            ContactRemarkSource.displayName(membersInfo.userID,
+                nickname: membersInfo.nickname)
+          ]),
     ));
     if (confirm == true) {
       Get.back(result: membersInfo);

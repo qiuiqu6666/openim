@@ -58,6 +58,42 @@ void main() {
   tearDown(Get.reset);
 
   for (final dark in [false, true]) {
+    testWidgets('known group verification keeps composer visible / dark=$dark',
+        (tester) async {
+      final fixture = await _DisabledComposer.mount(tester, dark: dark);
+      final composerHeight = tester
+          .getSize(find.byKey(const ValueKey('chat-composer-bar')))
+          .height;
+      fixture.availability.value = const _Availability(
+          enabled: false, showWarning: false, showDisabledBar: false);
+      await tester.pumpAndSettle();
+      expect(find.byKey(_bar), findsNothing);
+      expect(find.byType(ChatTextField), findsOneWidget);
+      expect(
+          tester
+              .getSize(find.byKey(const ValueKey('chat-composer-bar')))
+              .height,
+          composerHeight);
+      expect(fixture.focus.hasFocus, isFalse);
+      expect(fixture.sent, isEmpty);
+    });
+
+    testWidgets('syncing bar matches empty composer height / dark=$dark',
+        (tester) async {
+      final fixture = await _DisabledComposer.mount(tester,
+          dark: dark,
+          initial: const _Availability(
+              enabled: false, hint: '同步中', showWarning: false));
+      final syncingHeight = tester.getSize(find.byKey(_bar)).height;
+      fixture.availability.value = const _Availability();
+      await tester.pumpAndSettle();
+      expect(
+          syncingHeight,
+          tester
+              .getSize(find.byKey(const ValueKey('chat-composer-bar')))
+              .height);
+    });
+
     testWidgets('pending permission is silent and retains draft / dark=$dark',
         (tester) async {
       final fixture = await _DisabledComposer.mount(tester, dark: dark);
@@ -256,11 +292,13 @@ class _Availability {
     this.exited = false,
     this.hint,
     this.showWarning = true,
+    this.showDisabledBar = true,
   });
   final bool enabled;
   final bool exited;
   final String? hint;
   final bool showWarning;
+  final bool showDisabledBar;
 }
 
 class _DisabledComposer {
@@ -317,6 +355,7 @@ class _DisabledComposer {
                 isNotInGroup: state.exited,
                 hintText: state.hint,
                 showDisabledWarning: state.showWarning,
+                showDisabledBar: state.showDisabledBar,
                 onTapVoice: () {},
                 onSend: fixture.sent.add,
                 toolbox: const SizedBox(

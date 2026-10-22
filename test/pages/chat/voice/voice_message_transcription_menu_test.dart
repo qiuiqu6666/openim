@@ -1,3 +1,4 @@
+import 'package:openim/pages/chat/voice/widgets/voice_output_menu.dart';
 import 'dart:async';
 
 import 'package:dio/dio.dart';
@@ -83,6 +84,7 @@ void main() {
                     onToggleVoiceTranscription: () =>
                         controller.toggle(message),
                     messageMenus: [
+                      voiceOutputMenu(),
                       if (controller.canTranscribe(message) &&
                           !state.loading &&
                           !state.hasText)
@@ -103,6 +105,7 @@ void main() {
         await tester.longPress(find.byType(ChatVoiceMessageView));
         await tester.pumpAndSettle();
         expect(find.text('转文字'), findsOneWidget);
+        expect(find.text('听筒播放'), findsOneWidget);
         await tester.tap(find.text('转文字'));
         await tester.pump();
         expect(requests, 1);

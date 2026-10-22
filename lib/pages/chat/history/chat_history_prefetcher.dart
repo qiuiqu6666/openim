@@ -122,7 +122,7 @@ class ChatHistoryPrefetcher {
     }
     mark?.call('local_window_start');
     try {
-      await _localReads.run(
+      final page = await _localReads.run(
           (key, count), () => fetchLocalWindow!(key.$4, count),
           timeout: _readTimeout,
           isCurrent: () =>
@@ -130,6 +130,7 @@ class ChatHistoryPrefetcher {
               key.$2 == token() &&
               key.$3 == epoch() &&
               key.$5 == _conversationRevision(key.$1, key.$4));
+      _observeRevocations(key, page);
       mark?.call('local_window_finished');
     } catch (_) {
       mark?.call('local_window_failed');
@@ -174,7 +175,22 @@ class ChatHistoryPrefetcher {
           (String, String?, int, String, int, int) key, int count) =>
       _reads.run((key, count), () => fetch(key.$4, count),
           timeout: _readTimeout,
-          isCurrent: () => key.$1 == accountID() && key.$2 == token());
+          isCurrent: () =>
+              key.$1 == accountID() && key.$2 == token()).then(
+          (page) => _observeRevocations(key, page));
+
+  AdvancedMessage _observeRevocations(
+      (String, String?, int, String, int, int) key, AdvancedMessage page) {
+    if (key.$1 == accountID() &&
+        key.$2 == token() &&
+        key.$3 == epoch() &&
+        key.$5 == _conversationRevision(key.$1, key.$4)) {
+      page.messageList = page.messageList
+          ?.map((row) => ChatHistoryCache.applyRevocation(key.$1, row))
+          .toList();
+    }
+    return page;
+  }
 
   void clear() {
     for (final request in _requests.values) {

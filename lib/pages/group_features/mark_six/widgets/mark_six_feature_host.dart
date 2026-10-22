@@ -13,6 +13,7 @@ import '../data/mark_six_repository.dart';
 import '../data/diagnostics/mark_six_api_debug_log.dart';
 import '../agent/binding/robot_group_binding_controller.dart';
 import '../mark_six_module.dart';
+import '../../bingo/bingo_drawer.dart';
 import 'mark_six_drawer.dart';
 import 'mark_six_style.dart';
 
@@ -133,6 +134,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
     final draw = c.showMarkSixDrawHistory &&
         (c.gameType == GroupGameType.markSix ||
             _controller.repository.machineCode.isNotEmpty);
+    final bingoDraw = c.showBingoDrawHistory;
     final agent = c.sessionCurrent() &&
         c.capabilitiesCurrent() &&
         (robotAgentGroup || (enabled && feature.agentEntry)) &&
@@ -142,7 +144,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
         (robotAgentGroup || (enabled && feature.rebateHistoryEntry)) &&
         cap.canViewRebateHistory;
     final showAgent = robotAgentGroup ? agent : agent || history;
-    final overlay = !draw && !showAgent
+    final overlay = !draw && !bingoDraw && !showAgent
         ? const SizedBox.shrink()
         : Positioned.fill(child: LayoutBuilder(builder: (context, constraints) {
             if (!constraints.hasBoundedHeight || !constraints.hasBoundedWidth) {
@@ -154,7 +156,7 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
                 .clamp(0.0, travel);
             final style = MarkSixStyle.of(context);
             return Stack(children: [
-              if (draw)
+              if (draw || bingoDraw)
                 Positioned(
                     right: 0,
                     top: top,
@@ -169,6 +171,32 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
                                   constraints.maxHeight);
                         },
                         onTap: () async {
+                          if (bingoDraw) {
+                            if (_drawerOpen) return;
+                            final openingController = _controller;
+                            _drawerOpen = true;
+                            final box =
+                                context.findRenderObject() as RenderBox?;
+                            try {
+                              await showBingoDrawer(context, c,
+                                  anchorY: box
+                                      ?.localToGlobal(
+                                          Offset(0, top + height / 2))
+                                      .dy, onDismissChanged: (dismiss) {
+                                if (mounted &&
+                                    identical(openingController, _controller)) {
+                                  _dismissDrawer = dismiss;
+                                }
+                              });
+                            } finally {
+                              if (mounted &&
+                                  identical(openingController, _controller)) {
+                                _drawerOpen = false;
+                                _dismissDrawer = null;
+                              }
+                            }
+                            return;
+                          }
                           if (_drawerOpen || !_controller.current) return;
                           final openingController = _controller;
                           _drawerOpen = true;
@@ -192,7 +220,9 @@ class _MarkSixFeatureHostState extends State<MarkSixFeatureHost> {
                           }
                         },
                         child: Semantics(
-                            label: AppCopy.text('点击查看开奖记录'),
+                            label: bingoDraw
+                                ? '查看宾果开奖记录'
+                                : AppCopy.text('点击查看开奖记录'),
                             button: true,
                             child: SizedBox(
                                 width: 40,

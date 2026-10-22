@@ -1,0 +1,21 @@
+# Merge into the server notification.yml; do not replace the entire file.
+groupMemberSetToAdmin:
+  isSendMsg: true
+  reliabilityLevel: 2
+  unreadCount: false
+  offlinePush:
+    enable: false
+# Current server uses mapstructure decoding and the field name lacks User.
+groupMemberSetToOrdinary:
+  isSendMsg: true
+  reliabilityLevel: 2
+  unreadCount: false
+  offlinePush:
+    enable: false
+# Alias retained for servers using the declared YAML key.
+groupMemberSetToOrdinaryUser:
+  isSendMsg: true
+  reliabilityLevel: 2
+  unreadCount: false
+  offlinePush:
+    enable: false

@@ -1,0 +1,73 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.47-upload-fallback.1",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "6364b514c5c2632f76642e7125cdce941823bbec4aa8ddc614db7042141f062a",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "3c0ab308bc3f21a218954367c3ebf36516f9153fd8b6117167ff960d97929716",
+  "created": "2026-10-20",
+  "previous_release": "history/recovery.46-group-membership.1.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "upload": "Primary signed acceleration, separately signed Guangzhou origin, authenticated streaming relay; bounded attempts and persisted multipart recovery",
+    "source_lock": "verified; 15 build-tool tests passed",
+    "native_binaries": "Android four-ABI AAR rebuilt and verified 2026-10-23; iOS requires macOS rebuild",
+    "device_runtime": "not tested",
+    "flutter_media": "176 tests passed; scoped analysis clean",
+    "group_membership": "baseline fails; new permission recovery scenarios pass; group/common/syncer/interaction tests pass"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.47-upload-fallback.1",
+    "sdk_version": "v3.8.3-patch.15+recovery.47-upload-fallback.1",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "ARM64 debug APK built; AAR-to-merged and stripped-to-APK libraries verified 2026-10-23; not device-tested",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.47-upload-fallback.1",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "shared group membership recovery; macOS Framework and App rebuild required",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 710
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.47-upload-fallback.1 runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections",
+    "third_party/tools: pinned upstream tools with diagnostic output branding; original licenses retained",
+    "internal/third/file/upload.go and upload_fallback*.go: signed regional fallback and authenticated relay; canonical source change retained in upload-fallback.patch"
+  ],
+  "verification_evidence": "verification/recovery.47-upload-fallback.1.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Preserve log-order correction and upload cancellation deadline; integrate bounded transient upload retries with persisted multipart resumption into shared mobile source. Confirm departed membership after permission denial, retire stale sync obligations and preserve retryable failures. Add separately signed Guangzhou upload fallback and authenticated bounded backend relay."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "abb9fb7dbee7f787021e8932c7e9b819617aa036"
+}

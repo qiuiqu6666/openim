@@ -27,11 +27,13 @@ public class MainActivity extends FlutterFragmentActivity {
     private io.openim.location.ChatLocationAddressBridge locationAddressBridge;
     private io.openim.update.AndroidUpdateBridge updateBridge;
     private String pendingInvite;
+    private io.openim.media.MediaAudioBridge mediaAudioBridge;
     private static final String SYSTEM_SHARE_CHANNEL = "openim_system_share";
 
     @Override
     public void configureFlutterEngine(FlutterEngine flutterEngine) {
         super.configureFlutterEngine(flutterEngine);
+        mediaAudioBridge = new io.openim.media.MediaAudioBridge(this, flutterEngine.getDartExecutor().getBinaryMessenger());
         updateBridge = new io.openim.update.AndroidUpdateBridge(this, flutterEngine.getDartExecutor().getBinaryMessenger());
         new MethodChannel(flutterEngine.getDartExecutor().getBinaryMessenger(), "openim/youmeng")
             .setMethodCallHandler((call, result) -> {
@@ -91,6 +93,7 @@ public class MainActivity extends FlutterFragmentActivity {
 
     @Override
     public void cleanUpFlutterEngine(FlutterEngine flutterEngine) {
+        if (mediaAudioBridge != null) { mediaAudioBridge.dispose(); mediaAudioBridge = null; }
         if (updateBridge != null) { updateBridge.dispose(); updateBridge = null; }
         if (nativeNotificationBridge != null) { nativeNotificationBridge.dispose(); nativeNotificationBridge = null; }
         if (chatLocationMapFactory != null) {

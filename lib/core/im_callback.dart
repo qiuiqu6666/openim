@@ -5,6 +5,7 @@ import 'package:rxdart/rxdart.dart';
 
 import 'controller/app_controller.dart';
 import 'conversation_reads/conversation_read_request.dart';
+import 'conversation_reads/conversation_batch_read_api.dart';
 import 'session/message_events.dart';
 import '../services/chat_history_cache.dart';
 import '../services/fund/fund_refresh_events.dart';
@@ -72,6 +73,8 @@ mixin IMCallback {
 
   final conversationReadRequestSubject =
       PublishSubject<ConversationReadRequest>(sync: true);
+  final conversationEntryReadSubject =
+      PublishSubject<BatchReadTarget>(sync: true);
 
   final unreadMsgCountEventSubject = PublishSubject<int>();
 
@@ -399,6 +402,7 @@ mixin IMCallback {
     conversationAddedSubject.close();
     conversationChangedSubject.close();
     conversationReadRequestSubject.close();
+    conversationEntryReadSubject.close();
     memberAddedSubject.close();
     memberDeletedSubject.close();
     memberInfoChangedSubject.close();

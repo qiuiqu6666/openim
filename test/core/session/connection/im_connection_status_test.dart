@@ -30,6 +30,14 @@ class _App extends GetxController implements AppController {
 }
 
 class _IM extends IMController {
+  bool closedForTest = false;
+
+  @override
+  void onClose() {
+    closedForTest = true;
+    super.onClose();
+  }
+
   // Keep the real session queue and SDK login wrapper, without profile HTTP.
   @override
   Future<bool> refreshMyFullInfo() async => false;
@@ -108,7 +116,7 @@ void main() {
     for (final subscription in subscriptions) {
       await subscription.cancel();
     }
-    logic.onClose();
+    if (!logic.closedForTest) logic.onClose();
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, null);
     Get.reset();

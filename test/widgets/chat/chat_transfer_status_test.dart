@@ -4,6 +4,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
+import 'package:openim_common/src/widgets/progress/sector_progress_painter.dart';
 
 void main() {
   for (final dark in [false, true]) {
@@ -27,7 +28,25 @@ void main() {
                           status: state, onCheck: () => checks++)))),
         ),
       ));
-      expect(find.text('上传中 42%'), findsOneWidget);
+      final semantics = tester.ensureSemantics();
+      final sector = find.byWidgetPredicate((widget) =>
+          widget is CustomPaint && widget.painter is SectorProgressPainter);
+      expect(find.text('上传中 42%'), findsNothing);
+      expect(sector, findsOneWidget);
+      expect(tester.getSemantics(find.bySemanticsLabel('上传中')).value, '42%');
+      for (final percent in [0, 51, 100, -1, 120]) {
+        state.value = ChatTransferStatus(ChatTransferStage.uploading, percent);
+        await tester.pump();
+        expect(
+            (tester.widget<CustomPaint>(sector).painter
+                    as SectorProgressPainter)
+                .progress,
+            percent.clamp(0, 100) / 100);
+      }
+      state.value = const ChatTransferStatus(ChatTransferStage.uploading);
+      await tester.pump();
+      expect(tester.getSemantics(find.bySemanticsLabel('上传中')).value, isEmpty);
+      expect(find.byIcon(Icons.file_upload_outlined), findsOneWidget);
       state.value = const ChatTransferStatus(ChatTransferStage.unknown);
       await tester.pump();
       await tester.tap(find.text('待确认·点击查询'));
@@ -52,6 +71,7 @@ void main() {
       expect(find.byType(CupertinoActivityIndicator), findsNothing);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
+      semantics.dispose();
       state.dispose();
     });
   }

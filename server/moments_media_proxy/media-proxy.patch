@@ -1,0 +1,22 @@
+--- a/internal/api/chat/moment.go
++++ b/internal/api/chat/moment.go
+@@ -164,17 +164,8 @@
+ 		apiresp.GinError(c, err)
+ 		return
+ 	}
+-	// Authorization above remains mandatory before exposing the read location.
+-	readURL, err := o.momentStore.PublicReadURL(c, auth.ObjectKey)
+-	if err != nil {
+-		apiresp.GinError(c, eerrs.ErrForbidden.WithDetail("MOMENT_UNAVAILABLE").Wrap())
+-		return
+-	}
+-	if readURL != "" {
+-		c.Header("Cache-Control", "private, no-store")
+-		c.Redirect(http.StatusFound, readURL)
+-		return
+-	}
++	// Keep the authorized media URL stable across storage/CDN migrations.
++	// Stream from configured storage instead of redirecting clients to its host.
+ 	info, err := o.momentStore.Stat(c, auth.ObjectKey)
+ 	if err != nil {
+ 		apiresp.GinError(c, eerrs.ErrForbidden.WithDetail("MOMENT_UNAVAILABLE").Wrap())

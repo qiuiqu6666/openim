@@ -26,7 +26,7 @@ Future<void> _clear(WidgetTester tester) async {
 }
 
 void main() {
-  testWidgets('loading and searching only check up to 40 matching groups',
+  testWidgets('loading and searching only check up to 20 matching groups',
       (tester) async {
     final calls = <String>[];
     final rows = [
@@ -42,31 +42,31 @@ void main() {
     await fixture.open(tester);
     await fixture.selection.reloadRecentConversations();
     await tester.pumpAndSettle();
-    expect(calls, rows.take(40).map((row) => row.groupID).toList());
-    expect(fixture.selection.conversationList, hasLength(40));
+    expect(calls, rows.take(20).map((row) => row.groupID).toList());
+    expect(fixture.selection.conversationList, hasLength(20));
     calls.clear();
     await _query(tester, 'Group 99');
     expect(calls, ['group-99']);
     expect(fixture.selection.conversationList, [rows.last]);
     calls.clear();
     await _clear(tester);
-    expect(calls, rows.take(40).map((row) => row.groupID).toList());
-    expect(fixture.selection.conversationList, hasLength(40));
+    expect(calls, rows.take(20).map((row) => row.groupID).toList());
+    expect(fixture.selection.conversationList, hasLength(20));
   });
-  testWidgets('recent list is capped at 40 and search can find older chats',
+  testWidgets('recent list starts with 20 and search can find older chats',
       (tester) async {
     final rows = [
       for (var i = 0; i < 65; i++) recentConversation(id: '$i', name: '联系人$i'),
     ];
     final fixture = RecentConversationFixture(data: rows);
     await fixture.open(tester);
-    expect(fixture.selection.visibleConversations, rows.take(40).toList());
+    expect(fixture.selection.visibleConversations, rows.take(20).toList());
     await _query(tester, '联系人64');
     expect(fixture.selection.visibleConversations, [rows.last]);
     await _query(tester, '联系人');
-    expect(fixture.selection.visibleConversations, hasLength(40));
+    expect(fixture.selection.visibleConversations, hasLength(20));
     await _clear(tester);
-    expect(fixture.selection.visibleConversations, rows.take(40).toList());
+    expect(fixture.selection.visibleConversations, rows.take(20).toList());
   });
   for (final brightness in Brightness.values) {
     testWidgets(

@@ -22,6 +22,10 @@ class VoiceRecorderWidget extends StatefulWidget {
   /// existing permissions, native recorder and temporary-file lifecycle.
   final VoiceRecorderController? controller;
 
+  /// Optional application audio ownership; released only after native stop.
+  final Future<Future<void> Function()> Function(Future<void> Function())?
+      acquireAudio;
+
   /// Replaces the default UI and gesture detector. Custom surfaces decide
   /// when to call start, stop or cancel on the supplied controller.
   final Widget Function(BuildContext, VoiceRecorderController)? builder;
@@ -77,6 +81,7 @@ class VoiceRecorderWidget extends StatefulWidget {
   const VoiceRecorderWidget({
     super.key,
     this.controller,
+    this.acquireAudio,
     this.builder,
     this.onRecorded,
     this.idleText,
@@ -118,7 +123,7 @@ class VoiceRecorderWidget extends StatefulWidget {
 }
 
 class _VoiceRecorderWidgetState extends State<VoiceRecorderWidget> {
-  final _recorder = AudioRecorderClass();
+  late final _recorder = AudioRecorderClass(acquireAudio: widget.acquireAudio);
   late VoiceRecorderController _controller;
   bool _ownsController = false;
   bool _isRecording = false;

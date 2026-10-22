@@ -96,18 +96,23 @@ class SelectContactsLogic extends GetxController
   final inputCtrl = TextEditingController();
   final recentScrollController = ScrollController();
   final conversationSearch = ''.obs;
-  static const recentConversationLimit = 40;
+  static const recentConversationLimit = 20;
+  final recentHasMore = false.obs;
+  int _recentOffset = 0;
+  List<ConversationInfo> _recentCandidates = [];
+  List<ConversationInfo> _recentPageBase = [];
+  final _recentVisibleLimit = recentConversationLimit.obs;
 
   List<ConversationInfo> get visibleConversations {
     final query = conversationSearch.value;
     if (query.isEmpty) {
       return conversationList
-          .take(recentConversationLimit)
+          .take(_recentVisibleLimit.value)
           .toList(growable: false);
     }
     return conversationList
         .where((info) => (info.showName ?? '').toLowerCase().contains(query))
-        .take(recentConversationLimit)
+        .take(_recentVisibleLimit.value)
         .toList(growable: false);
   }
 
@@ -115,6 +120,8 @@ class SelectContactsLogic extends GetxController
     final query = graphemeTrim(value).toLowerCase();
     if (query == conversationSearch.value) return;
     conversationSearch.value = query;
+    recentHasMore.value = false;
+    _recentVisibleLimit.value = recentConversationLimit;
     // Stop obsolete workers immediately; only query after typing settles.
     ++_recentGeneration;
     _recentSearchTimer?.cancel();
@@ -216,33 +223,69 @@ class SelectContactsLogic extends GetxController
         _confirmingSelection.value) {
       return;
     }
-    final generation = ++_recentGeneration;
+    ++_recentGeneration;
+    recentLoading.value = false;
+    _recentOffset = 0;
+    _recentPageBase = [];
+    _recentVisibleLimit.value = recentConversationLimit;
+    _recentCandidates = Get.find<ConversationLogic>()
+        .list
+        .where((row) =>
+            isVisible(row) &&
+            row.conversationType != ConversationType.notification &&
+            (conversationSearch.value.isEmpty ||
+                (row.showName ?? '')
+                    .toLowerCase()
+                    .contains(conversationSearch.value)))
+        .toList(growable: false);
+    recentHasMore.value = true;
+    await loadMoreRecentConversations();
+  }
+
+  Future<void> loadMoreRecentConversations() async {
+    if (!selectionCurrent ||
+        hiddenConversations ||
+        _confirmingSelection.value ||
+        recentLoading.value ||
+        !recentHasMore.value ||
+        (_recentSearchTimer?.isActive ?? false)) {
+      return;
+    }
+    final generation = _recentGeneration;
     bool current() => selectionCurrent && generation == _recentGeneration;
     recentLoading.value = true;
     recentLoadFailed.value = false;
     try {
-      final result = await _recentDirectory.load(
-        Get.find<ConversationLogic>()
-            .list
-            .where((row) =>
-                isVisible(row) &&
-                row.conversationType != ConversationType.notification &&
-                (conversationSearch.value.isEmpty ||
-                    (row.showName ?? '')
-                        .toLowerCase()
-                        .contains(conversationSearch.value)))
-            .take(recentConversationLimit)
-            .toList(growable: false),
-        isVisible: isVisible,
-        isCurrent: current,
-        cache: _membershipCache,
-        onUpdate: (rows) {
-          if (current()) conversationList.assignAll(rows);
-        },
-        onExcluded: _excludeRecentGroup,
-      );
-      if (!current()) return;
-      recentLoadFailed.value = result.failed;
+      // Fill a page even when membership checks exclude some candidates.
+      var added = 0;
+      do {
+        final page = _recentCandidates
+            .skip(_recentOffset)
+            .take(recentConversationLimit - added)
+            .toList(growable: false);
+        final base = List<ConversationInfo>.of(_recentPageBase);
+        final result = await _recentDirectory.load(
+          page,
+          isVisible: isVisible,
+          isCurrent: current,
+          cache: _membershipCache,
+          onUpdate: (rows) {
+            if (current()) {
+              _recentVisibleLimit.value = base.length + recentConversationLimit;
+              conversationList.assignAll([...base, ...rows]);
+            }
+          },
+          onExcluded: _excludeRecentGroup,
+        );
+        if (!current()) return;
+        recentLoadFailed.value = result.failed;
+        // Keep the cursor and base on failure so retry replaces this page.
+        if (result.failed) break;
+        _recentOffset += page.length;
+        added += result.rows.length;
+        _recentPageBase = [...base, ...result.rows];
+        recentHasMore.value = _recentOffset < _recentCandidates.length;
+      } while (recentHasMore.value && added < recentConversationLimit);
     } catch (_) {
       if (current()) recentLoadFailed.value = true;
     } finally {

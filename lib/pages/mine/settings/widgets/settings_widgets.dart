@@ -436,6 +436,7 @@ class SettingsInputCell extends StatelessWidget {
     this.keyboardType = TextInputType.text,
     this.controller,
     this.inputFormatters,
+    this.autofillHints,
     this.leading,
     this.leadingWidth = 96,
     this.trailing,
@@ -451,6 +452,7 @@ class SettingsInputCell extends StatelessWidget {
   final TextInputType keyboardType;
   final TextEditingController? controller;
   final List<TextInputFormatter>? inputFormatters;
+  final Iterable<String>? autofillHints;
   final Widget? leading;
   final double leadingWidth;
   final Widget? trailing;
@@ -495,6 +497,7 @@ class SettingsInputCell extends StatelessWidget {
               enabled: enabled && !readOnly,
               keyboardType: keyboardType,
               inputFormatters: inputFormatters,
+              autofillHints: autofillHints,
               cursorColor: AppTokens.accent,
               decoration: InputDecoration(
                 hintText: hint,

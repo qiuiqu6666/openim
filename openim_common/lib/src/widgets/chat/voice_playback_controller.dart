@@ -1,8 +1,11 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:audio_session/audio_session.dart';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:just_audio/just_audio.dart';
 
+import '../../media/media_coordinator.dart';
 import 'voice/voice_playback_log.dart';
 import 'voice/voice_playback_source.dart';
 
@@ -12,27 +15,74 @@ class VoicePlaybackController extends ChangeNotifier
   VoicePlaybackController(
       {required this.messages,
       this.onPlayed,
+      MediaCoordinator? coordinator,
       AudioPlayer Function()? playerFactory,
       Future<VoicePlaybackSource> Function(Message)? sourceLoader,
       this.prepareTimeout = const Duration(seconds: 20)})
-      : _playerFactory = playerFactory ?? AudioPlayer.new,
+      : coordinator = coordinator ?? MediaCoordinator.instance,
+        _playerFactory = playerFactory ??
+            (() => AudioPlayer(
+                handleInterruptions: false,
+                handleAudioSessionActivation: false,
+                androidApplyAudioAttributes: false)),
         _sourceLoader = sourceLoader ?? VoicePlaybackSource.load {
     WidgetsBinding.instance.addObserver(this);
   }
   final Iterable<Message> Function() messages;
   final Future<void> Function(Message)? onPlayed;
-  static VoicePlaybackController? _active;
+  final MediaCoordinator coordinator;
+  MediaLease? _lease;
   final AudioPlayer Function() _playerFactory;
   final Future<VoicePlaybackSource> Function(Message) _sourceLoader;
   final Duration prepareTimeout;
   AudioPlayer? _player;
   String? _loadedID;
+  String? _resumeID;
+  Duration _resumePosition = Duration.zero;
   Message? current;
   bool loading = false, playing = false, failed = false;
   bool _disposed = false;
   int _generation = 0;
   String _stage = 'idle';
   Stream<Duration>? get positionStream => _player?.positionStream;
+  bool get paused =>
+      !playing &&
+      !loading &&
+      !failed &&
+      current != null &&
+      _resumeID == current!.clientMsgID;
+  double _speed = 1.0;
+  double get speed => _speed;
+  Future<void> _speedChange = Future<void>.value();
+
+  /// Change the existing player in place; never seek or reload the message.
+  Future<void> cycleSpeed() {
+    if (_disposed) return Future<void>.value();
+    _speed = _speed == 1.0 ? 2.0 : 1.0;
+    final requested = _speed;
+    final player = _player;
+    final lease = _lease;
+    notifyListeners();
+    final change = _speedChange.then((_) async {
+      if (_disposed ||
+          player == null ||
+          !identical(player, _player) ||
+          lease?.valid != true) {
+        return;
+      }
+      try {
+        await player.setSpeed(requested);
+      } catch (error) {
+        if (!_disposed && identical(player, _player) && _speed == requested) {
+          _speed = player.speed;
+          notifyListeners();
+        }
+        rethrow;
+      }
+    });
+    _speedChange = change.catchError((Object _) {});
+    return change;
+  }
 
   static Message? nextMessage(Iterable<Message> messages, Message current) {
     final queue = messages.where((m) => m.soundElem != null).toList()
@@ -45,54 +95,95 @@ class VoicePlaybackController extends ChangeNotifier
   }
 
   Future<void> toggle(Message message) async {
+    if (coordinator.recording) return;
     if (current?.clientMsgID == message.clientMsgID && (playing || loading)) {
-      stop();
+      try {
+        await stop();
+      } catch (error) {
+        failed = true;
+        VoicePlaybackLog.write('stop_failed', error: error);
+        if (!_disposed) notifyListeners();
+      }
     } else {
       await _play(message);
     }
   }
 
-  void stop() {
-    final wasLoading = loading;
+  Future<void> stop() async {
     _generation++;
     loading = playing = false;
-    if (wasLoading) {
-      // pause() does not abort source preparation. A new tap must not reuse a
-      // native player still loading an old URL.
-      _releasePlayer();
+    final lease = _lease;
+    _lease = null;
+    if (!_disposed) notifyListeners();
+    if (lease != null) {
+      await lease.release();
     } else {
-      unawaited(_player?.pause().catchError((Object error) {
-        VoicePlaybackLog.write('pause_failed', error: error);
-      }));
+      await _releasePlayer();
     }
-    if (_active == this) _active = null;
     if (!_disposed) notifyListeners();
   }
 
   Future<void> _play(Message message) async {
-    if (_disposed) return;
-    if (loading) stop();
-    if (_active != this) _active?.stop();
-    _active = this;
+    if (_disposed || coordinator.recording) return;
     final generation = ++_generation;
     current = message;
     loading = true;
     playing = failed = false;
     notifyListeners();
+    AudioPlayer? ownedPlayer;
+    MediaLease? lease;
     try {
-      final player = _player ??= _playerFactory();
+      lease = await coordinator.acquire(MediaKind.voice, () async {
+        final retired = ownedPlayer;
+        if (identical(_player, retired)) {
+          if (retired != null &&
+              retired.processingState != ProcessingState.completed) {
+            _resumeID = message.clientMsgID;
+            _resumePosition = retired.position;
+          } else {
+            _resumeID = null;
+            _resumePosition = Duration.zero;
+          }
+          _player = null;
+          _loadedID = null;
+        }
+        if (!_disposed && generation == _generation) {
+          _generation++;
+          loading = playing = false;
+          notifyListeners();
+        }
+        await retired?.dispose();
+      });
+      if (lease == null || _disposed || generation != _generation) {
+        await lease?.release();
+        if (!_disposed && generation == _generation) {
+          loading = playing = false;
+          notifyListeners();
+        }
+        return;
+      }
+      _lease = lease;
+      final player = ownedPlayer = _player = _playerFactory();
       await _prepare(player, message, generation).timeout(prepareTimeout);
-      if (_disposed || generation != _generation) return;
+      if (_disposed || generation != _generation || !lease.valid) return;
       _setStage('play', generation);
+      Future<void>? playback;
+      final started = await lease.run(() async {
+        if (_speed != 1.0) await player.setSpeed(_speed);
+        if (!lease!.valid) return;
+        playback = player.play();
+        // Attach an error handler before returning to the event loop.
+        unawaited(playback!.catchError((Object _) {}));
+      });
+      if (!started) return;
       loading = false;
       playing = true;
       notifyListeners();
-      final playback = player.play();
       if (onPlayed != null) {
         unawaited(onPlayed!(message).catchError((Object _) {}));
       }
       await playback;
-      if (_disposed || generation != _generation) return;
+      if (_disposed || generation != _generation || !lease.valid) return;
       if (player.processingState == ProcessingState.completed) {
         final next = nextMessage(messages(), message);
         if (next != null) {
@@ -100,7 +191,7 @@ class VoicePlaybackController extends ChangeNotifier
           return;
         }
       }
-      stop();
+      await stop();
     } catch (error) {
       if (!_disposed && generation == _generation) {
         VoicePlaybackLog.write('${_stage}_failed',
@@ -110,27 +201,38 @@ class VoicePlaybackController extends ChangeNotifier
         failed = true;
         // Timeouts do not cancel Futures. Retire the player and invalidate all
         // late continuations before allowing a fresh retry.
-        _releasePlayer();
-        if (_active == this) _active = null;
-        notifyListeners();
+        try {
+          await lease?.release();
+        } catch (cleanupError) {
+          VoicePlaybackLog.write('dispose_failed', error: cleanupError);
+        }
+        if (!_disposed) notifyListeners();
       }
     }
   }
 
   Future<void> _prepare(
       AudioPlayer player, Message message, int generation) async {
+    if (Platform.isAndroid) {
+      await player.setAndroidAudioAttributes(const AndroidAudioAttributes(
+          usage: AndroidAudioUsage.voiceCommunication,
+          contentType: AndroidAudioContentType.speech));
+    }
     _setStage('player_stop', generation);
     await player.stop();
     if (_disposed || generation != _generation) return;
     if (_loadedID != message.clientMsgID || _loadedID == null) {
       _loadedID = null;
+      final initialPosition =
+          _resumeID == message.clientMsgID ? _resumePosition : Duration.zero;
       _setStage('resolve_source', generation);
       final source = await _sourceLoader(message);
       if (_disposed || generation != _generation) return;
       _setStage(source.isFile ? 'load_file' : 'load_remote', generation);
       if (source.isFile) {
         try {
-          await player.setFilePath(source.value);
+          await player.setFilePath(source.value,
+              initialPosition: initialPosition);
         } catch (error) {
           if (_disposed || generation != _generation) return;
           final fallback = source.fallbackUrl;
@@ -138,10 +240,10 @@ class VoicePlaybackController extends ChangeNotifier
           VoicePlaybackLog.write('load_file_fallback',
               error: error, attempt: generation);
           _setStage('load_remote', generation);
-          await player.setUrl(fallback);
+          await player.setUrl(fallback, initialPosition: initialPosition);
         }
       } else {
-        await player.setUrl(source.value);
+        await player.setUrl(source.value, initialPosition: initialPosition);
       }
       if (_disposed || generation != _generation) return;
       _loadedID = message.clientMsgID;
@@ -157,20 +259,20 @@ class VoicePlaybackController extends ChangeNotifier
     VoicePlaybackLog.write(stage, attempt: generation);
   }
 
-  void _releasePlayer() {
+  Future<void> _releasePlayer() async {
     final player = _player;
     _player = null;
     _loadedID = null;
-    unawaited(player?.dispose().catchError((Object error) {
-      VoicePlaybackLog.write('dispose_failed', error: error);
-    }));
+    await player?.dispose();
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.detached) {
-      stop();
+      unawaited(stop().catchError((Object error) {
+        VoicePlaybackLog.write('stop_failed', error: error);
+      }));
     }
   }
 
@@ -179,9 +281,10 @@ class VoicePlaybackController extends ChangeNotifier
     _disposed = true;
     _generation++;
     loading = playing = false;
-    if (_active == this) _active = null;
     WidgetsBinding.instance.removeObserver(this);
-    _releasePlayer();
+    unawaited(stop().catchError((Object error) {
+      VoicePlaybackLog.write('stop_failed', error: error);
+    }));
     super.dispose();
   }
 }

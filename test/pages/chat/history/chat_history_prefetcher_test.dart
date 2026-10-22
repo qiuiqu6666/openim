@@ -15,6 +15,36 @@ void main() {
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
 
+  for (final local in [false, true]) {
+    test('prepared recall protects route seed before claim local=$local',
+        () async {
+      final old =
+          Message(clientMsgID: 'photo', contentType: MessageType.picture);
+      ChatHistoryCache.write('me', 'chat', [old]);
+      Future<AdvancedMessage> recalled(String _, int count) async =>
+          AdvancedMessage(messageList: [
+            Message(
+                clientMsgID: 'photo',
+                contentType: MessageType.revokeMessageNotification)
+          ], isEnd: true);
+      final prefetcher = ChatHistoryPrefetcher(
+          accountID: () => 'me',
+          token: () => 't',
+          epoch: () => 0,
+          fetch: recalled,
+          fetchLocalWindow: local ? recalled : null);
+      addTearDown(prefetcher.clear);
+      if (local) {
+        await prefetcher.warmLocal(conversation());
+      } else {
+        prefetcher.prepare(conversation());
+        await Future<void>.delayed(Duration.zero);
+      }
+      expect(ChatHistoryCache.read('me', 'chat').single.contentType,
+          MessageType.revokeMessageNotification);
+    });
+  }
+
   test('visible warming only reads local history and uses a 40-row window',
       () async {
     final reads = <(String, int)>[];

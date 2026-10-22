@@ -11,7 +11,6 @@ const _assetPackage = 'openim_common';
 
 class MineHotEcoSection extends StatelessWidget {
   static const imageProviders = <AssetImage>[
-    AssetImage(MineEcosystemArtwork.asset),
     AssetImage('assets/images/profile_eco_ai_99chat.webp',
         package: _assetPackage),
     AssetImage('assets/images/profile_eco_shop_99chat.webp',
@@ -67,8 +66,8 @@ class MineHotEcoSection extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final sectionWidth = constraints.maxWidth;
-        final horizontalPadding = sectionWidth * 0.045;
-        final tileGap = sectionWidth * 0.018;
+        final horizontalPadding = sectionWidth * 0.028;
+        final tileGap = sectionWidth * 0.012;
         final columns = MediaQuery.textScalerOf(context).scale(1) > 1.3 ? 2 : 4;
 
         return Container(
@@ -143,7 +142,7 @@ class MineHotEcoSection extends StatelessWidget {
   Widget _buildHeading(BuildContext context, double width) {
     final large = MediaQuery.textScalerOf(context).scale(1) > 1.3;
     final title = Row(children: [
-      MineEcosystemIcon(size: width * 0.06),
+      MineEcosystemIcon(size: width * 0.068),
       const SizedBox(width: AppTokens.s3),
       Expanded(
           child: Text(
@@ -152,7 +151,7 @@ class MineHotEcoSection extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: TextStyle(
             color: primaryTextColor,
-            fontSize: width * 0.043,
+            fontSize: width * 0.048,
             fontWeight: FontWeight.w600),
       )),
     ]);
@@ -264,11 +263,11 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
 
   @override
   Widget build(BuildContext context) => AspectRatio(
-        aspectRatio: 1.25,
+        aspectRatio: 0.78,
         child: LayoutBuilder(
           builder: (context, constraints) {
             final tileWidth = constraints.maxWidth;
-            final radius = tileWidth * 0.085;
+            final radius = tileWidth * 0.12;
             return Material(
               color: Colors.transparent,
               child: InkWell(
@@ -283,7 +282,9 @@ class _MineHotEcoTileState extends State<_MineHotEcoTile>
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        MineEcosystemArtwork(index: widget.artworkIndex),
+                        MineEcosystemArtwork(
+                            index: widget.artworkIndex,
+                            title: widget.item.title),
                         if (!_reduceMotion && widget.item.enabled)
                           _MineHotEcoLightSweep(animation: _sweep),
                       ],

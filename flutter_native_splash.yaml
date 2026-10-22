@@ -2,8 +2,8 @@ flutter_native_splash:
   # Native launch resources are maintained alongside the Flutter splash page.
   # Do not regenerate all platforms: the existing NormalTheme system bars and
   # native integrations must be preserved.
-  background_image: "lib/pages/splash/assets/splash_99chat.webp"
-  background_image_dark: "lib/pages/splash/assets/splash_99chat.webp"
+  background_image: "lib/pages/splash/assets/splash_99chat.png"
+  background_image_dark: "lib/pages/splash/assets/splash_99chat.png"
   background_image_android: "android/app/src/main/res/drawable-nodpi/splash_99chat.png"
   background_image_dark_android: "android/app/src/main/res/drawable-nodpi/splash_99chat.png"
   background_image_ios: "ios/Runner/Assets.xcassets/LaunchBackground.imageset/splash_99chat.png"

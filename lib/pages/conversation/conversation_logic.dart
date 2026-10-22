@@ -10,6 +10,7 @@ import 'updates/conversation_latest_sync.dart';
 import 'updates/conversation_snapshot_reader.dart';
 import 'dart:async';
 import 'dart:convert';
+import '../../core/conversation_reads/entry_conversation_reads.dart';
 
 import 'package:flutter/widgets.dart';
 import 'package:flutter_easyloading/flutter_easyloading.dart';
@@ -132,6 +133,17 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
   final _changesDuringRead = <String, ConversationInfo?>{};
   final _deletions = ConversationDeletionGuard();
   final _readProjection = ConversationReadProjection();
+  late final EntryConversationReads _entryReads = EntryConversationReads(
+    isCurrent: () => _sessionActive,
+    changed: () {
+      if (_sessionActive) list.value = list.map(_entryReads.project).toList();
+    },
+    acknowledged: (ids) {
+      for (final id in ids) {
+        _refreshReadConversation(id);
+      }
+    },
+  );
   final _settingsDuringRead = ConversationSettingsProjection();
   final _groupProjection = LegacyGroupConversationProjection();
   final LegacyServiceConversationCleanup _legacyCleanup;
@@ -209,6 +221,12 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void onInit() {
+    _subscriptions.add(imLogic.conversationEntryReadSubject.listen((target) {
+      unawaited(_entryReads.enqueue(target));
+    }));
+    _entryReads.queue.setForeground(WidgetsBinding.instance.lifecycleState ==
+            null ||
+        WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed);
     _subscriptions.add(imLogic.blacklistChangedSubject
         .listen((_) => unawaited(_blacklistVisibility.refresh())));
     unawaited(_blacklistVisibility.refresh());
@@ -236,6 +254,10 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         ({IMSdkStatus status, bool reInstall, int? progress}) value) {
       if (!_sessionActive) return;
       final status = value.status;
+      if (status == IMSdkStatus.connectionSucceeded ||
+          status == IMSdkStatus.syncEnded) {
+        _entryReads.queue.kick();
+      }
       if (status == IMSdkStatus.syncEnded) {
         unawaited(_blacklistVisibility.refresh());
       }
@@ -295,6 +317,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void onClose() {
+    _entryReads.close();
     _serverBatchReads?.close();
     if (reInstall) EasyLoading.dismiss();
     _feedCache?.dispose();
@@ -332,6 +355,7 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _entryReads.queue.setForeground(state == AppLifecycleState.resumed);
     _updates.setForeground(state == AppLifecycleState.resumed);
     if (_sessionActive && state == AppLifecycleState.resumed) {
       unawaited(_membership.refresh());
@@ -421,7 +445,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
           _settingsDuringRead.project(info),
           current: currentByID[info.conversationID],
           authoritativeUnread: authoritativeUnread);
-      accepted.add(projected);
+      accepted.add(_entryReads.project(projected,
+          current: currentByID[info.conversationID]));
       if (!authoritativeUnread &&
           _readProjection.takeReconciliationSignal(info, projected)) {
         // A protected zero is a reconciliation signal even when the aggregate
@@ -980,6 +1005,8 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
               authoritativeUnread: _reconcileUnreadPending &&
                   !usesCachedSnapshot &&
                   !_changesDuringRead.containsKey(info.conversationID)))
+          .map((info) => _entryReads.project(info,
+              current: currentByID[info.conversationID]))
           .toList();
       OpenIM.iMManager.conversationManager.simpleSort(merged);
       _latestSync

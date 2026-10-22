@@ -1,3 +1,5 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -29,6 +31,8 @@ class _VideoPlatform extends VideoPlayerPlatform {
 
   @override
   Future<void> init() async {}
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {}
   @override
   Future<int?> createWithOptions(VideoCreationOptions options) async {
     final source = options.dataSource;
@@ -104,6 +108,11 @@ Future<void> _flushCacheWrites(WidgetTester tester) async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   late Directory directory;
   late VideoPlayerPlatform previous;

@@ -1,3 +1,4 @@
+import 'package:audio_session/audio_session.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -47,7 +48,48 @@ class FavoriteAudioPreview extends StatefulWidget {
 
 class _FavoriteAudioPreviewState extends State<FavoriteAudioPreview>
     with WidgetsBindingObserver {
-  final AudioPlayer _player = AudioPlayer();
+  final AudioPlayer _player = AudioPlayer(
+      handleInterruptions: false,
+      handleAudioSessionActivation: false,
+      androidApplyAudioAttributes: false);
+  MediaLease? _lease;
+
+  Future<void> _pauseMedia() async {
+    final lease = _lease;
+    _lease = null;
+    await _player.pause();
+    await lease?.release(stopped: true);
+  }
+
+  Future<void> _playMedia(int intent) async {
+    if (MediaCoordinator.instance.recording) return;
+    final lease =
+        await MediaCoordinator.instance.acquire(MediaKind.voice, () async {
+      if (intent == _intent) ++_intent;
+      await _player.pause();
+    });
+    if (lease == null) return;
+    _lease = lease;
+    if (_closed || intent != _intent || !_foreground) {
+      await lease.release();
+      return;
+    }
+    if (Platform.isAndroid) {
+      await _player.setAndroidAudioAttributes(const AndroidAudioAttributes(
+          contentType: AndroidAudioContentType.speech,
+          usage: AndroidAudioUsage.voiceCommunication));
+    }
+    await lease.run(() async {
+      if (_closed || intent != _intent) return;
+      unawaited(_player.play().then<void>((_) async {
+        if (_player.processingState == ProcessingState.completed) {
+          if (identical(_lease, lease)) _lease = null;
+          await lease.release();
+        }
+      }).catchError((Object _) => _fail(intent)));
+    });
+  }
+
   bool _ready = false, _failed = false, _closed = false, _loading = false;
   bool _commandInFlight = false, _dragging = false, _foreground = true;
   int _intent = 0;
@@ -94,20 +136,22 @@ class _FavoriteAudioPreviewState extends State<FavoriteAudioPreview>
       _dragging = false;
       _seekMilliseconds = null;
     });
-    unawaited(_player.pause().catchError((Object _) {}));
+    unawaited(_pauseMedia().catchError((Object _) {}));
   }
 
   bool get _interactive =>
       _ready && !_failed && !_closed && _foreground && !_commandInFlight;
 
   Future<void> _toggle() async {
-    if (!_interactive || _dragging) return;
-    final intent = _intent;
+    if (!_interactive || _dragging || MediaCoordinator.instance.recording) {
+      return;
+    }
+    final intent = ++_intent;
     setState(() => _commandInFlight = true);
     try {
       if (_player.playing &&
           _player.processingState != ProcessingState.completed) {
-        await _player.pause();
+        await _pauseMedia();
       } else {
         if (_player.processingState == ProcessingState.completed) {
           await _player.pause();
@@ -116,7 +160,7 @@ class _FavoriteAudioPreviewState extends State<FavoriteAudioPreview>
         }
         if (!_closed && _foreground && intent == _intent) {
           // play() completes at playback end, rather than when it starts.
-          unawaited(_player.play().catchError((Object _) => _fail(intent)));
+          await _playMedia(intent);
           await Future<void>.value();
         }
       }
@@ -156,7 +200,7 @@ class _FavoriteAudioPreviewState extends State<FavoriteAudioPreview>
       ++_intent;
       _dragging = false;
       _seekMilliseconds = null;
-      unawaited(_player.pause().catchError((Object _) {}));
+      unawaited(_pauseMedia().catchError((Object _) {}));
     }
     if (mounted && !_closed) setState(() {});
   }
@@ -174,8 +218,11 @@ class _FavoriteAudioPreviewState extends State<FavoriteAudioPreview>
     try {
       await _initializing;
     } catch (_) {}
+    final lease = _lease;
+    _lease = null;
     try {
       await _player.dispose();
+      await lease?.release(stopped: true);
     } catch (_) {
       // Native release errors must not become unhandled UI errors.
     }

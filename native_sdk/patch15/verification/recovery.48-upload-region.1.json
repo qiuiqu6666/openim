@@ -1,0 +1,23 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.48-upload-region.1",
+  "date": "2026-10-23",
+  "mainland": [
+    "Guangzhou COS origin",
+    "COS acceleration",
+    "authenticated backend relay"
+  ],
+  "other_or_unknown": [
+    "COS acceleration",
+    "Guangzhou COS origin",
+    "authenticated backend relay"
+  ],
+  "geo": "local ip2region IPv4 and IPv6; only loopback ingress X-Real-IP trusted; HK/MO/TW use acceleration first",
+  "sdk_race": "passed Go1.26",
+  "mobile_race": "passed pinned Go1.24 including deadline/hash",
+  "server_tests": "passed region race, API, relay",
+  "live_api": "initial sign mainland; renewed signs for domestic/overseas IPv4/IPv6, Taiwan and unknown; authenticated relay bytes verified and temporary object/session cleaned",
+  "server_deployed": true,
+  "rollback": "/srv/99chat-production/backups/upload-region-20261023-001838/rollback.sh",
+  "native_binaries_rebuilt": false,
+  "device_tested": false
+}

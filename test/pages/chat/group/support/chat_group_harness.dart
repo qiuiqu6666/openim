@@ -11,6 +11,7 @@ class ChatGroupHarness {
     Future<List<GroupInfo>> Function(String)? groupInfo,
     Future<List<GroupMembersInfo>> Function(String, String)? selfMember,
     Future<List<GroupMembersInfo>> Function(String)? admins,
+    Future<List<GroupMembersInfo>> Function(String, List<String>)? members,
     GroupInfo? Function(String)? readCachedGroupInfo,
     Duration queryTimeout = const Duration(seconds: 15),
   }) {
@@ -33,6 +34,7 @@ class ChatGroupHarness {
         groupChanged: groupChanged.stream,
       ),
       queries: ChatGroupQueries(
+        members: members,
         verifyMembership: verifyMembership,
         isJoined: (id) {
           joinedReads++;

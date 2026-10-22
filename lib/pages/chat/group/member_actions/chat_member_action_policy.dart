@@ -1,4 +1,5 @@
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
+import '../permissions/group_mute.dart';
 
 enum ChatMemberAction { mention, exclusiveRedPacket, mute, unmute, remove }
 
@@ -46,7 +47,8 @@ class ChatMemberActionPolicy {
       if (!sendingMuted) ChatMemberAction.exclusiveRedPacket,
     ];
     if (_canManage(group, self, target)) {
-      result.add((target.muteEndTime ?? 0) > nowSeconds
+      result.add(GroupMute.active(target.muteEndTime,
+              nowMilliseconds: nowSeconds * 1000)
           ? ChatMemberAction.unmute
           : ChatMemberAction.mute);
       result.add(ChatMemberAction.remove);

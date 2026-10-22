@@ -1,3 +1,4 @@
+import '../media/media_coordinator.dart';
 import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:io';
@@ -34,8 +35,12 @@ class NativeMediaVideo extends StatefulWidget {
   State<NativeMediaVideo> createState() => _NativeMediaVideoState();
 }
 
-class _NativeMediaVideoState extends State<NativeMediaVideo> {
+class _NativeMediaVideoState extends State<NativeMediaVideo>
+    with WidgetsBindingObserver {
   VideoPlayerController? _controller;
+  MediaLease? _lease;
+  bool _requested = false;
+  bool _superseded = false;
   bool _initializing = false;
   bool _skipLocal = false;
   static const _loadTimeout = Duration(seconds: 20);
@@ -47,7 +52,11 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   @override
   void initState() {
     super.initState();
-    unawaited(_initialize());
+    WidgetsBinding.instance.addObserver(this);
+    if (widget.autoPlay) {
+      _requested = true;
+      unawaited(_initialize());
+    }
   }
 
   // Report platform failures without leaking signed URLs, headers or paths.
@@ -63,13 +72,42 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
     if (_closed) return false;
     _controller = controller;
     try {
+      if (!widget.muted) {
+        MediaLease? ownedLease;
+        final lease = ownedLease =
+            await MediaCoordinator.instance.acquire(MediaKind.video, () async {
+          if (ownedLease?.wasPreempted ?? true) _superseded = true;
+          if (controller.value.isInitialized) {
+            await controller.pause();
+          } else {
+            // No sound has started. Retire a pending decoder without blocking
+            // the next media on a native creation Future that may arrive late.
+            unawaited(controller.dispose().catchError((Object error) {
+              _logFailure('retire_pending', error);
+            }));
+          }
+        });
+        if (lease == null) {
+          _superseded = true;
+          await controller.dispose();
+          if (identical(_controller, controller)) _controller = null;
+          return false;
+        }
+        _lease = lease;
+        if (_closed || !lease.valid) {
+          await lease.release();
+          return false;
+        }
+      }
       await controller.initialize().timeout(_loadTimeout);
       if (_closed) return false;
       await controller.setVolume(widget.muted ? 0 : 1).timeout(_loadTimeout);
       if (_closed) return false;
       await controller.setLooping(widget.looping).timeout(_loadTimeout);
       if (_closed) return false;
-      if (widget.autoPlay) await controller.play().timeout(_loadTimeout);
+      if (_requested && (widget.muted || _lease?.valid == true)) {
+        await _play(controller).timeout(_loadTimeout);
+      }
       if (_closed) return false;
       if (controller.value.hasError) {
         throw StateError(
@@ -121,23 +159,38 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
             ? await NativeMediaFile.prepare(sourceFile).timeout(_loadTimeout)
             : sourceFile;
         if (_closed) return;
-        ready = await _open(VideoPlayerController.file(playable), 'local');
+        ready = await _open(
+            VideoPlayerController.file(playable,
+                videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true)),
+            'local');
         if (!ready) _skipLocal = true;
       }
       if (_closed) return;
+      if (_superseded) {
+        setState(() => _failed = !ready);
+        return;
+      }
       if (!ready && hasRemote) {
         ready = await _open(
             VideoPlayerController.networkUrl(Uri.parse(url),
-                httpHeaders: widget.httpHeaders),
+                httpHeaders: widget.httpHeaders,
+                videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true)),
             'network');
       }
       if (_closed) return;
+      if (_superseded) {
+        setState(() => _failed = !ready);
+        return;
+      }
       if (!ready && hasRemote && defaultTargetPlatform == TargetPlatform.iOS) {
         final downloaded = await VideoMediaCache.downloadForPlayback(url,
                 headers: widget.httpHeaders, refresh: _skipLocal)
             .timeout(_loadTimeout);
         if (_closed) return;
-        ready = await _open(VideoPlayerController.file(downloaded), 'download');
+        ready = await _open(
+            VideoPlayerController.file(downloaded,
+                videoPlayerOptions: VideoPlayerOptions(mixWithOthers: true)),
+            'download');
         sourceFile = downloaded;
       }
       if (_closed) return;
@@ -152,8 +205,40 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
     }
   }
 
+  Future<void> _play(VideoPlayerController controller) async {
+    if (_closed) return;
+    if (widget.muted) {
+      await controller.play();
+      return;
+    }
+    var lease = _lease;
+    if (lease == null || !lease.valid) {
+      lease = await MediaCoordinator.instance
+          .acquire(MediaKind.video, controller.pause);
+      if (lease == null) return;
+      _lease = lease;
+    }
+    if (_closed) {
+      await lease.release();
+      return;
+    }
+    await lease.run(() async {
+      if (!_closed) await controller.play();
+    });
+  }
+
+  Future<void> _pause(VideoPlayerController controller) async {
+    final lease = _lease;
+    _lease = null;
+    await controller.pause();
+    await lease?.release(stopped: true);
+  }
+
   void _playbackChanged() {
     final controller = _controller;
+    if (controller != null && controller.value.isCompleted && _lease != null) {
+      unawaited(_pause(controller));
+    }
     if (_closed ||
         _failed ||
         controller == null ||
@@ -171,7 +256,10 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
 
   Future<void> _disposeController(VideoPlayerController controller) async {
     controller.removeListener(_playbackChanged);
+    final lease = _lease;
+    _lease = null;
     try {
+      await lease?.release();
       // Dispose immediately, even if initialization has not emitted an event.
       await controller.dispose();
     } catch (error) {
@@ -181,6 +269,7 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
 
   void _retry() {
     if (_initializing || _closed) return;
+    _superseded = false;
     final controller = _controller;
     _controller = null;
     if (controller != null) unawaited(_disposeController(controller));
@@ -190,7 +279,21 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
   }
 
   @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      final controller = _controller;
+      if (controller != null) {
+        unawaited(_pause(controller).catchError((Object error) {
+          _logFailure('background_pause', error);
+        }));
+      }
+    }
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _closed = true;
     final controller = _controller;
     _controller = null;
@@ -202,6 +305,23 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
       '${time.inMinutes.toString().padLeft(2, '0')}:${(time.inSeconds % 60).toString().padLeft(2, '0')}';
   @override
   Widget build(BuildContext context) {
+    if (!_requested) {
+      return Stack(fit: StackFit.expand, children: [
+        if (widget.coverUrl?.isNotEmpty == true)
+          Image.network(widget.coverUrl!,
+              fit: BoxFit.contain,
+              errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+        Center(
+            child: IconButton(
+          tooltip: 'videoPlay'.tr,
+          icon: const Icon(Icons.play_arrow_rounded),
+          onPressed: () {
+            setState(() => _requested = true);
+            unawaited(_initialize());
+          },
+        )),
+      ]);
+    }
     if (_failed) {
       return Center(
         child: TextButton.icon(
@@ -274,12 +394,12 @@ class _NativeMediaVideoState extends State<NativeMediaVideo> {
                             onPressed: () async {
                               try {
                                 if (value.isPlaying) {
-                                  await controller.pause();
+                                  await _pause(controller);
                                 } else {
                                   if (value.position >= value.duration) {
                                     await controller.seekTo(Duration.zero);
                                   }
-                                  if (!_closed) await controller.play();
+                                  if (!_closed) await _play(controller);
                                 }
                               } catch (_) {
                                 if (mounted) setState(() => _failed = true);

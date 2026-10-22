@@ -16,8 +16,11 @@ void main() {
       final pending = Completer<bool>();
       final h = ChatGroupHarness(
         isJoined: (_) async => joined,
-        verifyMembership: (_, __) =>
-            departure == 'pending' ? pending.future : Future.value(false),
+        verifyMembership: (_, __) => joined
+            ? Future.value(true)
+            : departure == 'pending'
+                ? pending.future
+                : Future.value(false),
       );
       h.controller.initialize();
       await h.controller.loadAfterHistory();
@@ -65,6 +68,7 @@ void main() {
       expect(calls, 0);
       expect(resets, 0);
       expect(h.messages, isEmpty);
+      joined = false;
       h.controller.recover(resetAttempts: true);
       await tester.pump();
       expect(h.controller.isInvalidGroup, departure != 'pending');

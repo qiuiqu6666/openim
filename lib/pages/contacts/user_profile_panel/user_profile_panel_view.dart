@@ -263,6 +263,9 @@ class UserProfilePanelPage extends StatelessWidget {
       avatarUrl: user.faceURL,
       gender: user.gender,
       account: _showAccount ? logic.displayedUserID : '',
+      // Account disclosure arrives after the first frame. Keep the identity
+      // height stable without exposing a placeholder or a copy action.
+      reserveAccountSpace: true,
       copyLabel: _text(context, AppCopy.text('复制聊天号'), 'Copy chat ID'),
       onCopy: logic.copyID,
       signature: signature.isNotEmpty

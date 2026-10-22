@@ -514,6 +514,7 @@ class ChatTimelineController {
 
   /// Publish append and automatic eviction together, retaining retry rows.
   void appendIncoming(Message message, {required bool trim}) {
+    message = ChatHistoryCache.applyRevocation(accountID, message);
     if (_ingress.receive(message)) return;
     _appendIncomingDirect(message, trim: trim);
   }
@@ -619,6 +620,7 @@ class ChatTimelineController {
   }
 
   void bufferIncoming(Message message) {
+    message = ChatHistoryCache.applyRevocation(accountID, message);
     _rememberRecoveryAnchor([message]);
     scrollingCacheMessageList.add(message);
     if (scrollingCacheMessageList.length > bufferedWindowLimit) {
@@ -735,7 +737,8 @@ class ChatTimelineController {
   void flushBuffered() {
     if (_closed || scrollingCacheMessageList.isEmpty) return;
     messageList.value = ChatHistoryLoader.merge(
-        [...messageList, ...scrollingCacheMessageList],
+        [...messageList, ...scrollingCacheMessageList].map(
+            (message) => ChatHistoryCache.applyRevocation(accountID, message)),
         removedIDs: removedIDs);
     scrollingCacheMessageList.clear();
   }

@@ -1,0 +1,74 @@
+{
+  "internal/rpc/chat/friend_auto_accept.go": {
+    "baseline_sha256": null,
+    "result_sha256": "0611cef7d6b778202fbdc6cdd70092cf680191c3ed60269fa6c729144d8bef46"
+  },
+  "internal/rpc/chat/friend_auto_accept_test.go": {
+    "baseline_sha256": null,
+    "result_sha256": "da681adb9944dc9de6f6d8c565d9c1f7d27d791b725ce95c5492e51e2410f362"
+  },
+  "internal/rpc/chat/friend_blacklist_test.go": {
+    "baseline_sha256": "895e2ae3530ecaad298002df1addd3df78ec8bead6c8e6c3eb734e25fbeeb31f",
+    "result_sha256": "d4d74d32ba408a800d4432b3888273e823f76899adfd6bfaff49f1d660408a4e"
+  },
+  "internal/rpc/chat/friend_grant.go": {
+    "baseline_sha256": "da832d31739935f796a94ba78aef52be45f85f316f7858dd2db4ccd23199486d",
+    "result_sha256": "8d569a493481c59c2765105fde2da27bdbde60cd66af127b1d8878e004061af7"
+  },
+  "internal/rpc/chat/update.go": {
+    "baseline_sha256": "80305ff3ab3c31dc2c01906dd68cecac8e867882a8b96d7e37ba5f89ef2ca425",
+    "result_sha256": "5ed7c6f0a8a63ae4e0f63eb7f1985dfd00aed178861643db0f7e73a42196062f"
+  },
+  "internal/rpc/chat/utils.go": {
+    "baseline_sha256": "52324463e52a9f7172c5d5dcf3c0fac2b55e1ecde455babb27f28ab193d65fb7",
+    "result_sha256": "68c90af5c30f4453a589039cd521dd783fcd28f1c537fdd8eb3d4cdb5dd371d4"
+  },
+  "pkg/common/db/database/chat.go": {
+    "baseline_sha256": "e792e7fcd6c5a2a9b65929cdb02a14e57bd4b5c68274096c4628d3e8617f5ee4",
+    "result_sha256": "b42713ab64636d7c5f5273cb2fad5183a0b7eef960bda369af660446eadaeef8"
+  },
+  "pkg/common/db/database/friend_grant.go": {
+    "baseline_sha256": "09c5ab63ec2ec2aa33635f87ba95421a1512928ee624032843f85e57d7dcebd2",
+    "result_sha256": "2d6c53adf339c1710b108591e2ac40165b300ff968a93f6e542b86a0398bd7e4"
+  },
+  "pkg/common/db/model/chat/friend_grant.go": {
+    "baseline_sha256": "ac79940feb1915eecc84751e985436f0e5112a2e2405596ffc7c03790b1000bd",
+    "result_sha256": "fc62f711a41a1a76df44ed475576b30393b97e19c27f83a12ad5ba5ac1c2a9bb"
+  },
+  "pkg/common/db/table/chat/attribute.go": {
+    "baseline_sha256": "4e5ef04f7d56343926b549c4b1ef2aa62fa6f7c6b0675c3f1b1615ae72fd7fe5",
+    "result_sha256": "54f472f90556820104a71f26f39727f72eccc3dcb1d13f7745c778b409aac2ac"
+  },
+  "pkg/common/db/table/chat/friend_grant.go": {
+    "baseline_sha256": "bc5588c0d5e52d4d695e0a365f6ac80440c152cb15758f12d683e11d29ad1692",
+    "result_sha256": "a19247bbd4f0312a5fc7f13856e2b25f6e6963153afdfa9cd147ef7eaa11f4d1"
+  },
+  "pkg/common/imapi/caller.go": {
+    "baseline_sha256": "cf5d64cf4f292c5e8b1b9586266b78e0b75e59bdd9ff04f8f6bf463c178586c7",
+    "result_sha256": "26c0d47ecfd906327527122a37d2e8eb755f4f0b96766b0be7cd9331190a36c0"
+  },
+  "pkg/common/imapi/friend_auto_accept.go": {
+    "baseline_sha256": null,
+    "result_sha256": "fefa1c3c3e4f98d410eca87947b8f85901973bf36d75d8cb8721d2bfd58822da"
+  },
+  "pkg/common/imapi/friend_auto_accept_test.go": {
+    "baseline_sha256": null,
+    "result_sha256": "b46e78864c26b0a88e8bded5585a9742a52ab08659d50bee55200d1266287df6"
+  },
+  "pkg/protocol/chat/chat.pb.go": {
+    "baseline_sha256": "e8425443de25bfc0ffbd5167e4aac479dbcb9592708f353277062aeaaa7c200b",
+    "result_sha256": "b3eb0cf0fd4f3e4971e5302e89d00c4c5a7bd9368d8612aee355319bc776c14c"
+  },
+  "pkg/protocol/chat/chat.proto": {
+    "baseline_sha256": "2527e9dfcc979cf6640219dd68fa09190a4eec1dc24f68efca9844a00000da2b",
+    "result_sha256": "f025eb367b621fc093492d16f80eb6ac50e97015c617fc17da59f58adb93fc47"
+  },
+  "pkg/protocol/common/common.pb.go": {
+    "baseline_sha256": "43992df9ca4e8156467a1b870bda8677d2d636dc487c9d146d44d19b76fe095f",
+    "result_sha256": "0ef04d030883e80c1fc1576fe7b6916e2b120ba9397c48b64fc94d9571c4beef"
+  },
+  "pkg/protocol/common/common.proto": {
+    "baseline_sha256": "05022c37ea147b86200cb8efb4d1f1308102ed359cb18cc4ceebf8fe684cb922",
+    "result_sha256": "5c46864a5f8425ef151c30c5d403c64a668287fbc8ff6635156042024f97344c"
+  }
+}

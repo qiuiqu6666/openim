@@ -327,7 +327,13 @@ class ChatDeliveryController {
       final result = ChatMessageSender.resultForError(error, message);
       if (!isClosed && account == _currentAccountID()) {
         if (result.status == FavoriteSendStatus.failed) {
-          _senFailed(message, groupId, userId, error, stack);
+          // The send result is already definitive. A best-effort local hint
+          // must not turn SDK creation/storage failures into unhandled errors.
+          unawaited(_senFailed(message, groupId, userId, error, stack)
+              .catchError((Object hintError, StackTrace _) {
+            Logger.print(
+                'Failed-send hint unavailable: ${hintError.runtimeType}');
+          }));
         } else if (favoriteResult == null) {
           updateTransfer(message.clientMsgID,
               const ChatTransferStatus(ChatTransferStage.unknown));
@@ -361,7 +367,7 @@ class ChatDeliveryController {
     ));
   }
 
-  void _senFailed(
+  Future<void> _senFailed(
       Message message, String? groupId, String? userId, error, stack) async {
     Logger.print('message send failed id:${message.clientMsgID} '
         'code:${error is PlatformException ? error.code : error.runtimeType}');
@@ -392,7 +398,8 @@ class ChatDeliveryController {
           } else {
             messageList.add(hintMessage);
           }
-          OpenIM.iMManager.messageManager.insertSingleMessageToLocalStorage(
+          await OpenIM.iMManager.messageManager
+              .insertSingleMessageToLocalStorage(
             message: hintMessage,
             receiverID: userId ?? userID,
             senderID: OpenIM.iMManager.userID,
@@ -412,7 +419,8 @@ class ChatDeliveryController {
             ..isRead = true;
           if (isClosed) return;
           messageList.add(hintMessage);
-          OpenIM.iMManager.messageManager.insertGroupMessageToLocalStorage(
+          await OpenIM.iMManager.messageManager
+              .insertGroupMessageToLocalStorage(
             message: hintMessage,
             groupID: groupID,
             senderID: OpenIM.iMManager.userID,

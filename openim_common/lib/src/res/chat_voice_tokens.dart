@@ -4,6 +4,12 @@ import 'package:flutter/material.dart';
 class ChatVoiceTokens {
   ChatVoiceTokens._();
 
+  static const double unreadDotSize = 9;
+  static const double unreadDotGap = 6;
+  static const double playbackActionFontSize = 12;
+  static const double playbackActionHorizontalPadding = 8;
+  static const double playbackActionVerticalPadding = 6;
+
   static const double panelHeight = 248;
   static const double micSize = 80;
   static const double micIconSize = 32;

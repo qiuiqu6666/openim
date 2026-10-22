@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -127,7 +128,7 @@ void main() {
       await tester.drag(find.byType(ListView), const Offset(0, -450));
       await tester.pumpAndSettle();
       final offset = scroll.offset;
-      final entryY = tester.getTopLeft(_entry).dy;
+      final entryY = tester.getTopLeft(_input).dy;
       final initialRect = tester.getRect(_entry);
       final inputState = tester.state(_input);
       final pushes = routes.pushes;
@@ -151,9 +152,10 @@ void main() {
       expect(routes.pushes, pushes);
       expect(modes, [true]);
       expect(searches.single.focusNode.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
       expect(source.updates.hasListener, isTrue);
       expect(find.text('消息'), findsNothing);
-      expect(tester.getTopLeft(_input).dy, closeTo(32, 1));
+      expect(tester.getTopLeft(_entry).dy, closeTo(32, 1));
       final activeRect = tester.getRect(_entry);
       await tester.tap(_cancel);
       await tester.pump();
@@ -174,6 +176,7 @@ void main() {
       expect(scroll.offset, closeTo(offset, 1));
       expect(modes, [true, false]);
       expect(searches.single.isClosed, isTrue);
+      expect(tester.testTextInput.isVisible, isFalse);
       expect(source.updates.hasListener, isFalse);
       expect(tester.takeException(), isNull);
     });
@@ -205,12 +208,14 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('消息'), findsOneWidget);
     expect(searches.first.isClosed, isTrue);
+    expect(tester.testTextInput.isVisible, isFalse);
     source.pending!.complete([FriendInfo(userID: 'late', nickname: '迟到结果')]);
     await tester.pumpAndSettle();
     await tester.tap(_entry);
     await tester.pumpAndSettle();
     expect(searches, hasLength(2));
     expect(searches.last.searchCtrl.text, isEmpty);
+    expect(tester.testTextInput.isVisible, isTrue);
     expect(find.text('迟到结果'), findsNothing);
     expect(routes.pushes, 1);
     await tester.pumpWidget(const SizedBox.shrink());
@@ -219,6 +224,48 @@ void main() {
     expect(source.updates.hasListener, isFalse);
     expect(tester.takeException(), isNull);
   });
+
+  for (final systemBack in [false, true]) {
+    testWidgets(
+        'exit hides a keyboard left visible without focus ($systemBack)',
+        (tester) async {
+      final source = _Source();
+      final searches = <GlobalSearchLogic>[];
+      final scroll = ScrollController();
+      addTearDown(source.updates.close);
+      addTearDown(scroll.dispose);
+      await _mount(tester,
+          source: source,
+          searches: searches,
+          modes: [],
+          scroll: scroll,
+          routes: _Routes());
+      await tester.tap(_entry);
+      await tester.pumpAndSettle();
+      await tester.enterText(_input, '好友');
+      searches.single.focusNode.unfocus();
+      await tester.pumpAndSettle();
+      // Model an IME that remains visible after Flutter has lost focus.
+      await SystemChannels.textInput.invokeMethod<void>('TextInput.show');
+      expect(tester.testTextInput.isVisible, isTrue);
+      if (systemBack) {
+        await tester
+            .state<NavigatorState>(find.byType(Navigator).first)
+            .maybePop();
+      } else {
+        await tester.tap(_cancel);
+      }
+      await tester.pumpAndSettle();
+      expect(find.text('消息'), findsOneWidget);
+      expect(tester.testTextInput.isVisible, isFalse);
+      await tester.tap(_entry);
+      await tester.pumpAndSettle();
+      expect(searches.last.focusNode.hasFocus, isTrue);
+      expect(tester.testTextInput.isVisible, isTrue);
+      await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pump();
+    });
+  }
 
   testWidgets('cancel during expansion reverses the same field without jumping',
       (tester) async {

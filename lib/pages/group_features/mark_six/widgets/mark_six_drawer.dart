@@ -29,7 +29,7 @@ Future<void> showMarkSixDrawer(
         return SafeArea(
             right: false,
             child: CustomSingleChildLayout(
-                delegate: _LotteryPreviewPosition(
+                delegate: LotteryPreviewPosition(
                     anchorY == null
                         ? null
                         : anchorY - MediaQuery.paddingOf(context).top,
@@ -201,8 +201,8 @@ class _LatestPreviewShellState extends State<_LatestPreviewShell> {
   }
 }
 
-class _LotteryPreviewPosition extends SingleChildLayoutDelegate {
-  const _LotteryPreviewPosition(this.anchorY, this.pixelRatio);
+class LotteryPreviewPosition extends SingleChildLayoutDelegate {
+  const LotteryPreviewPosition(this.anchorY, this.pixelRatio);
   final double? anchorY;
   final double pixelRatio;
   @override
@@ -218,6 +218,6 @@ class _LotteryPreviewPosition extends SingleChildLayoutDelegate {
   }
 
   @override
-  bool shouldRelayout(_LotteryPreviewPosition old) =>
+  bool shouldRelayout(LotteryPreviewPosition old) =>
       anchorY != old.anchorY || pixelRatio != old.pixelRatio;
 }

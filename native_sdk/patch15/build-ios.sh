@@ -28,7 +28,7 @@ cd "$work/source"
 "$go_bin" install "golang.org/x/mobile/cmd/gomobile@$mobile"
 "$go_bin" install "golang.org/x/mobile/cmd/gobind@$mobile"
 CGO_ENABLED=0 "$go_bin" test ./pkg/logpolicy ./pkg/cache ./internal/user ./open_im_sdk ./pkg/common ./pkg/network ./internal/interaction ./internal/conversation_msg ./internal/relation -count=1 -timeout=120s
-CGO_ENABLED=0 "$go_bin" test ./internal/third/file -run '^(TestUploadDeadline|TestUploadHash)' -count=1 -timeout=30s
+CGO_ENABLED=0 "$go_bin" test ./internal/third/file -run '^(TestUploadDeadline|TestUploadHash|TestUploadFallback|TestUploadRegion|TestUploadDisaster|TestUploadRetry|TestUploadMultipart)' -count=1 -timeout=30s
 # CGO=0 skips SQLite transaction/restart tests; run these on the Mac host too.
 CGO_ENABLED=1 "$go_bin" test ./internal/group ./internal/interaction ./internal/conversation_msg -count=1 -timeout=120s
 CGO_ENABLED=1 "$go_bin" test ./pkg/db -run '^(TestMessageSyncBatch|TestInitialNotificationBootstrap|TestVersionHeaders)' -count=1 -timeout=120s

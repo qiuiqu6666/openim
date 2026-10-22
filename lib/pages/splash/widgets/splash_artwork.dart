@@ -6,7 +6,7 @@ import 'package:openim_common/openim_common.dart';
 class SplashArtwork extends StatelessWidget {
   const SplashArtwork({super.key});
 
-  static const asset = 'lib/pages/splash/assets/splash_99chat.webp';
+  static const asset = 'lib/pages/splash/assets/splash_99chat.png';
 
   @override
   Widget build(BuildContext context) => AppSystemBars(

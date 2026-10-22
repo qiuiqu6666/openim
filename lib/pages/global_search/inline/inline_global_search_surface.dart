@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../global_search_logic.dart';
 import '../global_search_view.dart';
@@ -80,6 +81,9 @@ class _SearchSurfaceState extends State<InlineGlobalSearchSurface>
   void _close() {
     if (_disposing || _search == null || _closing) return;
     _search!.focusNode.unfocus();
+    // The input stays mounted while returning to the feed. An IME can still
+    // be visible after focus was lost, so dismiss it explicitly on every exit.
+    SystemChannels.textInput.invokeMethod<void>('TextInput.hide');
     setState(() => _closing = true);
     _animation.reverse();
     // Cancel can arrive before the first animation frame.

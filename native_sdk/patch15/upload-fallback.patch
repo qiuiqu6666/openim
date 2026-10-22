@@ -1,0 +1,864 @@
+diff --git a/internal/third/file/upload.go b/internal/third/file/upload.go
+index fedfbfc4..cc688956 100644
+--- a/internal/third/file/upload.go
++++ b/internal/third/file/upload.go
+@@ -1,4 +1,4 @@
+-// Copyright © 2023 OpenIM SDK. All rights reserved.
++// Copyright 漏 2023 OpenIM SDK. All rights reserved.
+ //
+ // Licensed under the Apache License, Version 2.0 (the "License");
+ // you may not use this file except in compliance with the License.
+@@ -19,6 +19,7 @@ import (
+ 	"crypto/md5"
+ 	"encoding/base64"
+ 	"encoding/hex"
++	"encoding/json"
+ 	"errors"
+ 	"fmt"
+ 	"github.com/openimsdk/openim-sdk-core/v3/pkg/api"
+@@ -64,6 +65,7 @@ func NewFile(database db_interface.DataBase, loginUserID string) *File {
+ }
+ 
+ type File struct {
++	circuit     uploadCircuit
+ 	database    db_interface.DataBase
+ 	loginUserID string
+ 	confLock    sync.Locker
+@@ -104,8 +106,23 @@ func (f *File) unlockHash(hash string) {
+ }
+ 
+ func (f *File) UploadFile(ctx context.Context, req *UploadFileReq, cb UploadFileCallback) (*UploadFileResp, error) {
+-	return retryUpload(ctx, []time.Duration{time.Second, 2 * time.Second, 4 * time.Second, 8 * time.Second}, func() (*UploadFileResp, error) {
+-		return f.uploadFileOnce(ctx, req, cb)
++	if req.Name == "" {
++		return nil, errors.New("name is empty")
++	}
++	route := &uploadRouteState{multiBucket: true, circuit: &f.circuit}
++	ctx = context.WithValue(ctx, uploadRouteKey{}, route)
++	budget := uploadBudget(req)
++	ctx, cancel := context.WithTimeout(ctx, budget)
++	defer cancel()
++	return retryUpload(ctx, []time.Duration{0, 0, 0, 0, 0}, func() (*UploadFileResp, error) {
++		attempt := *req
++		attempt.Name = uploadName(req.Name, f.loginUserID, route.hongKong())
++		previous := route.tier
++		result, err := f.uploadFileOnce(ctx, &attempt, cb)
++		if err != nil && previous == route.tier {
++			advanceUploadRoute(ctx, err)
++		}
++		return result, err
+ 	})
+ }
+ 
+@@ -247,14 +264,26 @@ func (f *File) cleanPartLimit() {
+ }
+ 
+ func (f *File) initiateMultipartUploadResp(ctx context.Context, req *third.InitiateMultipartUploadReq) (*third.InitiateMultipartUploadResp, error) {
+-	return api.ObjectInitiateMultipartUpload.Invoke(ctx, req)
++	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
++	defer cancel()
++	response, err := api.ObjectInitiateMultipartUpload.Invoke(requestCtx, req)
++	if err != nil && requestCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
++		return nil, &uploadHTTPError{status: 408}
++	}
++	return response, err
+ }
+ 
+ func (f *File) authSign(ctx context.Context, req *third.AuthSignReq) (*third.AuthSignResp, error) {
+ 	if len(req.PartNumbers) == 0 {
+ 		return nil, errs.ErrArgs.WrapMsg("partNumbers is empty")
+ 	}
+-	return api.ObjectAuthSign.Invoke(ctx, req)
++	requestCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
++	defer cancel()
++	response, err := api.ObjectAuthSign.Invoke(requestCtx, req)
++	if err != nil && requestCtx.Err() == context.DeadlineExceeded && ctx.Err() == nil {
++		return nil, &uploadHTTPError{status: 408}
++	}
++	return response, err
+ }
+ 
+ func (f *File) completeMultipartUpload(ctx context.Context, req *third.CompleteMultipartUploadReq) (*third.CompleteMultipartUploadResp, error) {
+@@ -441,6 +470,9 @@ func (f *File) getLocalUploadInfo(ctx context.Context, req *third.InitiateMultip
+ 			}
+ 		}
+ 	}()
++	if strings.HasPrefix(dbUpload.UploadID, "hk:") != strings.HasPrefix(strings.TrimPrefix(req.Name, f.loginUserID+"/"), "__cos_hk__/") {
++		return nil
++	}
+ 	if dbUpload.UploadID == "" || dbUpload.ExpireTime-3600*1000 < time.Now().UnixMilli() {
+ 		return nil
+ 	}
+@@ -509,8 +541,36 @@ func (f *File) getUpload(ctx context.Context, req *third.InitiateMultipartUpload
+ }
+ 
+ func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, header http.Header, reader io.Reader, size int64) error {
++	url, header, err := selectUploadRoute(ctx, url, header)
++	if err != nil {
++		return err
++	}
+ 	rawURL := url.String()
+-	req, err := http.NewRequestWithContext(ctx, http.MethodPut, rawURL, reader)
++	method := http.MethodPut
++	if header.Get(uploadFallbackHeader) != "" {
++		method = http.MethodPost
++	}
++	key := url.Host
++	if method == http.MethodPost {
++		var target uploadFallbackTarget
++		if json.Unmarshal([]byte(header.Get(uploadFallbackHeader)), &target) == nil {
++			if targetURL, e := parseUploadURL(target.URL); e == nil {
++				key += "/" + targetURL.Host
++			}
++		}
++	}
++	state, _ := ctx.Value(uploadRouteKey{}).(*uploadRouteState)
++	if state != nil && state.available {
++		if state.circuit.blocked(key) {
++			state.currentKey = ""
++			return advanceUploadRoute(ctx, &uploadHTTPError{status: 503})
++		}
++		state.currentKey = key
++	}
++	attemptCtx, watchedReader, cancel, idleTimeout := uploadIdleContext(ctx, reader, 8*time.Second)
++	reader = watchedReader
++	defer cancel()
++	req, err := http.NewRequestWithContext(attemptCtx, method, rawURL, reader)
+ 	if err != nil {
+ 		return err
+ 	}
+@@ -519,9 +579,17 @@ func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, hea
+ 	}
+ 	req.ContentLength = size
+ 	log.ZDebug(ctx, "do put req", "host", url.Host, "contentLength", size)
+-	resp, err := client.Do(req)
++	// Signed PUTs and authenticated relay requests must not follow redirects.
++	uploadClient := *client
++	uploadClient.Transport = uploadTransport(client.Transport)
++	defer uploadClient.CloseIdleConnections()
++	uploadClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
++	resp, err := uploadClient.Do(req)
+ 	if err != nil {
+-		return uploadTransportError(err)
++		if (idleTimeout.Load() || attemptCtx.Err() == context.DeadlineExceeded) && ctx.Err() == nil {
++			return advanceUploadRoute(ctx, &uploadHTTPError{status: http.StatusRequestTimeout})
++		}
++		return advanceUploadRoute(ctx, uploadTransportError(err))
+ 	}
+ 	defer func() {
+ 		_ = resp.Body.Close()
+@@ -529,10 +597,21 @@ func (f *File) doPut(ctx context.Context, client *http.Client, url *url.URL, hea
+ 	log.ZDebug(ctx, "do put resp status", "host", url.Host, "status", resp.StatusCode)
+ 	_, err = io.Copy(io.Discard, io.LimitReader(resp.Body, 64*1024))
+ 	if err != nil {
+-		return err
++		if (idleTimeout.Load() || attemptCtx.Err() == context.DeadlineExceeded) && ctx.Err() == nil {
++			return advanceUploadRoute(ctx, &uploadHTTPError{status: http.StatusRequestTimeout})
++		}
++		return advanceUploadRoute(ctx, err)
+ 	}
+ 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+-		return &uploadHTTPError{status: resp.StatusCode}
++		return advanceUploadRoute(ctx, &uploadHTTPError{status: resp.StatusCode})
++	}
++	// Authentication middleware may return HTTP 200 with a JSON error envelope.
++	// Only the relay's explicit no-content acknowledgement commits a part.
++	if method == http.MethodPost && resp.StatusCode != http.StatusNoContent {
++		return &uploadHTTPError{status: http.StatusUnauthorized}
++	}
++	if state != nil {
++		state.circuit.mark(key, false)
+ 	}
+ 	return nil
+ }
+diff --git a/internal/third/file/upload_retry.go b/internal/third/file/upload_retry.go
+index e743d214..db69a6d5 100644
+--- a/internal/third/file/upload_retry.go
++++ b/internal/third/file/upload_retry.go
+@@ -38,7 +38,11 @@ func retryableUploadError(err error) bool {
+ 	// alone misses failures while obtaining part limits, signatures or completion.
+ 	var coded errs.CodeError
+ 	if errors.As(err, &coded) {
+-		return coded.Code() == sdkerrs.NetworkError || coded.Code() == sdkerrs.NetworkTimeoutError
++		return coded.Code() == 10901 || coded.Code() == sdkerrs.NetworkError || coded.Code() == sdkerrs.NetworkTimeoutError
++	}
++	var timed net.Error
++	if errors.As(err, &timed) && timed.Timeout() {
++		return true
+ 	}
+ 	var network *net.OpError
+ 	var dns *net.DNSError
+--- /dev/null
++++ b/internal/third/file/upload_fallback.go
+@@ -0,0 +1,102 @@
++package file
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"net/http"
++	"net/url"
++	"strings"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
++	"github.com/openimsdk/tools/log"
++)
++
++const uploadFallbackHeader = "X-Openim-Upload-Fallback"
++const uploadRegionalHost = "gz99chat-1416337673.cos.ap-guangzhou.myqcloud.com"
++const uploadAcceleratedHost = "gz99chat-1416337673.cos.accelerate.myqcloud.com"
++
++type uploadRouteKey struct{}
++type uploadRouteState struct {
++	tier           int
++	available      bool
++	preferenceSet  bool
++	preferRegional bool
++	multiBucket    bool
++	circuit        *uploadCircuit
++	currentKey     string
++}
++type uploadFallbackTarget struct {
++	URL            string      `json:"url"`
++	Header         http.Header `json:"header"`
++	PreferRegional bool        `json:"preferRegional,omitempty"`
++	MultiBucket    bool        `json:"multiBucket,omitempty"`
++}
++
++// Only transport/retryable service failures change routes. Auth errors and
++// cancellation remain errors. retryUpload reopens files and restores part bits.
++func advanceUploadRoute(ctx context.Context, err error) error {
++	state, _ := ctx.Value(uploadRouteKey{}).(*uploadRouteState)
++	if state != nil && (state.available || state.multiBucket) && retryableUploadError(err) {
++		state.circuit.mark(state.currentKey, true)
++		state.currentKey = ""
++		if state.tier < state.lastTier() {
++			state.tier++
++		}
++		log.ZInfo(ctx, "upload route fallback", "tier", state.tier)
++	}
++	return err
++}
++
++func selectUploadRoute(ctx context.Context, original *url.URL, headers http.Header) (*url.URL, http.Header, error) {
++	headers = headers.Clone()
++	metadata := headers.Get(uploadFallbackHeader)
++	headers.Del(uploadFallbackHeader)
++	state, _ := ctx.Value(uploadRouteKey{}).(*uploadRouteState)
++	if state == nil || metadata == "" {
++		if state != nil && !state.preferenceSet {
++			state.multiBucket = false
++		}
++		return original, headers, nil
++	}
++	var target uploadFallbackTarget
++	if len(metadata) > 16*1024 || json.Unmarshal([]byte(metadata), &target) != nil {
++		return nil, nil, errors.New("invalid upload fallback metadata")
++	}
++	regional, accelerated := uploadRegionalHost, uploadAcceleratedHost
++	if state.hongKong() {
++		regional, accelerated = uploadHKRegionalHost, uploadHKAcceleratedHost
++	}
++	u, err := url.Parse(target.URL)
++	if err != nil || u.Scheme != "https" || u.Host != regional || u.User != nil || u.Fragment != "" ||
++		original.Scheme != "https" || (original.Host != accelerated && original.Host != regional) || u.EscapedPath() != original.EscapedPath() {
++		return nil, nil, errors.New("invalid upload fallback target")
++	}
++	state.available = true
++	if !state.preferenceSet {
++		state.preferRegional = target.PreferRegional
++		state.multiBucket = target.MultiBucket
++		state.preferenceSet = true
++	}
++	if !state.relay() && state.tier%2 == 0 {
++		if state.preferRegional {
++			return u, target.Header.Clone(), nil
++		}
++		return original, headers, nil
++	}
++	if !state.relay() && state.tier%2 == 1 {
++		if state.preferRegional {
++			return original, headers, nil
++		}
++		return u, target.Header.Clone(), nil
++	}
++	info := ccontext.Info(ctx)
++	relay, err := url.Parse(strings.TrimRight(info.ApiAddr(), "/") + "/object/upload_relay")
++	if err != nil || relay.Host == "" || (relay.Scheme != "https" && relay.Scheme != "http") {
++		return nil, nil, errors.New("invalid upload relay API")
++	}
++	return relay, http.Header{
++		"Token": {info.Token()}, "Operationid": {info.OperationID()},
++		uploadFallbackHeader: {metadata}, "Content-Type": {"application/octet-stream"},
++	}, nil
++}
+--- /dev/null
++++ b/internal/third/file/upload_fallback_test.go
+@@ -0,0 +1,209 @@
++package file
++
++import (
++	"context"
++	"encoding/json"
++	"errors"
++	"io"
++	"net"
++	"net/http"
++	"net/http/httptest"
++	"net/url"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/db_interface"
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/db/model_struct"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++)
++
++type fallbackTransport func(*http.Request) (*http.Response, error)
++
++type fallbackMemoryDB struct {
++	db_interface.DataBase
++	row *model_struct.LocalUpload
++}
++
++func (d *fallbackMemoryDB) GetUpload(context.Context, string) (*model_struct.LocalUpload, error) {
++	if d.row == nil {
++		return nil, errors.New("not found")
++	}
++	copy := *d.row
++	return &copy, nil
++}
++func (d *fallbackMemoryDB) InsertUpload(_ context.Context, row *model_struct.LocalUpload) error {
++	copy := *row
++	d.row = &copy
++	return nil
++}
++func (d *fallbackMemoryDB) UpdateUpload(ctx context.Context, row *model_struct.LocalUpload) error {
++	return d.InsertUpload(ctx, row)
++}
++func (d *fallbackMemoryDB) DeleteUpload(context.Context, string) error { d.row = nil; return nil }
++
++func (fn fallbackTransport) RoundTrip(r *http.Request) (*http.Response, error) { return fn(r) }
++
++func fallbackContext() context.Context {
++	ctx := ccontext.WithInfo(context.Background(), &ccontext.GlobalConfig{Token: "im-session", IMConfig: sdk_struct.IMConfig{ApiAddr: "https://im.example"}})
++	return context.WithValue(ctx, uploadRouteKey{}, &uploadRouteState{})
++}
++func fallbackSign() (*url.URL, http.Header) {
++	u, _ := url.Parse("https://" + uploadAcceleratedHost + "/chat/temp/test?partNumber=2&uploadId=test")
++	data, _ := json.Marshal(uploadFallbackTarget{URL: "https://" + uploadRegionalHost + "/chat/temp/test?partNumber=2&uploadId=test", Header: http.Header{"Authorization": {"regional-signature"}}})
++	h := http.Header{"Authorization": {"accelerated-signature"}}
++	h.Set(uploadFallbackHeader, string(data))
++	return u, h
++}
++
++func TestUploadFallbackRoutesAndReplay(t *testing.T) {
++	ctx := fallbackContext()
++	u, h := fallbackSign()
++	calls := 0
++	client := &http.Client{Transport: fallbackTransport(func(r *http.Request) (*http.Response, error) {
++		calls++
++		body, _ := io.ReadAll(r.Body)
++		if string(body) != "complete-part" {
++			t.Fatalf("replayed body %q", body)
++		}
++		switch calls {
++		case 1, 2:
++			host, auth := uploadAcceleratedHost, "accelerated-signature"
++			if calls == 2 {
++				host, auth = uploadRegionalHost, "regional-signature"
++			}
++			if r.URL.Host != host || r.Header.Get("Authorization") != auth || r.Header.Get(uploadFallbackHeader) != "" || r.Header.Get("token") != "" || r.Method != "PUT" {
++				t.Fatalf("incorrect direct request")
++			}
++			return nil, &net.DNSError{Err: "no such host", Name: host}
++		default:
++			if r.URL.String() != "https://im.example/object/upload_relay" || r.Method != "POST" || r.Header.Get("token") != "im-session" || r.Header.Get("Authorization") != "" || r.Header.Get(uploadFallbackHeader) == "" {
++				t.Fatal("incorrect relay request")
++			}
++			return &http.Response{StatusCode: 204, Body: io.NopCloser(strings.NewReader("")), Header: make(http.Header)}, nil
++		}
++	})}
++	for i := 0; i < 3; i++ {
++		err := (&File{}).doPut(ctx, client, u, h, strings.NewReader("complete-part"), 13)
++		if (i < 2) != (err != nil) {
++			t.Fatalf("attempt %d: %v", i, err)
++		}
++	}
++	if h.Get(uploadFallbackHeader) == "" {
++		t.Fatal("mutated cached signature")
++	}
++}
++
++func TestUploadFallbackStopsOnAuthorizationAndCancellation(t *testing.T) {
++	for _, failure := range []error{&uploadHTTPError{status: 403}, context.Canceled, context.DeadlineExceeded} {
++		ctx := fallbackContext()
++		state := ctx.Value(uploadRouteKey{}).(*uploadRouteState)
++		state.available = true
++		if !errors.Is(advanceUploadRoute(ctx, failure), failure) || state.tier != 0 {
++			t.Fatal("retried terminal error")
++		}
++	}
++}
++
++func TestUploadFallbackRejectsTamperingAndRelayEnvelope(t *testing.T) {
++	u, h := fallbackSign()
++	ctx := fallbackContext()
++	h.Set(uploadFallbackHeader, strings.ReplaceAll(h.Get(uploadFallbackHeader), uploadRegionalHost, "attacker.example"))
++	if _, _, err := selectUploadRoute(ctx, u, h); err == nil {
++		t.Fatal("accepted arbitrary fallback host")
++	}
++	u, h = fallbackSign()
++	ctx.Value(uploadRouteKey{}).(*uploadRouteState).tier = 2
++	client := &http.Client{Transport: fallbackTransport(func(*http.Request) (*http.Response, error) {
++		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{"errCode":1501}`))}, nil
++	})}
++	if err := (&File{}).doPut(ctx, client, u, h, strings.NewReader("x"), 1); err == nil {
++		t.Fatal("committed unauthenticated relay response")
++	}
++}
++
++func TestUploadFallbackMultipartKeepsCommittedParts(t *testing.T) {
++	puts := map[string]int{}
++	completed, initiated := 0, 0
++	sign := func() map[string]any {
++		parts := []any{}
++		for _, n := range []string{"1", "2", "3"} {
++			meta, _ := json.Marshal(uploadFallbackTarget{URL: "https://" + uploadRegionalHost + "/chat/temp/test?partNumber=" + n, Header: http.Header{"Authorization": {"regional-signature"}}})
++			parts = append(parts, map[string]any{"partNumber": int(n[0] - '0'), "query": []any{map[string]any{"key": "partNumber", "values": []string{n}}}, "header": []any{map[string]any{"key": uploadFallbackHeader, "values": []string{string(meta)}}}})
++		}
++		return map[string]any{"url": "https://" + uploadAcceleratedHost + "/chat/temp/test", "parts": parts}
++	}
++	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++		var data any
++		switch r.URL.Path {
++		case "/object/part_limit":
++			data = map[string]any{"minPartSize": 3, "maxPartSize": 100, "maxNumSize": 100}
++		case "/object/initiate_multipart_upload":
++			initiated++
++			data = map[string]any{"upload": map[string]any{"uploadID": "fallback-id", "partSize": 3, "expireTime": time.Now().Add(24 * time.Hour).UnixMilli(), "sign": sign()}}
++		case "/object/auth_sign":
++			data = sign()
++		case "/object/complete_multipart_upload":
++			completed++
++			data = map[string]any{"url": "completed"}
++		case "/object/upload_relay":
++			body, _ := io.ReadAll(r.Body)
++			if string(body) != "ghi" {
++				t.Errorf("relay body %q", body)
++			}
++			puts["relay3"]++
++			w.WriteHeader(204)
++			return
++		default:
++			t.Errorf("unexpected route %s", r.URL.Path)
++			w.WriteHeader(404)
++			return
++		}
++		json.NewEncoder(w).Encode(map[string]any{"errCode": 0, "data": data})
++	}))
++	defer server.Close()
++	previous := http.DefaultClient
++	http.DefaultClient = &http.Client{Transport: fallbackTransport(func(r *http.Request) (*http.Response, error) {
++		if r.URL.Host != uploadAcceleratedHost && r.URL.Host != uploadRegionalHost {
++			return http.DefaultTransport.RoundTrip(r)
++		}
++		n := r.URL.Query().Get("partNumber")
++		tier := "primary"
++		if r.URL.Host == uploadRegionalHost {
++			tier = "regional"
++		}
++		puts[tier+n]++
++		body, _ := io.ReadAll(r.Body)
++		expected := map[string]string{"1": "abc", "2": "def", "3": "ghi"}[n]
++		if string(body) != expected {
++			t.Errorf("%s%s body %q", tier, n, body)
++		}
++		status := 200
++		if (tier == "primary" && n == "2") || (tier == "regional" && n == "3") {
++			status = 503
++		}
++		return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(""))}, nil
++	})}
++	defer func() { http.DefaultClient = previous }()
++	path := filepath.Join(t.TempDir(), "parts.bin")
++	if err := os.WriteFile(path, []byte("abcdefghi"), 0600); err != nil {
++		t.Fatal(err)
++	}
++	ctx := ccontext.WithInfo(context.WithValue(context.Background(), "operationID", "fallback-resume"), &ccontext.GlobalConfig{UserID: "test", Token: "test", IMConfig: sdk_struct.IMConfig{ApiAddr: server.URL}})
++	db := &fallbackMemoryDB{}
++	result, err := NewFile(db, "test").UploadFile(ctx, &UploadFileReq{Filepath: path, Name: "parts.bin"}, nil)
++	if err != nil {
++		t.Fatal(err)
++	}
++	if result.URL != "completed" || completed != 1 || initiated != 1 || db.row != nil || len(puts) != 5 {
++		t.Fatalf("result=%v complete=%d initiate=%d puts=%v", result, completed, initiated, puts)
++	}
++	for _, key := range []string{"primary1", "primary2", "regional2", "regional3", "relay3"} {
++		if puts[key] != 1 {
++			t.Fatalf("reuploaded committed part: %v", puts)
++		}
++	}
++}
+--- /dev/null
++++ b/internal/third/file/upload_region_test.go
+@@ -0,0 +1,48 @@
++package file
++
++import (
++	"encoding/json"
++	"net"
++	"testing"
++)
++
++func TestUploadRegionPreferenceAndFallbackOrder(t *testing.T) {
++	for _, mainland := range []bool{true, false} {
++		ctx := fallbackContext()
++		original, headers := fallbackSign()
++		var metadata uploadFallbackTarget
++		if err := json.Unmarshal([]byte(headers.Get(uploadFallbackHeader)), &metadata); err != nil {
++			t.Fatal(err)
++		}
++		metadata.PreferRegional = mainland
++		encoded, _ := json.Marshal(metadata)
++		headers.Set(uploadFallbackHeader, string(encoded))
++		first, second := uploadAcceleratedHost, uploadRegionalHost
++		firstAuth, secondAuth := "accelerated-signature", "regional-signature"
++		if mainland {
++			first, second = second, first
++			firstAuth, secondAuth = secondAuth, firstAuth
++		}
++		u, h, err := selectUploadRoute(ctx, original, headers)
++		if err != nil || u.Host != first || h.Get("Authorization") != firstAuth {
++			t.Fatalf("mainland=%v first target incorrect", mainland)
++		}
++		advanceUploadRoute(ctx, &net.DNSError{Err: "no such host"})
++		// A signature refresh/network change must not reset the in-flight order.
++		metadata.PreferRegional = !mainland
++		encoded, _ = json.Marshal(metadata)
++		headers.Set(uploadFallbackHeader, string(encoded))
++		u, h, err = selectUploadRoute(ctx, original, headers)
++		if err != nil || u.Host != second || h.Get("Authorization") != secondAuth {
++			t.Fatalf("mainland=%v second target incorrect", mainland)
++		}
++		advanceUploadRoute(ctx, &net.DNSError{Err: "no such host"})
++		u, h, err = selectUploadRoute(ctx, original, headers)
++		if err != nil || u.Host != "im.example" || h.Get("token") != "im-session" {
++			t.Fatalf("mainland=%v relay incorrect", mainland)
++		}
++		if json.Unmarshal([]byte(h.Get(uploadFallbackHeader)), &metadata) != nil || metadata.URL[:8] != "https://" {
++			t.Fatal("missing signed regional relay target")
++		}
++	}
++}
+--- /dev/null
++++ b/internal/third/file/upload_disaster.go
+@@ -0,0 +1,149 @@
++package file
++
++import (
++	"context"
++	"io"
++	"net"
++	"net/http"
++	"net/url"
++	"path/filepath"
++	"strings"
++	"sync"
++	"sync/atomic"
++	"time"
++)
++
++const uploadHKRegionalHost = "99chat-1416337673.cos.ap-hongkong.myqcloud.com"
++const uploadHKAcceleratedHost = "99chat-1416337673.cos.accelerate.myqcloud.com"
++
++func parseUploadURL(raw string) (*url.URL, error) { return url.Parse(raw) }
++
++func (s *uploadRouteState) hongKong() bool {
++	return s.multiBucket && (s.tier == 2 || s.tier == 3 || s.tier == 5)
++}
++func (s *uploadRouteState) lastTier() int {
++	if s.multiBucket {
++		return 5
++	}
++	return 2
++}
++func (s *uploadRouteState) relay() bool {
++	return s.tier >= s.lastTier()-1 && (s.multiBucket || s.tier == 2)
++}
++
++func uploadName(name, user string, hk bool) string {
++	name = strings.TrimPrefix(name, "/")
++	name = strings.TrimPrefix(name, user+"/")
++	if hk {
++		name = "__cos_hk__/" + name
++	}
++	return user + "/" + name
++}
++
++// Failed hosts are avoided briefly, not disabled permanently. This cache belongs
++// to one File uploader/session and stores neither credentials nor signed URLs.
++type uploadCircuit struct {
++	mu       sync.Mutex
++	failures map[string]time.Time
++}
++
++func (c *uploadCircuit) blocked(key string) bool {
++	if c == nil {
++		return false
++	}
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	until := c.failures[key]
++	if !time.Now().Before(until) {
++		delete(c.failures, key)
++		return false
++	}
++	return true
++}
++func (c *uploadCircuit) mark(key string, failed bool) {
++	if c == nil || key == "" {
++		return
++	}
++	c.mu.Lock()
++	defer c.mu.Unlock()
++	if c.failures == nil {
++		c.failures = make(map[string]time.Time)
++	}
++	if failed {
++		c.failures[key] = time.Now().Add(30 * time.Second)
++	} else {
++		delete(c.failures, key)
++	}
++}
++
++func uploadBudget(req *UploadFileReq) time.Duration {
++	image := strings.HasPrefix(req.ContentType, "image/")
++	switch strings.ToLower(filepath.Ext(req.Filepath)) {
++	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".heic", ".heif":
++		image = true
++	}
++	if image {
++		if source, err := Open(req); err == nil {
++			size := source.Size()
++			source.Close()
++			if size <= 10<<20 {
++				return 30 * time.Second
++			}
++		}
++	}
++	return 9 * time.Minute
++}
++
++type uploadProgressReader struct {
++	io.Reader
++	last *atomic.Int64
++}
++
++func (r uploadProgressReader) Read(p []byte) (int, error) {
++	n, err := r.Reader.Read(p)
++	if n > 0 {
++		r.last.Store(time.Now().UnixNano())
++	}
++	return n, err
++}
++
++// Activity extends only the idle timer, never the caller's total deadline.
++func uploadIdleContext(ctx context.Context, body io.Reader, idle time.Duration) (context.Context, io.Reader, func(), *atomic.Bool) {
++	child, cancel := context.WithCancel(ctx)
++	last := &atomic.Int64{}
++	last.Store(time.Now().UnixNano())
++	timedOut := &atomic.Bool{}
++	done := make(chan struct{})
++	go func() {
++		defer close(done)
++		timer := time.NewTicker(idle / 4)
++		defer timer.Stop()
++		for {
++			select {
++			case <-child.Done():
++				return
++			case <-timer.C:
++				if time.Since(time.Unix(0, last.Load())) >= idle {
++					timedOut.Store(true)
++					cancel()
++					return
++				}
++			}
++		}
++	}()
++	return child, uploadProgressReader{body, last}, func() { cancel(); <-done }, timedOut
++}
++
++func uploadTransport(original http.RoundTripper) http.RoundTripper {
++	if original == nil {
++		original = http.DefaultTransport
++	}
++	if transport, ok := original.(*http.Transport); ok {
++		tuned := transport.Clone()
++		tuned.DialContext = (&net.Dialer{Timeout: 3 * time.Second, KeepAlive: 30 * time.Second}).DialContext
++		tuned.TLSHandshakeTimeout = 3 * time.Second
++		tuned.ResponseHeaderTimeout = 8 * time.Second
++		return tuned
++	}
++	return original
++}
+--- /dev/null
++++ b/internal/third/file/upload_disaster_test.go
+@@ -0,0 +1,151 @@
++package file
++
++import (
++	"context"
++	"encoding/json"
++	"io"
++	"net/http"
++	"net/http/httptest"
++	"os"
++	"path/filepath"
++	"strings"
++	"testing"
++	"time"
++
++	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
++	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
++)
++
++func TestUploadDisasterSixStagesAndBucketResume(t *testing.T) {
++	for _, prefer := range []bool{true, false} {
++		t.Run(map[bool]string{true: "mainland", false: "other"}[prefer], func(t *testing.T) {
++			events := []string{}
++			completed := 0
++			names := []string{}
++			sign := func(hk bool) map[string]any {
++				regional, accelerated := uploadRegionalHost, uploadAcceleratedHost
++				if hk {
++					regional, accelerated = uploadHKRegionalHost, uploadHKAcceleratedHost
++				}
++				parts := []any{}
++				for n := 1; n <= 3; n++ {
++					target, _ := json.Marshal(uploadFallbackTarget{URL: "https://" + regional + "/chat/test", Header: http.Header{"Authorization": {"signed"}}, PreferRegional: prefer, MultiBucket: true})
++					parts = append(parts, map[string]any{"partNumber": n, "header": []any{map[string]any{"key": uploadFallbackHeader, "values": []string{string(target)}}}})
++				}
++				return map[string]any{"url": "https://" + accelerated + "/chat/test", "parts": parts}
++			}
++			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
++				var data any
++				var req map[string]any
++				_ = json.NewDecoder(r.Body).Decode(&req)
++				switch r.URL.Path {
++				case "/object/part_limit":
++					data = map[string]any{"minPartSize": 3, "maxPartSize": 100, "maxNumSize": 100}
++				case "/object/initiate_multipart_upload":
++					name := req["name"].(string)
++					names = append(names, name)
++					hk := strings.Contains(name, "/__cos_hk__/")
++					id := "gz"
++					if hk {
++						id = "hk:hk"
++					}
++					data = map[string]any{"upload": map[string]any{"uploadID": id, "partSize": 3, "expireTime": time.Now().Add(24 * time.Hour).UnixMilli(), "sign": sign(hk)}}
++				case "/object/auth_sign":
++					data = sign(strings.HasPrefix(req["uploadID"].(string), "hk:"))
++				case "/object/complete_multipart_upload":
++					if !strings.HasPrefix(req["uploadID"].(string), "hk:") || !strings.Contains(req["name"].(string), "/__cos_hk__/") {
++						t.Error("completed wrong bucket")
++					}
++					completed++
++					data = map[string]any{"url": "hong-kong-completed"}
++				default:
++					t.Errorf("unexpected API %s", r.URL.Path)
++				}
++				_ = json.NewEncoder(w).Encode(map[string]any{"errCode": 0, "data": data})
++			}))
++			defer server.Close()
++			old := http.DefaultClient
++			defer func() { http.DefaultClient = old }()
++			http.DefaultClient = &http.Client{Transport: fallbackTransport(func(r *http.Request) (*http.Response, error) {
++				if r.Method != "PUT" && r.URL.Path != "/object/upload_relay" {
++					return http.DefaultTransport.RoundTrip(r)
++				}
++				key := r.URL.Host
++				if r.Method == "POST" {
++					var target uploadFallbackTarget
++					_ = json.Unmarshal([]byte(r.Header.Get(uploadFallbackHeader)), &target)
++					u, _ := parseUploadURL(target.URL)
++					key = "relay:" + u.Host
++				}
++				body, _ := io.ReadAll(r.Body)
++				events = append(events, key+":"+string(body))
++				status := 200
++				if r.Method == "POST" {
++					status = 204
++				}
++				if string(body) == "def" && key != "relay:"+uploadHKRegionalHost {
++					status = 503
++				}
++				return &http.Response{StatusCode: status, Body: io.NopCloser(strings.NewReader(""))}, nil
++			})}
++			path := filepath.Join(t.TempDir(), "picture.jpg")
++			_ = os.WriteFile(path, []byte("abcdefghi"), 0600)
++			ctx := ccontext.WithInfo(context.WithValue(context.Background(), "operationID", "disaster"), &ccontext.GlobalConfig{UserID: "test", Token: "test", IMConfig: sdk_struct.IMConfig{ApiAddr: server.URL}})
++			response, err := NewFile(&fallbackMemoryDB{}, "test").UploadFile(ctx, &UploadFileReq{Filepath: path, Name: "picture.jpg"}, nil)
++			if err != nil || response.URL != "hong-kong-completed" || completed != 1 {
++				t.Fatalf("upload failed %v, completed %d", err, completed)
++			}
++			first, second := uploadAcceleratedHost, uploadRegionalHost
++			third, fourth := uploadHKAcceleratedHost, uploadHKRegionalHost
++			if prefer {
++				first, second = second, first
++				third, fourth = fourth, third
++			}
++			expected := []string{first + ":abc", first + ":def", second + ":def", third + ":abc", third + ":def", fourth + ":def", "relay:" + uploadRegionalHost + ":abc", "relay:" + uploadRegionalHost + ":def", "relay:" + uploadHKRegionalHost + ":abc", "relay:" + uploadHKRegionalHost + ":def", "relay:" + uploadHKRegionalHost + ":ghi"}
++			if strings.Join(events, "|") != strings.Join(expected, "|") {
++				t.Fatalf("wrong order/resumed bits: %v", events)
++			}
++			if len(names) != 4 {
++				t.Fatalf("cross-bucket sessions %v", names)
++			}
++		})
++	}
++}
++
++func TestUploadDisasterIdleAndProgress(t *testing.T) {
++	ctx, body, closeWatch, timed := uploadIdleContext(context.Background(), strings.NewReader("abc"), 40*time.Millisecond)
++	defer closeWatch()
++	for i := 0; i < 3; i++ {
++		time.Sleep(15 * time.Millisecond)
++		b := make([]byte, 1)
++		body.Read(b)
++		if ctx.Err() != nil {
++			t.Fatal("active transfer canceled")
++		}
++	}
++	select {
++	case <-ctx.Done():
++		if !timed.Load() {
++			t.Fatal("idle not recorded")
++		}
++	case <-time.After(time.Second):
++		t.Fatal("idle did not cancel")
++	}
++}
++
++func TestUploadDisasterCircuitAndBudget(t *testing.T) {
++	c := &uploadCircuit{}
++	c.mark("gz", true)
++	if !c.blocked("gz") || c.blocked("hk") {
++		t.Fatal("host isolation")
++	}
++	c.failures["gz"] = time.Now().Add(-time.Second)
++	if c.blocked("gz") {
++		t.Fatal("cooldown never recovered")
++	}
++	p := filepath.Join(t.TempDir(), "a.jpg")
++	os.WriteFile(p, []byte("image"), 0600)
++	if uploadBudget(&UploadFileReq{Filepath: p}) != 30*time.Second || uploadBudget(&UploadFileReq{Filepath: "a.mp4"}) != 9*time.Minute {
++		t.Fatal("wrong budget")
++	}
++}

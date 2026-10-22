@@ -164,6 +164,24 @@ void main() {
         hasLength(1));
   }
 
+  testWidgets('conversation avatar event survives the pending initial read',
+      (tester) async {
+    await mount(tester);
+    im.conversationChangedSubject.add([
+      _conversation()
+        ..showName = 'New name'
+        ..faceURL = 'new-avatar',
+    ]);
+    await tester.pump();
+    initialRead.complete(jsonEncode(_conversation().toJson()));
+    await tester.pump();
+    expect(logic.conversationInfo.value.showName, 'New name');
+    expect(logic.conversationInfo.value.faceURL, 'new-avatar');
+    im.conversationChangedSubject.add([_conversation()..faceURL = '']);
+    await tester.pump();
+    expect(logic.conversationInfo.value.faceURL, '');
+  });
+
   testWidgets('initial failure retains seed and later SDK updates still work',
       (tester) async {
     await mount(tester);

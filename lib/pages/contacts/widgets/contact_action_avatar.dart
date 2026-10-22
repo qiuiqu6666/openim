@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 
 /// Source windows in the supplied artwork, preserving the original rendering.
 enum ContactActionArtwork {
-  newFriend(139, 132, 392),
-  groupNotice(609, 132, 394),
-  myGroups(1077, 132, 392),
-  channel(1548, 132, 394);
+  newFriend(97, 155, 412),
+  groupNotice(617, 155, 412),
+  myGroups(1137, 156, 412),
+  channel(1660, 155, 412);
 
   const ContactActionArtwork(this.left, this.top, this.diameter);
   final double left;
@@ -25,7 +25,7 @@ class ContactActionAvatar extends StatelessWidget {
   final ContactActionArtwork artwork;
   final double size;
   static const asset = 'assets/images/contact_actions_reference.png';
-  static const sourceSize = Size(2081, 755);
+  static const sourceSize = Size(2172, 724);
 
   @override
   Widget build(BuildContext context) => ExcludeSemantics(

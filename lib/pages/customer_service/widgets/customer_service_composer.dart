@@ -20,47 +20,66 @@ class CustomerServiceComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
-    return LiquidGlassSurface(
-      surface: NavigationGlassSurface.bottom,
-      tint: CustomerServiceTokens.surface(context),
+    return DecoratedBox(
+      key: const ValueKey('customer-service-composer'),
+      decoration: BoxDecoration(
+        color: CustomerServiceTokens.surface(context),
+        border: Border(
+            top: BorderSide(color: CustomerServiceTokens.border(context))),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(AppTokens.s3),
+        padding: const EdgeInsets.symmetric(
+            horizontal: AppTokens.s2, vertical: AppTokens.s2),
         child: Row(children: [
           IconButton(
             key: const ValueKey('customer-service-attach'),
             tooltip: zh ? AppCopy.text('图片或视频') : 'Photo or video',
             onPressed: enabled ? onAttach : null,
             color: CustomerServiceTokens.text(context),
+            constraints: const BoxConstraints.tightFor(
+                width: kMinInteractiveDimension,
+                height: kMinInteractiveDimension),
             icon: const Icon(Icons.add_rounded),
           ),
+          const SizedBox(width: AppTokens.s2),
           Expanded(
             child: TextField(
               key: const ValueKey('customer-service-input'),
               controller: controller,
               enabled: enabled,
+              onTapOutside: (_) => FocusScope.of(context).unfocus(),
+              textAlignVertical: TextAlignVertical.center,
               textInputAction: TextInputAction.send,
               onSubmitted: enabled ? (_) => onSend() : null,
               style: TextStyle(
                   color: CustomerServiceTokens.text(context),
-                  fontSize: CustomerServiceTokens.faqFontSize),
+                  fontSize: CustomerServiceTokens.faqFontSize,
+                  height: CustomerServiceTokens.answerLineHeight),
               decoration: InputDecoration(
-                hintText: zh
-                    ? AppCopy.text('请输入您的问题，将会转接人工在线客服')
-                    : 'Type your question',
+                constraints:
+                    const BoxConstraints(minHeight: kMinInteractiveDimension),
+                hintText: zh ? AppCopy.text('输入您的问题') : 'Type your question',
                 hintStyle: TextStyle(
                     color: CustomerServiceTokens.secondaryText(context),
                     fontSize: CustomerServiceTokens.faqFontSize),
-                isDense: true,
+                isDense: false,
+                visualDensity: VisualDensity.standard,
+                filled: true,
+                fillColor: CustomerServiceTokens.background(context),
                 contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppTokens.s4, vertical: AppTokens.s4),
+                    horizontal: AppTokens.s4, vertical: AppTokens.s3),
                 border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rPill),
+                    borderRadius: BorderRadius.circular(AppTokens.rMd),
                     borderSide: BorderSide(
                         color: CustomerServiceTokens.border(context))),
                 enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rPill),
+                    borderRadius: BorderRadius.circular(AppTokens.rMd),
                     borderSide: BorderSide(
                         color: CustomerServiceTokens.border(context))),
+                focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppTokens.rMd),
+                    borderSide:
+                        const BorderSide(color: CustomerServiceTokens.blue)),
               ),
             ),
           ),
@@ -73,6 +92,9 @@ class CustomerServiceComposer extends StatelessWidget {
               onPressed:
                   enabled && value.text.trim().isNotEmpty ? onSend : null,
               style: IconButton.styleFrom(
+                fixedSize: const Size.square(kMinInteractiveDimension),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTokens.rMd)),
                 backgroundColor: CustomerServiceTokens.blue,
                 foregroundColor: AppTokens.onAccent,
               ),

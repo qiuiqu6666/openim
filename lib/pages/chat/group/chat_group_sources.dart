@@ -46,12 +46,12 @@ class ChatGroupQueries {
     return ChatGroupQueries(
       isJoined: (id) =>
           OpenIM.iMManager.groupManager.isJoinedGroup(groupID: id),
-      verifyMembership: (id, userID) => GroupMemberIdentitySource()
-          .containsMember(groupID: id, userID: userID),
+      verifyMembership: (id, userID) =>
+          identities.containsMember(groupID: id, userID: userID),
       groupInfo: (id) =>
           OpenIM.iMManager.groupManager.getGroupsInfo(groupIDList: [id]),
-      selfMember: (id, userID) => OpenIM.iMManager.groupManager
-          .getGroupMembersInfo(groupID: id, userIDList: [userID]),
+      selfMember: (id, userID) =>
+          identities.members(groupID: id, userIDList: [userID]),
       ownerAndAdmin: (id) =>
           OpenIM.iMManager.groupManager.getGroupOwnerAndAdmin(groupID: id),
       // SDK member reads may return an existing local row without checking

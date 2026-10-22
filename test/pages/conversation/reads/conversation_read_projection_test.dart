@@ -76,6 +76,10 @@ void main() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) {
       sdkCalls.add(call);
+      if (call.method == 'getBlacklist' ||
+          call.method == 'getJoinedGroupListPage') {
+        return Future.value('[]');
+      }
       expect(call.method, 'getConversationListSplit');
       return snapshot.future;
     });
@@ -534,7 +538,10 @@ void main() {
     request.complete(true);
     await Future<void>.delayed(Duration.zero);
     expect(logic.list.single.unreadCount, 0);
-    expect(sdkCalls, isEmpty);
+    // Initialization also refreshes membership/blacklist; receipt delivery must
+    // not cause another conversation list read.
+    expect(sdkCalls.where((call) => call.method == 'getConversationListSplit'),
+        isEmpty);
   });
 
   test('subject delivery captures clear generation before native completion',

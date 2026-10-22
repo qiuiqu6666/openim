@@ -63,6 +63,7 @@ dependencies:
   video_compress: ^3.1.2
   just_waveform: ^0.0.7
   just_audio: ^0.10.5
+  audio_session: ^0.1.25
   webview_flutter: ^4.10.0
   webview_flutter_wkwebview: ^3.17.0
   webview_flutter_android: ^4.3.1

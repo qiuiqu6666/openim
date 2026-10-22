@@ -11,3 +11,5 @@
 消息内转写仍由公共 `VoiceTranscriptionView` 显示，使用同一语音颜色。短结果不显示冗余折叠操作，长结果按实际宽度和字号判断三行预览；私密消息继续禁止文字选择。
 
 测试位于 `test/pages/chat/voice/` 及 `test/voice_transcription_view_test.dart`。界面变更与预览见 `docs/chat-voice-text-validation.md`。
+
+语音输出菜单位于 `widgets/voice_output_menu.dart`，播放模式和媒体互斥统一由公共 `MediaCoordinator` 管理。模式跨消息、会话和应用重启保存；图片浏览不申请音频所有权。协调器、原生桥、适配入口和真机验证边界见 `openim_common/lib/src/media/README.md`。

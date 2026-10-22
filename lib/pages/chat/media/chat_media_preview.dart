@@ -1,3 +1,4 @@
+import 'chat_gallery_pager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -64,6 +65,10 @@ class ChatMediaPreview {
         isCurrent: current,
         onDeleted: onDeleted);
     var open = true;
+    final pager = ChatGalleryPager(
+        gallery: media,
+        conversationID: conversationID,
+        isCurrent: () => open && current());
     final recipients =
         ChatMediaShareRecipients(isCurrent: () => open && current());
     final locate = navigation ?? ChatHistoryMessageNavigation();
@@ -71,6 +76,7 @@ class ChatMediaPreview {
       context: context,
       message: selected,
       sources: media.sources,
+      loadMoreMedia: pager.load,
       initialIndex: media.initialIndex,
       onAutoPlay: (index) =>
           index == media.initialIndex && media.sources[index].isVideo,

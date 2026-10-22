@@ -18,6 +18,7 @@ void main() {
 
     unawaited(Config.init(() async {
       await GroupNameCache.initialize();
+      await MediaCoordinator.instance.initialize();
       await AppSystemBars.initialize();
       AppThemeController.instance.load();
       NavigationGlassController.instance.load();

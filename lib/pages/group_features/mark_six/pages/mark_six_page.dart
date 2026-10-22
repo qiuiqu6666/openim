@@ -13,6 +13,7 @@ import '../widgets/mark_six_opened_statistics.dart';
 import '../widgets/mark_six_predictions.dart';
 import '../widgets/mark_six_style.dart';
 import '../widgets/mark_six_app_bar.dart';
+import '../widgets/lottery_tab_bar.dart';
 
 class MarkSixPage extends StatefulWidget {
   const MarkSixPage({super.key, required this.featureContext, this.controller});
@@ -159,57 +160,11 @@ class _MarkSixPageState extends State<MarkSixPage> {
                     })));
   }
 
-  Widget _tabs(BuildContext context) {
-    final style = MarkSixStyle.of(context);
-    final tabs = [
-      AppCopy.text('开奖历史'),
-      AppCopy.text('智能预测'),
-      AppCopy.text('已开统计'),
-      '本群宣言'
-    ];
-    const icons = [
-      Icons.access_time_rounded,
-      Icons.auto_awesome_rounded,
-      Icons.bar_chart_rounded,
-      Icons.campaign_rounded
-    ];
-    return Container(
-        key: const ValueKey('lottery-tab-bar'),
-        padding: const EdgeInsets.all(2),
-        decoration: BoxDecoration(
-            color: style.lotteryAlt,
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: style.lotteryBorder)),
-        child: Row(children: [
-          for (var index = 0; index < tabs.length; index++)
-            Expanded(
-                child: DecoratedBox(
-                    decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(12),
-                        gradient: _tab == index
-                            ? const LinearGradient(
-                                colors: [Color(0xFF3A91FA), Color(0xFF1976F3)])
-                            : null),
-                    child: TextButton(
-                        style: TextButton.styleFrom(
-                            minimumSize: const Size(0, 34),
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            padding: const EdgeInsets.symmetric(vertical: 6),
-                            foregroundColor: _tab == index
-                                ? AppTokens.onAccent
-                                : style.secondary),
-                        onPressed: () {
-                          setState(() => _tab = index);
-                          _controller.setPredictionVisible(index == 1);
-                        },
-                        child: FittedBox(
-                            child:
-                                Row(mainAxisSize: MainAxisSize.min, children: [
-                          Icon(icons[index], size: 16),
-                          const SizedBox(width: 6),
-                          Text(tabs[index],
-                              style: const TextStyle(fontSize: 12))
-                        ])))))
-        ]));
-  }
+  Widget _tabs(BuildContext context) => LotteryTabBar(
+        selectedIndex: _tab,
+        onChanged: (index) {
+          setState(() => _tab = index);
+          _controller.setPredictionVisible(index == 1);
+        },
+      );
 }

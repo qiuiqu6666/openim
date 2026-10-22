@@ -114,6 +114,21 @@ void main() {
           await tester.pump(const Duration(seconds: 1));
           expect(find.byType(ChatFileMessageView), findsOneWidget);
           expect(find.byType(ChatVoiceMessageView), findsOneWidget);
+          final voice = find.byType(ChatVoiceMessageView);
+          final unreadDot =
+              find.descendant(of: voice, matching: find.byIcon(Icons.circle));
+          if (outgoing) {
+            expect(unreadDot, findsNothing);
+          } else {
+            expect(unreadDot, findsOneWidget);
+            final bubble =
+                find.ancestor(of: voice, matching: find.byType(ChatBubble));
+            final dotRect = tester.getRect(unreadDot);
+            expect(dotRect.left, greaterThan(tester.getRect(bubble).right));
+            expect(dotRect.right, lessThanOrEqualTo(320));
+            expect(dotRect.center.dy,
+                closeTo(tester.getRect(voice).center.dy, 0.01));
+          }
           expect(find.byType(ChatCallItemView), findsOneWidget);
           expect(find.text(StrRes.unsupportedMessage), findsNothing);
           expect(tester.takeException(), isNull);

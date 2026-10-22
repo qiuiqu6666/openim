@@ -165,6 +165,16 @@ void main() {
         (tester) async {
       final key = await _mount(tester, wallet.wallet, dark: dark);
       expect(find.text('TRX'), findsNothing);
+      expect(find.text('可用余额 987.65 元'), findsOneWidget);
+      expect(
+          tester
+              .widget<CupertinoSlidingSegmentedControl<String>>(
+                  find.byType(CupertinoSlidingSegmentedControl<String>))
+              .groupValue,
+          'BI99');
+      await tester.tapAt(tester
+          .getCenter(find.byKey(const ValueKey('live-tip-currency-USDT'))));
+      await tester.pumpAndSettle();
       expect(find.text('可用余额 12.345678 USDT'), findsOneWidget);
       expect(
           tester
@@ -207,7 +217,7 @@ void main() {
     wallet.failure = null;
     await tester.tap(find.byTooltip('重试余额'));
     await _frames(tester);
-    expect(find.text('可用余额 12.345678 USDT'), findsOneWidget);
+    expect(find.text('可用余额 987.65 元'), findsOneWidget);
     expect(wallet.requests.where((r) => r.path.endsWith('/balances')), hasLength(2));
     expect(wallet.requests.where((r) => r.path.endsWith('/withdrawal-security/check')), isEmpty);
   });
@@ -217,9 +227,6 @@ void main() {
     final payment =
         LiveTransport((_) => {'tipId': 99, 'liveSessionId': 'live-1'});
     await _mount(tester, wallet.wallet, payment: payment);
-    await tester.tapAt(
-        tester.getCenter(find.byKey(const ValueKey('live-tip-currency-BI99'))));
-    await tester.pumpAndSettle();
     await tester.enterText(
         find.byKey(const ValueKey('live-tip-amount')), '1.23');
     await tester.pump();

@@ -38,12 +38,16 @@ class GroupFeatureContext {
   /// Public display metadata, independent of summary and private permissions.
   final GroupGameType gameType;
 
-  /// Public draw navigation is available for type 3 even before binding is
+  /// Public draw navigation is available for type 3 before binding is
   /// configured. Private agent/rebate permissions remain separate.
   bool get showMarkSixDrawHistory =>
       sessionCurrent() &&
+      gameType != GroupGameType.bingoMarkSix &&
       (gameType == GroupGameType.markSix ||
           (features.markSix.enabled && features.markSix.drawHistoryEntry));
+
+  bool get showBingoDrawHistory =>
+      sessionCurrent() && gameType == GroupGameType.bingoMarkSix;
 
   AccountPrivilegeAccess get privilege =>
       accountPrivilege ?? AccountPrivilegeRuntime.store;

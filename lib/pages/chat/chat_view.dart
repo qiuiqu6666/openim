@@ -212,14 +212,11 @@ class ChatPage extends StatelessWidget {
           : Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                if (logic.preparingMediaCount > 0 ||
-                    logic.failedMediaPreparationCount > 0)
+                if (logic.failedMediaPreparationCount > 0)
                   ChatMediaPreparationIndicator(
-                    count: logic.preparingMediaCount,
+                    count: 0,
                     failedCount: logic.failedMediaPreparationCount,
                     onRetry: logic.retryMediaPreparation,
-                    stageLabel: logic.mediaPreparationLabel,
-                    onCancel: logic.cancelMediaPreparation,
                     onRetryOriginal: logic.hasFailedVideoPreparation
                         ? logic.retryOriginalVideoPreparation
                         : null,
@@ -261,12 +258,14 @@ class ChatPage extends StatelessWidget {
                   enabled: !logic.sendingMuted &&
                       !logic.pendingForward.sending.value,
                   showDisabledWarning: !logic.groupMutePending,
+                  showDisabledBar:
+                      !(logic.groupMembershipPending && logic.isInGroup.value),
                   muteNotice: logic.isGroupChat &&
                       logic.sendingMuted &&
                       !logic.groupMutePending &&
                       !logic.isChannelSubscriber,
                   hintText: logic.groupMembershipPending
-                      ? StrRes.synchronizing
+                      ? (logic.isInGroup.value ? null : StrRes.synchronizing)
                       : logic.groupMutePending
                           ? ''
                           : (logic.isChannelSubscriber
@@ -282,6 +281,7 @@ class ChatPage extends StatelessWidget {
                   onCloseDirectional: logic.onClearDirectional,
                   onSend: (v) => logic.sendTextMsg(),
                   onTapVoice: logic.onTapRecord,
+                  onTapComposerAction: () => logic.scrollBottom(smooth: true),
                   toolbox: ListenableBuilder(
                       listenable: logic.groupFeatures,
                       builder: (context, _) => ChatToolBox(

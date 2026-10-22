@@ -134,6 +134,7 @@ dependencies:
   provider: 6.1.5+1
   webview_flutter: 4.13.1
   flutter_zxing: 2.3.0
+  brotli: 0.6.0
 
 dependency_overrides:
   # Unregister native callbacks before releasing Dart FFI trampolines.
@@ -216,6 +217,7 @@ flutter:
     - lib/pages/wallet/widgets/assets/
     - lib/pages/splash/assets/
     - lib/pages/group_features/mark_six/assets/
+    - lib/pages/group_features/bingo/assets/
     - shorebird.yaml
 
   # An image asset can refer to one or more resolution-specific "variants", see

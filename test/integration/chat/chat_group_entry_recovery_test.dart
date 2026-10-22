@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'package:openim/pages/chat/group/chat_group_sources.dart';
+import 'package:openim/pages/chat/group/identity/group_member_identity_source.dart';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -46,7 +48,24 @@ void main() {
         ),
       ),
     };
-    final logic = ChatLogic();
+    final logic = ChatLogic(
+        groupQueries: ChatGroupQueries.sdk(
+      identitySource: GroupMemberIdentitySource(
+        currentUserID: () => 'self',
+        sdkUserID: () => 'self',
+        currentToken: () => 'test-token',
+        baseURL: () => 'https://im.test',
+        poster: (_, body, __) async => {
+          'members': [
+            GroupMembersInfo(
+                    groupID: 'group',
+                    userID: 'self',
+                    roleLevel: GroupRoleLevel.member)
+                .toJson()
+          ]
+        },
+      ),
+    ));
     owners.add(logic);
     logic.onInit();
     return logic;

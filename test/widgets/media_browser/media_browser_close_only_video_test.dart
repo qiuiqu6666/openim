@@ -1,3 +1,5 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:io';
 
 import 'package:extended_image/extended_image.dart';
@@ -17,6 +19,8 @@ class _VideoPlatform extends VideoPlayerPlatform {
 
   @override
   Future<void> init() async {}
+  @override
+  Future<void> setMixWithOthers(bool mixWithOthers) async {}
 
   @override
   Future<int?> createWithOptions(VideoCreationOptions options) async =>
@@ -67,13 +71,18 @@ Future<void> _mount(WidgetTester tester, {required bool closeOnly}) async {
       ),
     ),
   ));
-  await tester.runAsync(() async {
-    await Future<void>.delayed(const Duration(milliseconds: 20));
-  });
-  await tester.pump();
+  for (var i = 0; i < 8; i++) {
+    await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+    await tester.pump();
+  }
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
   late VideoPlayerPlatform previous;
   late _VideoPlatform platform;
   setUp(() {
@@ -127,10 +136,10 @@ void main() {
                 ))),
       ));
       await tester.pump();
-      await tester.runAsync(
-          () => Future<void>.delayed(const Duration(milliseconds: 30)));
-      await tester.pump();
-      await tester.pump();
+      for (var i = 0; i < 8; i++) {
+        await tester.runAsync(() => Future<void>.delayed(const Duration(milliseconds: 10)));
+        await tester.pump();
+      }
       final player = find.byType(NativeMediaVideo, skipOffstage: false);
       final originalPlayer = tester.state(player);
       for (var frame = 0; frame < (exit == 'interrupted' ? 6 : 21); frame++) {

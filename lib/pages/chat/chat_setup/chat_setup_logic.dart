@@ -188,6 +188,7 @@ class ChatSetupLogic extends GetxController {
             val?.isMsgDestruct = newValue.isMsgDestruct;
             val?.msgDestructTime = newValue.msgDestructTime;
             val?.showName = newValue.showName;
+            val?.faceURL = newValue.faceURL;
           });
           break;
         }

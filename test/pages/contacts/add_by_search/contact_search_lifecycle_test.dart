@@ -3,8 +3,10 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/contacts/add_by_search/add_by_search_logic.dart';
+import 'package:openim/pages/contacts/add_by_search/add_by_search_view.dart';
 import 'package:openim/pages/contacts/search/contact_search_source.dart';
 import 'package:openim_common/openim_common.dart';
 
@@ -50,6 +52,141 @@ void main() {
   tearDown(() {
     LoadingView.singleton.dismiss();
     Get.reset();
+  });
+
+  for (final brightness in Brightness.values) {
+    testWidgets('page shows loading, empty and retry in $brightness',
+        (tester) async {
+      Get.routing.args = {'searchType': SearchType.user};
+      final source = _Source();
+      final logic = Get.put(AddContactsBySearchLogic(source: source));
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+          theme: ThemeData(brightness: brightness),
+          home: AddContactsBySearchPage(),
+        ),
+      ));
+      await tester.enterText(find.byType(TextField), 'query');
+      await tester.pump();
+      expect(find.text(StrRes.noFoundUser), findsNothing);
+      expect(find.text('Searching…'), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 350));
+      source.userReplies.single.complete([]);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text(StrRes.noFoundUser), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'next');
+      await tester.pump(const Duration(milliseconds: 350));
+      source.userReplies.last.completeError(StateError('offline'));
+      await tester.pump();
+      await tester.pump();
+      expect(find.text(StrRes.noFoundUser), findsNothing);
+      await tester.tap(find.text('Search failed. Tap to retry.'));
+      expect(source.pages, [('query', 1), ('next', 1), ('next', 1)]);
+      source.userReplies.last
+          .complete([UserFullInfo(userID: 'found', nickname: 'Result')]);
+      await tester.pump();
+      await tester.pump();
+      expect(find.text('Result'), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      logic.onClose();
+    });
+  }
+
+  testWidgets(
+      'typing searches automatically and never shows premature empty state',
+      (tester) async {
+    Get.routing.args = {'searchType': SearchType.user};
+    final source = _Source();
+    final logic = AddContactsBySearchLogic(source: source)..onInit();
+    logic.searchCtrl.text = '@first';
+    expect(logic.isNotFoundUser, isFalse);
+    await tester.pump(const Duration(milliseconds: 200));
+    logic.searchCtrl.text = '@second';
+    await tester.pump(const Duration(milliseconds: 349));
+    expect(source.pages, isEmpty);
+    await tester.pump(const Duration(milliseconds: 1));
+    expect(source.pages, [('@second', 1)]);
+    expect(logic.status.value, ContactSearchStatus.loading);
+    expect(logic.isNotFoundUser, isFalse);
+    source.userReplies.single.complete([UserFullInfo(userID: 'found')]);
+    await tester.pump();
+    expect(logic.userInfoList.single.userID, 'found');
+    expect(logic.isNotFoundUser, isFalse);
+    logic.onClose();
+  });
+
+  testWidgets('submit cancels debounce and does not duplicate a pending search',
+      (tester) async {
+    Get.routing.args = {'searchType': SearchType.user};
+    final source = _Source();
+    final logic = AddContactsBySearchLogic(source: source)..onInit();
+    logic.searchCtrl.text = 'query';
+    logic.search();
+    logic.search();
+    await tester.pump(const Duration(seconds: 1));
+    expect(source.pages, [('query', 1)]);
+    source.userReplies.single.complete([]);
+    await tester.pump();
+    expect(logic.isNotFoundUser, isTrue);
+    logic.searchCtrl.clear();
+    expect(logic.isNotFoundUser, isFalse);
+    logic.onClose();
+  });
+
+  testWidgets('failure is distinct from empty and can be retried',
+      (tester) async {
+    Get.routing.args = {'searchType': SearchType.user};
+    final source = _Source();
+    final logic = AddContactsBySearchLogic(source: source)..onInit();
+    logic.searchCtrl.text = 'query';
+    final pending = logic.searchUser();
+    source.userReplies.single.completeError(StateError('offline'));
+    await pending;
+    expect(logic.status.value, ContactSearchStatus.error);
+    expect(logic.isNotFoundUser, isFalse);
+    final retry = logic.searchUser();
+    source.userReplies.last.complete([]);
+    await retry;
+    expect(logic.isNotFoundUser, isTrue);
+    logic.onClose();
+  });
+
+  for (final end in ['clear', 'close', 'account']) {
+    testWidgets('scheduled search is cancelled after $end', (tester) async {
+      Get.routing.args = {'searchType': SearchType.user};
+      final source = _Source();
+      final logic = AddContactsBySearchLogic(source: source)..onInit();
+      logic.searchCtrl.text = 'query';
+      switch (end) {
+        case 'clear':
+          logic.searchCtrl.clear();
+        case 'close':
+          logic.onClose();
+        case 'account':
+          OpenIM.iMManager.userID = 'other';
+      }
+      await tester.pump(const Duration(seconds: 1));
+      expect(source.pages, isEmpty);
+      if (end != 'close') logic.onClose();
+    });
+  }
+
+  testWidgets('IME composition waits until text is committed', (tester) async {
+    Get.routing.args = {'searchType': SearchType.user};
+    final source = _Source();
+    final logic = AddContactsBySearchLogic(source: source)..onInit();
+    logic.searchCtrl.value = const TextEditingValue(
+        text: 'query', composing: TextRange(start: 0, end: 5));
+    await tester.pump(const Duration(seconds: 1));
+    expect(source.pages, isEmpty);
+    logic.searchCtrl.value = const TextEditingValue(text: 'query');
+    await tester.pump(const Duration(milliseconds: 350));
+    expect(source.pages, [('query', 1)]);
+    source.userReplies.single.complete([]);
+    await tester.pump();
+    logic.onClose();
   });
 
   test('an old group search cannot overwrite the current query', () async {

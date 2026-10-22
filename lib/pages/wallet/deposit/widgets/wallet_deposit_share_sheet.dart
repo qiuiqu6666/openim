@@ -7,6 +7,7 @@ import '../../wallet_share_service.dart';
 import '../../widgets/wallet_page_colors.dart';
 import '../share/wallet_deposit_share_tokens.dart';
 import '../wallet_deposit_controller.dart';
+import '../wallet_deposit_tokens.dart';
 import 'wallet_deposit_share_preview.dart';
 
 class WalletDepositShareSheet extends StatefulWidget {
@@ -27,6 +28,7 @@ class WalletDepositShareSheet extends StatefulWidget {
 
 class _WalletDepositShareSheetState extends State<WalletDepositShareSheet> {
   final _boundary = GlobalKey();
+  final _qrBoundary = GlobalKey();
   final _createdAt = DateTime.now();
   bool _saving = false;
   bool _sharing = false;
@@ -76,12 +78,15 @@ class _WalletDepositShareSheetState extends State<WalletDepositShareSheet> {
         .t(zhHans: zh, zhHant: hant, en: en, ja: ja, ko: ko);
   }
 
-  Future<void> _save() async {
+  Future<void> _save({bool qrOnly = false}) async {
     final address = _address;
     if (_busy || address.isEmpty) return;
     setState(() => _saving = true);
-    final result = await widget.service.saveQrImg(context, _boundary,
-        isCurrent: () => _current(address), backgroundColor: _imageBackground);
+    final result = await widget.service.saveQrImg(
+        context, qrOnly ? _qrBoundary : _boundary,
+        isCurrent: () => _current(address),
+        backgroundColor:
+            qrOnly ? WalletDepositTokens.qrBackground : _imageBackground);
     if (!mounted) return;
     setState(() => _saving = false);
     if (!_current(address)) return;
@@ -247,6 +252,10 @@ class _WalletDepositShareSheetState extends State<WalletDepositShareSheet> {
                                 ? RepaintBoundary(
                                     key: _boundary,
                                     child: WalletDepositSharePreview(
+                                        qrCaptureKey: _qrBoundary,
+                                        onSaveQr: _busy
+                                            ? null
+                                            : () => _save(qrOnly: true),
                                         address: widget.controller.address!,
                                         currency: widget.currency,
                                         createdAt: _createdAt))

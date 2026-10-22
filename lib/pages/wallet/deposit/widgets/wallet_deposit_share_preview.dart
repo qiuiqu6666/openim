@@ -16,11 +16,15 @@ class WalletDepositSharePreview extends StatefulWidget {
     required this.address,
     required this.currency,
     this.createdAt,
+    this.qrCaptureKey,
+    this.onSaveQr,
   });
 
   final WalletDepositAddress address;
   final FundCurrency currency;
   final DateTime? createdAt;
+  final GlobalKey? qrCaptureKey;
+  final VoidCallback? onSaveQr;
 
   @override
   State<WalletDepositSharePreview> createState() =>
@@ -100,11 +104,31 @@ class _WalletDepositSharePreviewState extends State<WalletDepositSharePreview> {
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(
                         WalletDepositShareTokens.qrRadius),
-                    child: WalletDepositQr(
-                      address: widget.address,
-                      currency: widget.currency,
-                      size: WalletDepositShareTokens.qrSize,
-                      quietZone: WalletDepositShareTokens.qrQuietZone,
+                    child: Semantics(
+                      onLongPress: widget.onSaveQr,
+                      hint: widget.onSaveQr == null
+                          ? null
+                          : i18n.t(
+                              zhHans: '长按保存二维码',
+                              zhHant: '長按儲存二維碼',
+                              en: 'Long press to save QR code',
+                              ja: '長押ししてQRコードを保存',
+                              ko: '길게 눌러 QR 코드 저장',
+                            ),
+                      child: GestureDetector(
+                        key: const ValueKey('wallet-deposit-save-qr'),
+                        onLongPress: widget.onSaveQr,
+                        excludeFromSemantics: true,
+                        child: RepaintBoundary(
+                          key: widget.qrCaptureKey,
+                          child: WalletDepositQr(
+                            address: widget.address,
+                            currency: widget.currency,
+                            size: WalletDepositShareTokens.qrSize,
+                            quietZone: WalletDepositShareTokens.qrQuietZone,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),

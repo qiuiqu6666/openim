@@ -4,6 +4,7 @@ import 'host/wallet_platform_guard.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/rendering.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 import 'package:image_gallery_saver_plus/image_gallery_saver_plus.dart';
@@ -181,11 +182,18 @@ class WalletShareService {
           boundary.size.isEmpty) {
         return WalletSystemShareResult.failed;
       }
-      if (boundary.debugNeedsPaint) {
-        await WidgetsBinding.instance.endOfFrame;
+      final binding = WidgetsBinding.instance;
+      // debugNeedsPaint throws in profile/release builds. Wait for pending
+      // UI updates using the scheduler before capturing the deposit card.
+      if (binding.hasScheduledFrame ||
+          binding.schedulerPhase != SchedulerPhase.idle) {
+        await binding.endOfFrame;
         if (!active() || boundaryContext?.mounted != true) {
           return WalletSystemShareResult.dismissed;
         }
+      }
+      if (!boundary.attached || !boundary.hasSize || boundary.size.isEmpty) {
+        return WalletSystemShareResult.failed;
       }
       final bytes =
           await _captureBytes(boundary, backgroundColor: backgroundColor);

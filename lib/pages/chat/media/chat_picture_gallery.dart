@@ -1,3 +1,4 @@
+import 'dart:collection';
 import 'dart:io';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -10,16 +11,39 @@ class ChatPictureGallery {
     required List<MediaSource> sources,
     required this.initialIndex,
     List<Message> messages = const [],
-  })  : sources = List.unmodifiable(sources),
-        _messages = List.unmodifiable(messages.map(_snapshot));
+  })  : _sources = List.of(sources),
+        _messages = List.of(messages.map(_snapshot));
 
   ChatPictureGallery._captured(
-      {required this.sources,
+      {required List<MediaSource> sources,
       required this.initialIndex,
       required List<Message> messages})
-      : _messages = List.unmodifiable(messages);
+      : _sources = List.of(sources),
+        _messages = List.of(messages);
 
-  final List<MediaSource> sources;
+  final List<MediaSource> _sources;
+  late final List<MediaSource> sources = UnmodifiableListView(_sources);
+
+  Future<void> append(Iterable<Message> messages,
+      {bool Function()? isCurrent}) async {
+    final eligible = messages
+        .where((m) =>
+            m.clientMsgID?.isNotEmpty == true &&
+            !m.hasExpired &&
+            m.attachedInfoElem?.isPrivateChat != true)
+        .toList();
+    if (eligible.isEmpty) return;
+    final next = await fromMessages(eligible, eligible.first);
+    if (isCurrent != null && !isCurrent()) return;
+    final ids = _sources.map((s) => s.tag).toSet();
+    for (var i = 0; i < next.sources.length; i++) {
+      if (ids.add(next.sources[i].tag)) {
+        _sources.add(next.sources[i]);
+        _messages.add(next._messages[i]);
+      }
+    }
+  }
+
   final int initialIndex;
   final List<Message> _messages;
 

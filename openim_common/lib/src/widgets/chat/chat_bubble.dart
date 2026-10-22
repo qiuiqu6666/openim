@@ -52,7 +52,8 @@ class ChatBubble extends StatelessWidget {
       margin: margin,
       padding: padding ??
           (compact
-              ? EdgeInsets.fromLTRB(10.w, 8.w, 10.w, 6.w)
+              ? EdgeInsets.fromLTRB(ChatBubbleTokens.compactHorizontalPadding.w,
+                  8.w, ChatBubbleTokens.compactHorizontalPadding.w, 6.w)
               : const EdgeInsets.symmetric(
                   horizontal: ChatBubbleTokens.horizontalPadding,
                   vertical: ChatBubbleTokens.verticalPadding)),

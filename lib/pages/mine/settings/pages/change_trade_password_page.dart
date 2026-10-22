@@ -209,6 +209,8 @@ class _ChangeTradePasswordPageState extends State<ChangeTradePasswordPage>
                     zh: _smsMode ? '请输入验证码' : '请输入 6 位支付密码',
                     en: _smsMode ? 'Enter the 6-digit code' : 'Enter 6 digits'),
                 controller: _old,
+                autofillHints:
+                    _smsMode ? const [AutofillHints.oneTimeCode] : null,
                 obscureText: !_smsMode && _obscureOld,
                 keyboardType: TextInputType.number,
                 inputFormatters: digits,

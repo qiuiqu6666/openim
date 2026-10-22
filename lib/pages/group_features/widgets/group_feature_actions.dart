@@ -7,6 +7,7 @@ import '../models/group_feature_context.dart';
 import '../live/group_live_module.dart';
 import '../sangong/sangong_module.dart';
 import '../mark_six/mark_six.dart';
+import '../bingo/bingo_page.dart';
 import 'group_feature_tokens.dart';
 
 class GroupFeatureActions {
@@ -54,6 +55,12 @@ class GroupFeatureActions {
             icon: '',
             symbol: Icons.history_rounded,
             onTap: () => MarkSixModule.openDrawHistory(context, feature)),
+      if (feature.showBingoDrawHistory)
+        ToolboxItemInfo(
+            text: '宾果开奖记录',
+            icon: '',
+            symbol: Icons.history_rounded,
+            onTap: () => BingoPage.open(context, feature)),
       if (feature.capabilitiesCurrent() &&
           (feature.gameType == GroupGameType.markSixAgent ||
               (games.markSix.enabled && games.markSix.agentEntry)) &&

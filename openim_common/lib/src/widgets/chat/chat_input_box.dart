@@ -29,6 +29,7 @@ class ChatInputBox extends StatefulWidget {
     this.pendingSend = false,
     this.pendingSending = false,
     this.showDisabledWarning = true,
+    this.showDisabledBar = true,
     this.muteNotice = false,
     this.isNotInGroup = false,
     this.hintText,
@@ -37,6 +38,7 @@ class ChatInputBox extends StatefulWidget {
     this.onClearQuote,
     this.onSend,
     this.onTapVoice,
+    this.onTapComposerAction,
     this.directionalText,
     this.onCloseDirectional,
     this.stickerPanel,
@@ -51,6 +53,7 @@ class ChatInputBox extends StatefulWidget {
   final bool pendingSend;
   final bool pendingSending;
   final bool showDisabledWarning;
+  final bool showDisabledBar;
   final bool muteNotice;
   final bool isNotInGroup;
   final String? hintText;
@@ -61,6 +64,7 @@ class ChatInputBox extends StatefulWidget {
   final Function()? onClearQuote;
   final ValueChanged<String>? onSend;
   final VoidCallback? onTapVoice;
+  final VoidCallback? onTapComposerAction;
   final TextSpan? directionalText;
   final VoidCallback? onCloseDirectional;
   final Widget? stickerPanel;
@@ -229,7 +233,9 @@ class _ChatInputBoxState extends State<ChatInputBox>
             : voiceVisible
                 ? ChatVoiceTokens.panelHeight + safeBottom
                 : 0;
-    final content = _inputBlocked && !widget.pendingSending
+    final content = _inputBlocked &&
+            widget.showDisabledBar &&
+            !widget.pendingSending
         ? ChatDisableInputBox(
             muteNotice: widget.muteNotice && !widget.isNotInGroup,
             showWarning: widget.isNotInGroup || widget.showDisabledWarning,
@@ -243,7 +249,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
               Container(
                 key: const ValueKey('chat-composer-bar'),
                 constraints: const BoxConstraints(
-                    minHeight: ChatComposerTokens.inputHeight),
+                    minHeight: ChatComposerTokens.barHeight),
                 padding: const EdgeInsets.symmetric(
                   horizontal: ChatComposerTokens.horizontalPadding,
                   vertical: ChatComposerTokens.verticalPadding,
@@ -262,6 +268,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
                         tooltip: StrRes.voiceCapture,
                         onPressed: widget.enabled
                             ? () {
+                                widget.onTapComposerAction?.call();
                                 setState(() {
                                   _emojiVisible = false;
                                   _toolsVisible = false;
@@ -424,7 +431,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
               top: false,
               left: false,
               right: false,
-              bottom: _inputBlocked,
+              bottom: _inputBlocked && widget.showDisabledBar,
               child: content),
         ),
       ),
@@ -550,6 +557,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
 
   void toggleToolbox() {
     if (_inputBlocked) return;
+    widget.onTapComposerAction?.call();
     setState(() {
       _directPanelSwitch = !_toolsVisible &&
           (_emojiVisible || _leftKeyboardButton || _keyboardHandoff.height > 0);
@@ -566,6 +574,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
 
   void toggleEmojiPanel() {
     if (_inputBlocked) return;
+    widget.onTapComposerAction?.call();
     if (_emojiVisible) {
       setState(() => _emojiVisible = false);
       focus();

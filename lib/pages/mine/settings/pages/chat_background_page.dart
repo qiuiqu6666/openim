@@ -4,8 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 import 'package:wechat_camera_picker/wechat_camera_picker.dart';
 
-import '../appearance/chat_background/chat_background_menu.dart';
-import '../appearance/chat_background/chat_background_picker.dart';
+import '../appearance/chat_background/chat_background_editor.dart';
 
 import '../chat_background_local_service.dart';
 import '../settings_draft_store.dart';
@@ -19,7 +18,6 @@ class ChatBackgroundPage extends StatefulWidget {
     this.conversationName = '',
     this.embedded = false,
     this.onClose,
-    this.showSelection = false,
   });
 
   /// Kept for the Settings shell's in-memory preview compatibility. Persistent
@@ -29,7 +27,6 @@ class ChatBackgroundPage extends StatefulWidget {
   final String conversationName;
   final bool embedded;
   final VoidCallback? onClose;
-  final bool showSelection;
 
   @override
   State<ChatBackgroundPage> createState() => _ChatBackgroundPageState();
@@ -173,6 +170,13 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
       setState(() => _afterSaved(value));
       _syncStore(value);
       _toastSaved();
+    } catch (_) {
+      if (mounted) {
+        showSettingsMessage(
+            context,
+            settingsText(context,
+                zh: '保存失败，请重试', en: 'Unable to save. Please try again.'));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -200,6 +204,13 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
                 en: 'This chat will now use the global default.',
               ),
       );
+    } catch (_) {
+      if (mounted) {
+        showSettingsMessage(
+            context,
+            settingsText(context,
+                zh: '保存失败，请重试', en: 'Unable to save. Please try again.'));
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -231,36 +242,29 @@ class _ChatBackgroundPageState extends State<ChatBackgroundPage> {
   }
 
   @override
-  Widget build(BuildContext context) {
-    if (!widget.showSelection) {
-      return ChatBackgroundMenu(
-        embedded: widget.embedded,
-        onClose: widget.onClose,
-        busy: _loading || _saving,
-        onPhotos: _pickBackground,
-        onCamera: () => _pickBackground(camera: true),
-        onSelect: () async {
-          await Navigator.of(context).push<void>(MaterialPageRoute(
-            builder: (_) => ChatBackgroundPage(
-              store: widget.store,
-              conversationId: widget.conversationId,
-              conversationName: widget.conversationName,
-              showSelection: true,
-            ),
-          ));
-          if (mounted) await _load();
-        },
+  Widget build(BuildContext context) => PopScope(
+        canPop: !_saving,
+        child: ChatBackgroundEditor(
+          globalOnly: _isGlobalOnlyEntry,
+          allChats: _scope == _BackgroundScope.allChats,
+          name: widget.conversationName.trim(),
+          value: _scope == _BackgroundScope.allChats
+              ? _globalValue
+              : (_directValue ?? _globalValue),
+          hasOverride: _hasEditableValue,
+          busy: _loading || _saving,
+          embedded: widget.embedded,
+          onClose: widget.onClose,
+          onScope: (all) {
+            if (!_saving) {
+              setState(() => _scope = all
+                  ? _BackgroundScope.allChats
+                  : _BackgroundScope.currentChat);
+            }
+          },
+          onSelect: _saveValue,
+          onPhotos: _pickBackground,
+          onClear: _clearBackground,
+        ),
       );
-    }
-    return ChatBackgroundPicker(
-      initialValue: _isGlobalOnlyEntry ? _globalValue : _directValue,
-      onSave: (value) async {
-        if (value == null) {
-          await _clearBackground();
-        } else {
-          await _saveValue(value);
-        }
-      },
-    );
-  }
 }

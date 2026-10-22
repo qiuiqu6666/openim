@@ -1,3 +1,5 @@
+import '../../voice/widgets/voice_output_menu.dart';
+import '../../media/chat_gallery_pager.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -75,7 +77,7 @@ class ChatMessageTile extends StatelessWidget {
     }
     return message.isVoiceType
         ? ListenableBuilder(
-            listenable: logic.voiceTranscriptions,
+            listenable: Listenable.merge([logic.voiceTranscriptions, MediaCoordinator.instance.output]),
             builder: (_, child) => Obx(() => _buildItemView(context, message)),
           )
         : Obx(() => _buildItemView(context, message));
@@ -126,6 +128,7 @@ class ChatMessageTile extends StatelessWidget {
             logic.voiceTranscriptions.toggle(message),
         onRetryVoiceTranscription: () => logic.transcribeVoice(message),
         messageMenus: [
+          if (message.isVoiceType) voiceOutputMenu(),
           ...SangongMessageActions.items(context, message),
           if (logic.canAddMessageToStickers(message))
             PopMenuInfo(
@@ -376,12 +379,17 @@ class ChatMessageTile extends StatelessWidget {
                   }));
 
           var previewActive = true;
+          final pager = ChatGalleryPager(
+              gallery: gallery,
+              conversationID: conversationID,
+              isCurrent: () => previewActive && current());
           final shareRecipients = ChatMediaShareRecipients(
               isCurrent: () => previewActive && current());
           await IMUtils.previewMediaFile(
               context: context,
               message: message,
               sources: gallery.sources,
+              loadMoreMedia: pager.load,
               initialIndex: gallery.initialIndex,
               onAutoPlay: (index) {
                 return index == gallery.initialIndex && !logic.playOnce;
@@ -454,7 +462,8 @@ class ChatMessageTile extends StatelessWidget {
             url: video?.snapshotUrl,
             width: 120.w,
           ),
-          const Center(child: ChatVideoPlayIndicator()),
+          if (!isOutgoing || message.status != MessageStatus.sending)
+            const Center(child: ChatVideoPlayIndicator()),
         ]),
       );
     } else {

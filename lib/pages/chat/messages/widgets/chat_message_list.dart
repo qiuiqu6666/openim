@@ -6,6 +6,8 @@ import 'package:openim_common/openim_common.dart';
 import '../../chat_logic.dart';
 import '../../fund/confirmed_fund_card_row.dart';
 import '../../media/chat_image_prewarmer.dart';
+import '../../media/preparation/pending_chat_media.dart';
+import '../../media/widgets/pending_chat_media_bubble.dart';
 import '../../navigation/chat_entry_route_timing.dart';
 import '../../navigation/chat_message_focus_tokens.dart';
 import '../selection/message_selection_drag_region.dart';
@@ -120,6 +122,12 @@ class _ChatMessageListState extends State<ChatMessageList>
           logic.syncStatus.value;
           final latestRows = [
             ...widget.latestRows,
+            for (final pending in PendingChatMedia.entries.reversed)
+              if (pending.conversationID == logic.conversationInfo.conversationID &&
+                  pending.visible())
+                ChatTransientRow(id: pending.id,
+                    child: PendingChatMediaBubble(key: ValueKey(pending.id), pending: pending,
+                        isChannel: logic.isChannel)),
             if (!logic.viewingHistory.value && !logic.hasDeferredLatest)
               for (final card in logic.confirmedFundCards)
                 ChatTransientRow(

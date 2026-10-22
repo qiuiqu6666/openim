@@ -1243,6 +1243,7 @@ class IMUtils {
       {required BuildContext context,
       required Message message,
       List<MediaSource>? sources,
+      Future<bool> Function()? loadMoreMedia,
       int initialIndex = 0,
       bool muted = false,
       bool Function(int)? onAutoPlay,
@@ -1289,6 +1290,7 @@ class IMUtils {
     bool canSave() => previewOpen && owner == (DataSp.userID, DataSp.imToken);
     final mb = MediaBrowser(
       sources: mediaSources,
+      loadMoreMedia: loadMoreMedia,
       showGallery: showGallery,
       showCounter: showCounter,
       initialIndex: initialIndex,

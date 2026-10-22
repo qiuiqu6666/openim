@@ -1,0 +1,74 @@
+--- a/pkg/common/config/config.go
++++ b/pkg/common/config/config.go
+@@ -328,6 +328,8 @@
+ 	} `mapstructure:"object"`
+ }
+ type Cos struct {
++	EngineName   string `mapstructure:"engineName"`
++	Legacy       *Cos   `mapstructure:"legacy"`
+ 	CDN          string `mapstructure:"cdn"`
+ 	BucketURL    string `mapstructure:"bucketURL"`
+ 	SecretID     string `mapstructure:"secretID"`
+--- a/internal/rpc/third/third.go
++++ b/internal/rpc/third/third.go
+@@ -111,7 +111,26 @@
+ 	if err != nil {
+ 		return err
+ 	}
++	if enable == "cos" && config.RpcConfig.Object.Cos.EngineName != "" {
++		o = &objectstorage.NamedEngine{Interface: o, Name: config.RpcConfig.Object.Cos.EngineName}
++	}
+ 	store := controller.NewS3Database(rdb, o, s3db)
++	if enable == "cos" && config.RpcConfig.Object.Cos.Legacy != nil {
++		old := config.RpcConfig.Object.Cos.Legacy
++		legacy, legacyErr := objectstorage.NewCOS(*old.Build(), old.CDN)
++		if legacyErr != nil {
++			return legacyErr
++		}
++		var reader s3.Interface = legacy
++		if old.EngineName != "" {
++			reader = &objectstorage.NamedEngine{Interface: legacy, Name: old.EngineName}
++		}
++		if reader.Engine() == o.Engine() {
++			return fmt.Errorf("COS buckets must use distinct engine names")
++		}
++		store = &legacyReadStore{S3Database: store, legacy: controller.NewS3Database(rdb, reader, s3db)}
++	}
++
+ 	if enable == "cos" && config.RpcConfig.Object.Oss.Bucket != "" {
+ 		// Retain read access to OSS records without running legacy write workers.
+ 		legacy, legacyErr := toolsoss.NewOSS(*config.RpcConfig.Object.Oss.Build())
+--- /dev/null
++++ b/pkg/common/storage/objectstorage/named_engine.go
+@@ -0,0 +1,11 @@
++package objectstorage
++
++import "github.com/openimsdk/tools/s3"
++
++// NamedEngine keeps object metadata for separate COS buckets isolated.
++type NamedEngine struct {
++	s3.Interface
++	Name string
++}
++
++func (s *NamedEngine) Engine() string { return s.Name }
+--- /dev/null
++++ b/pkg/common/storage/objectstorage/named_engine_test.go
+@@ -0,0 +1,17 @@
++package objectstorage
++
++import (
++	"github.com/openimsdk/tools/s3/cos"
++	"testing"
++)
++
++func TestNamedBucketKeepsLegacyEngine(t *testing.T) {
++	old, err := NewCOS(cos.Config{BucketURL: "https://old-123.cos.ap-hongkong.myqcloud.com", SecretID: "x", SecretKey: "y", PublicRead: true}, "")
++	if err != nil {
++		t.Fatal(err)
++	}
++	current := &NamedEngine{Interface: old, Name: "tencent-cos-guangzhou"}
++	if current.Engine() == old.Engine() || old.Engine() != "tencent-cos" {
++		t.Fatal("bucket metadata collision")
++	}
++}

@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 import '../../../core/controller/im_controller.dart';
 import '../../../core/session/queries/sdk_query_gate.dart';
 import 'chat_group_sources.dart';
+import 'permissions/group_mute.dart';
 import 'identity/group_sender_avatars.dart';
 
 export 'chat_group_sources.dart';
@@ -15,6 +16,7 @@ export 'chat_group_sources.dart';
 /// Owns one chat's group metadata, membership, role and mute lifecycle.
 class ChatGroupController {
   ChatGroupController({
+    ChatGroupQueries? queries,
     required IMController im,
     required String? Function() groupID,
     required RxList<Message> messages,
@@ -26,7 +28,7 @@ class ChatGroupController {
     void Function(Object)? reportError,
   }) : this.withSources(
           events: ChatGroupEvents.fromController(im),
-          queries: ChatGroupQueries.sdk(),
+          queries: queries ?? ChatGroupQueries.sdk(),
           groupID: groupID,
           currentUserID: currentUserID ?? (() => OpenIM.iMManager.userID),
           messages: messages,
@@ -183,7 +185,8 @@ class ChatGroupController {
     if (membershipPending.value) return true;
     return isGroupChat &&
         groupInfo?.status == 3 &&
-        (groupMembersInfo?.muteEndTime ?? 0) <= _nowSeconds() &&
+        !GroupMute.active(groupMembersInfo?.muteEndTime,
+            nowMilliseconds: _nowSeconds() * 1000) &&
         !const [
           GroupRoleLevel.member,
           GroupRoleLevel.admin,
@@ -193,7 +196,10 @@ class ChatGroupController {
 
   bool get personallyMuted {
     _muteRevision.value;
-    return isGroupChat && (groupMembersInfo?.muteEndTime ?? 0) > _nowSeconds();
+    return isGroupChat &&
+        groupMemberRoleLevel.value != GroupRoleLevel.owner &&
+        GroupMute.active(groupMembersInfo?.muteEndTime,
+            nowMilliseconds: _nowSeconds() * 1000);
   }
 
   bool get sendingMuted {
@@ -203,7 +209,7 @@ class ChatGroupController {
       return true;
     }
     return isGroupChat &&
-        ((groupMembersInfo?.muteEndTime ?? 0) > _nowSeconds() ||
+        (personallyMuted ||
             (groupInfo?.status == 3 &&
                 (muteStatusPending ||
                     groupMemberRoleLevel.value == GroupRoleLevel.member)));
@@ -339,10 +345,56 @@ class ChatGroupController {
 
   Future<void>? _profileRefresh;
   Timer? _profileRetryTimer;
+  Future<void>? _permissionRefresh;
 
-  /// A sync finish can repair native metadata without a live group callback.
-  /// Read only this profile, preserving loaded members and message history.
-  Future<void> refreshProfileAfterSync() => _refreshProfile();
+  /// Reconcile this chat's membership and permissions even when a live member
+  /// callback was missed. Concurrent recovery signals share the same request.
+  Future<void> refreshProfileAfterSync() => _permissionRefresh ??=
+      _refreshPermissions().whenComplete(() => _permissionRefresh = null);
+
+  Future<void> _refreshPermissions() async {
+    if (!_matches(groupID())) return;
+    if (_leftByEvent || membershipPending.value || !isInGroup.value) {
+      await _refreshProfile();
+      return;
+    }
+    final id = groupID()!;
+    final user = currentUserID();
+    final membership = _membershipRevision;
+    final selfRevision = ++_selfRevision;
+    final adminRevision = ++_adminRevision;
+    try {
+      final verify = _queries.verifyMembership;
+      if (verify != null) {
+        final joined = await _read('server-membership', () => verify(id, user));
+        if (!_queryStillCurrent(id, user, membership)) return;
+        if (!joined) {
+          _leaveGroup();
+          return;
+        }
+      }
+      if (!_queryStillCurrent(id, user, membership)) return;
+      _senderAvatars.refreshMessages(messages);
+      var permissionFailed = false;
+      await Future.wait([
+        _refreshProfile(),
+        _querySelfMember(id, user, membership,
+            capturedRevision: selfRevision,
+            onFailure: () => permissionFailed = true),
+        _queryOwnerAndAdmin(id, user, membership,
+            capturedRevision: adminRevision,
+            onFailure: () => permissionFailed = true),
+      ]);
+      if (_queryStillCurrent(id, user, membership) && permissionFailed) {
+        recover(resetAttempts: true);
+      }
+    } catch (error) {
+      if (_queryStillCurrent(id, user, membership)) {
+        _loadError(error);
+        recover(resetAttempts: true);
+      }
+    }
+  }
 
   Future<void> _refreshProfile({int attempt = 0}) {
     if (!_matches(groupID())) return Future<void>.value();
@@ -424,11 +476,11 @@ class ChatGroupController {
       var joined = !_leftByEvent &&
           await _read('membership', () => _queries.isJoined(id));
       if (!_queryStillCurrent(id, userID, revision)) return;
-      if (!joined) {
+      if (!joined || (_queries.verifyMembership != null && revision == 0)) {
         // Cache absence cannot distinguish sync lag from a real departure.
         // Stop sending while unresolved, without claiming the user has left.
         if (!_leftByEvent) membershipPending.value = true;
-        isInGroup.value = false;
+        if (!joined) isInGroup.value = false;
         _loadFailed = true; // Bounded retries also cover negative snapshots.
         final verify = _queries.verifyMembership;
         if (verify == null) return;
@@ -490,9 +542,9 @@ class ChatGroupController {
     }
   }
 
-  Future<void> _querySelfMember(
-      String id, String userID, int membership) async {
-    final revision = _selfRevision;
+  Future<void> _querySelfMember(String id, String userID, int membership,
+      {int? capturedRevision, void Function()? onFailure}) async {
+    final revision = capturedRevision ?? _selfRevision;
     try {
       final list = await _read(
           ('self', revision), () => _queries.selfMember(id, userID));
@@ -508,13 +560,16 @@ class ChatGroupController {
       _refreshMute();
       messages.refresh();
     } catch (error) {
-      if (_queryStillCurrent(id, userID, membership)) _loadError(error);
+      if (_queryStillCurrent(id, userID, membership)) {
+        _loadError(error);
+        onFailure?.call();
+      }
     }
   }
 
-  Future<void> _queryOwnerAndAdmin(
-      String id, String userID, int membership) async {
-    final revision = _adminRevision;
+  Future<void> _queryOwnerAndAdmin(String id, String userID, int membership,
+      {int? capturedRevision, void Function()? onFailure}) async {
+    final revision = capturedRevision ?? _adminRevision;
     try {
       final list =
           await _read(('admins', revision), () => _queries.ownerAndAdmin(id));
@@ -530,7 +585,10 @@ class ChatGroupController {
       _adminListLoaded.value = true;
       messages.refresh();
     } catch (error) {
-      if (_queryStillCurrent(id, userID, membership)) _loadError(error);
+      if (_queryStillCurrent(id, userID, membership)) {
+        _loadError(error);
+        onFailure?.call();
+      }
     }
   }
 
@@ -612,9 +670,11 @@ class ChatGroupController {
   void _refreshMute() {
     _muteRevision.value++;
     _muteTimer?.cancel();
-    final seconds = (groupMembersInfo?.muteEndTime ?? 0) - _nowSeconds();
-    if (seconds > 0) {
-      _muteTimer = Timer(Duration(seconds: seconds + 1), () {
+    final remaining = GroupMute.remaining(groupMembersInfo?.muteEndTime,
+        nowMilliseconds: _nowSeconds() * 1000);
+    if (remaining != null &&
+        groupMemberRoleLevel.value != GroupRoleLevel.owner) {
+      _muteTimer = Timer(remaining + const Duration(seconds: 1), () {
         if (!_closed) _muteRevision.value++;
       });
     }

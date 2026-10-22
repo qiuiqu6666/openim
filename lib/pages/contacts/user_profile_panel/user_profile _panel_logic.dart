@@ -22,6 +22,7 @@ import '../../../services/common_group_count_service.dart';
 import '../common_groups/common_groups_page.dart';
 import '../../mine/settings/pages/chat_background_page.dart';
 import '../../chat/chat_logic.dart';
+import '../../chat/group/permissions/group_mute.dart';
 import '../../chat/group_setup/group_manage/group_friend_protection_store.dart';
 import 'adding/profile_friend_add_account_resolver.dart';
 import 'identity/group_profile_account_state.dart';
@@ -112,6 +113,8 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   int _profileRequest = 0;
   int _userInfoRequest = 0;
   int _friendIdentityRevision = 0;
+  int _avatarRevision = 0;
+  int _memberIdentityRevision = 0;
   final profileLayoutReady = false.obs;
   final initialProfileFailed = false.obs;
   final commonGroupCount = RxnInt();
@@ -121,6 +124,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   final _commonGroupSubscriptions = <StreamSubscription>[];
   final _groupIdentitySubscriptions = <StreamSubscription>[];
   Timer? _commonGroupRefreshTimer;
+  Timer? _muteExpiryTimer;
   int _commonGroupRequest = 0;
   CancelToken? _commonGroupCancel;
   late StreamSubscription _friendAddedSub;
@@ -132,6 +136,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void onClose() {
+    _muteExpiryTimer?.cancel();
     _friendAddAccountResolver.close();
     _groupPermissionEpoch++;
     _friendProtectionWorker?.dispose();
@@ -239,6 +244,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     _friendInfoChangedSub = imLogic.friendInfoChangedSubject.listen((user) {
       if (user.userID == userInfo.value.userID) {
         _friendIdentityRevision++;
+        _avatarRevision++;
         userInfo.update((val) {
           val?.nickname = user.nickname;
           val?.faceURL = user.faceURL;
@@ -287,6 +293,13 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         }
       }
       if (value.userID == userInfo.value.userID) {
+        _memberIdentityRevision++;
+        groupMembersInfo = value;
+        if (value.faceURL != null) {
+          _avatarRevision++;
+          userInfo.update((user) => user?.faceURL = value.faceURL);
+          UserCacheManager().addOrUpdateUserInfo(value.userID!, userInfo.value);
+        }
         final roleChanged = _targetRole.value != value.roleLevel;
         if (roleChanged) _groupPermissionEpoch++;
         _targetRole.value = value.roleLevel;
@@ -297,7 +310,8 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
           unawaited(_queryGroupMemberInfo());
         }
         if (null != value.muteEndTime) {
-          _calMuteTime(value.muteEndTime!);
+          _calMuteTime(
+              value.roleLevel == GroupRoleLevel.owner ? 0 : value.muteEndTime!);
         }
         groupUserNickname.value = value.nickname ?? '';
       }
@@ -442,6 +456,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   Future<void> _getUsersInfo() async {
     final request = ++_userInfoRequest;
     final identityRevision = _friendIdentityRevision;
+    final avatarRevision = _avatarRevision;
     final owner = DataSp.userID;
     final sdkOwner = OpenIM.iMManager.userID;
     final token = DataSp.chatToken;
@@ -477,7 +492,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
 
         userInfo.update((val) {
           val?.nickname = user.nickname;
-          val?.faceURL = user.faceURL;
+          if (avatarRevision == _avatarRevision) val?.faceURL = user.faceURL;
           val?.ex = user.ex;
         });
 
@@ -515,7 +530,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
           userInfo.update((val) {
             if (identityRevision != _friendIdentityRevision) return;
             val?.nickname = user.nickname;
-            val?.faceURL = user.faceURL;
+            if (avatarRevision == _avatarRevision) val?.faceURL = user.faceURL;
             val?.ex = user.ex;
             val?.remark = friendInfo?.remark;
             val?.isBlacklist = isBlack;
@@ -528,7 +543,9 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
           // is in flight. Keep its newer identity and finish loading metadata.
           if (identityRevision == _friendIdentityRevision) {
             val?.nickname = friendInfo.nickname;
-            val?.faceURL = friendInfo.faceURL;
+            if (avatarRevision == _avatarRevision) {
+              val?.faceURL = friendInfo.faceURL;
+            }
             val?.remark = friendInfo.remark;
           }
           val?.isBlacklist = isBlack;
@@ -646,6 +663,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     if (isGroupMemberPage && !_groupContextClosed.value) {
       final scope = _groupPermissionScope;
       final request = ++_groupMembersRead;
+      final identityRevision = _memberIdentityRevision;
       final List<GroupMembersInfo> list;
       try {
         list = await OpenIM.iMManager.groupManager.getGroupMembersInfo(
@@ -665,9 +683,11 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       }
       final other =
           list.firstWhereOrNull((e) => e.userID == userInfo.value.userID);
-      groupMembersInfo = other;
+      if (identityRevision == _memberIdentityRevision) {
+        groupMembersInfo = other;
+        groupUserNickname.value = other?.nickname ?? '';
+      }
       _targetRole.value = other?.roleLevel;
-      groupUserNickname.value = other?.nickname ?? '';
       joinGroupTime.value = other?.joinTime ?? 0;
 
       hasAdminPermission.value = other?.roleLevel == GroupRoleLevel.admin;
@@ -708,11 +728,9 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         _getJoinGroupMethod(other);
       }
 
-      if (null != other &&
-          null != other.muteEndTime &&
-          other.muteEndTime! > 0) {
-        _calMuteTime(other.muteEndTime!);
-      }
+      _calMuteTime(other?.roleLevel == GroupRoleLevel.owner
+          ? 0
+          : (other?.muteEndTime ?? 0));
     }
   }
 
@@ -739,14 +757,18 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
     }
   }
 
-  _calMuteTime(int time) {
-    var date = DateUtil.formatDateMs(time, format: IMUtils.getTimeFormat2());
-    var now = DateTime.now().millisecondsSinceEpoch ~/ 1000;
-    var diff = time - now;
-    if (diff > 0) {
-      mutedTime.value = date;
-    } else {
-      mutedTime.value = "";
+  void _calMuteTime(int time) {
+    _muteExpiryTimer?.cancel();
+    final remaining = GroupMute.remaining(time,
+        nowMilliseconds: DateTime.now().millisecondsSinceEpoch);
+    mutedTime.value = remaining == null
+        ? ''
+        : DateUtil.formatDateMs(GroupMute.milliseconds(time),
+            format: IMUtils.getTimeFormat2());
+    if (remaining != null) {
+      _muteExpiryTimer = Timer(remaining, () {
+        if (!isClosed) mutedTime.value = '';
+      });
     }
   }
 

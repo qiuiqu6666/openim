@@ -57,6 +57,26 @@ class GroupSenderAvatars {
     _scheduleLoad();
   }
 
+  /// Recovery rechecks only identities used by the loaded message window.
+  /// Reuse the bounded query queue instead of reloading the whole member list.
+  void refreshMessages(Iterable<Message> messages) {
+    if (_closed || !isCurrent()) return;
+    final ids = <String>{};
+    for (final message in messages) {
+      final sender = message.sendID;
+      if (sender != null && sender.isNotEmpty) ids.add(sender);
+      final detail = groupNoticeDetail(message);
+      if (detail == null) continue;
+      for (final member in groupNoticeMembers(detail)) {
+        final id = member['userID'];
+        if (id is String && id.isNotEmpty) ids.add(id);
+      }
+    }
+    for (final id in ids) {
+      refreshMember(id);
+    }
+  }
+
   void update(String? id, String? face) {
     if (_closed || !isCurrent() || id == null || id.isEmpty || face == null) {
       return;

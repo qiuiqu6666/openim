@@ -94,10 +94,25 @@ class GroupMemberIdentitySource {
     if (userID != _currentUserID() || userID != _sdkUserID()) {
       throw const GroupMemberIdentitySessionChanged();
     }
-    final data = await _request('/group/get_group_members_info', {
-      'groupID': groupID,
-      'userIDs': [userID],
-    });
+    final Map<String, dynamic> data;
+    try {
+      data = await _request('/group/get_group_members_info', {
+        'groupID': groupID,
+        'userIDs': [userID],
+      });
+    } catch (error) {
+      // A departed user may no longer read member details. Permission denial
+      // alone is not departure: confirm against the complete joined directory.
+      if (error is! (int, String) || error.$1 != 1002) rethrow;
+      final joined =
+          await _request('/group/get_full_join_group_ids', {'userID': userID});
+      final ids = joined['groupIDs'];
+      if (ids is! List || ids.any((id) => id is! String || id.trim().isEmpty)) {
+        throw const FormatException(
+            'Invalid joined group verification response');
+      }
+      return ids.contains(groupID);
+    }
     final values = data['members'];
     if (values is! List ||
         values.any((value) =>

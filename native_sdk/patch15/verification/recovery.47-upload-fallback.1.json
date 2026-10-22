@@ -1,0 +1,16 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.47-upload-fallback.1",
+  "date": "2026-10-22",
+  "routes": ["signed COS acceleration", "separately signed Guangzhou origin", "authenticated IM API streaming relay"],
+  "sdk_tests": "targeted upload tests and race passed on Go 1.26.0",
+  "mobile_tests": "targeted fallback, resume, cancellation, deadline and hash tests with race passed on Go 1.24.0 and Go 1.26.0",
+  "source_lock_tests": 15,
+  "server_tests": "objectstorage, uploadrelay, API, third RPC, storage controller passed",
+  "live_storage": "all three routes verified byte-for-byte; temporary objects removed",
+  "live_authenticated_api": "deployed signing and authenticated relay verified; no chat messages sent",
+  "server_deployed": true,
+  "rollback": "/srv/99chat-production/backups/upload-fallback-20261022-234723/rollback.sh",
+  "native_binaries_rebuilt": false,
+  "device_tested": false,
+  "limitation": "Existing mobile installations require native SDK and App rebuild. Storage fallback is a backend relay to the same COS bucket, not an independent durable store. Public download URLs are unchanged."
+}

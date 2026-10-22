@@ -20,8 +20,7 @@ class AppTokens {
   static const Color videoHoldHintBackground = Color(0xB3000000);
   static const EdgeInsets videoHoldHintPadding =
       EdgeInsets.symmetric(horizontal: 16, vertical: 8);
-  static const EdgeInsets videoSpeedPadding =
-      EdgeInsets.fromLTRB(8, 16, 8, 0);
+  static const EdgeInsets videoSpeedPadding = EdgeInsets.fromLTRB(8, 16, 8, 0);
   static const TextStyle videoSpeedTextStyle =
       TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
 
@@ -227,6 +226,7 @@ class ChatBubbleTokens {
   static const double radius = 16;
   static const double senderCornerRadius = 6;
   static const double horizontalPadding = 12;
+  static const double compactHorizontalPadding = 10;
   static const double verticalPadding = 8;
   static const double metadataFontSize = 11;
   static const double deliveryStatusSize = 16;
@@ -272,6 +272,7 @@ class ChatComposerTokens {
   static const Color dividerLight = Color(0xFFEAEAEA);
   static const double inputHeight = 36;
   static const double verticalPadding = 5;
+  static const double barHeight = 47;
   static const double horizontalPadding = 16;
   static const double actionGap = 10;
   static const double iconSize = 26;

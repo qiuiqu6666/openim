@@ -28,6 +28,13 @@ Message _message(String id) => Message.fromJson({
     });
 
 class _TileLogic extends GetxController implements ChatLogic {
+  @override
+  Message resolveGroupNotice(Message message) => message;
+  @override
+  bool get isChannel => false;
+  @override
+  bool get isChannelSubscriber => false;
+
   ChatDeliveryController? delivery;
   @override
   final messageReadUpdates = ChatMessageReadUpdates();

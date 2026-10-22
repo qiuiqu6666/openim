@@ -8,6 +8,7 @@ import 'package:package_info_plus/package_info_plus.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:openim/pages/chat/media/chat_media_controller.dart';
+import 'package:openim/pages/chat/media/preparation/pending_chat_media.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:wechat_assets_picker/wechat_assets_picker.dart';
 
@@ -130,6 +131,7 @@ void main() {
   });
 
   setUp(() async {
+    PendingChatMedia.entries.clear();
     directory = await Directory.systemTemp.createTemp('chat-album-send-');
     Config.cachePath = directory.path;
     photo = await File('${directory.path}/photo.jpg').writeAsBytes([1, 2, 3]);
@@ -316,6 +318,8 @@ void main() {
     ];
     final pending = media.onTapAlbum();
     await started.future;
+    expect(PendingChatMedia.entries.map((entry) => entry.asset.id),
+        contains('slow-first'));
     try {
       await _until(() => sends.isNotEmpty);
       expect(media.preparingCount.value, 1);
@@ -329,6 +333,27 @@ void main() {
     }
     expect(staged, hasLength(2));
     expect(sends, ['image-1', 'image-2']);
+    expect(PendingChatMedia.entries, isEmpty);
+  });
+
+  test('all selected bubbles exist before source files are available', () async {
+    final source = Completer<File?>();
+    selected = [
+      _Asset('first', source.future),
+      _Asset('second', source.future),
+      _Asset('third', source.future),
+    ];
+    final operation = media.onTapAlbum();
+    await _until(() => PendingChatMedia.entries.length == 3);
+    expect(staged, isEmpty);
+    expect(sends, isEmpty);
+    expect(PendingChatMedia.entries.map((entry) => entry.asset.id),
+        ['first', 'second', 'third']);
+    source.complete(photo);
+    await operation;
+    expect(PendingChatMedia.entries, isEmpty);
+    expect(staged, hasLength(3));
+    expect(sends.toSet(), hasLength(3));
   });
 
   test('preparation retry sends only failed item and double tap is harmless',
@@ -338,6 +363,7 @@ void main() {
     await media.onTapAlbum();
     expect(media.failedPreparationCount.value, 1);
     expect(staged, isEmpty);
+    expect(PendingChatMedia.entries, isEmpty);
     expect(sends, isEmpty);
     media.retryPreparation();
     media.retryPreparation();

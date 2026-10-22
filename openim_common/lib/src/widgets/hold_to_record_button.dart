@@ -341,6 +341,12 @@ class _HoldToRecordButtonState extends State<HoldToRecordButton>
     if (!foreground || !widget.enabled) return const SizedBox.shrink();
     final recorder = VoiceRecorderWidget(
       controller: _recorderController,
+      acquireAudio: (stopNative) async {
+        final lease = await MediaCoordinator.instance
+            .acquire(MediaKind.recording, stopNative);
+        if (lease == null) throw StateError('Another recording is active');
+        return () => lease.release(stopped: true);
+      },
       builder: widget.expandedPanel ? _expandedRecorder : null,
       style: VoiceUIStyle.compact,
       idleText: busy

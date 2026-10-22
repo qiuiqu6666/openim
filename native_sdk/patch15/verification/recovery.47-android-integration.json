@@ -1,0 +1,14 @@
+{
+  "date": "2026-10-23",
+  "android_aar_verified": true,
+  "arm64_debug_apk": "D:\\openim-build-output\\android-app\\outputs\\flutter-apk\\app-debug.apk",
+  "apk_sha256": "9d4f6bf9f0f1ce58bafa2dc8478b4a10f1a4de45b3a38906f4997b83aa0760ca",
+  "packaged_native_sha256": "8734c3c3dfd8b7006fe1f327b246fbd4e1a45f0a984cc6d126f97bf722903784",
+  "aar_matches_merged_native": true,
+  "apk_matches_stripped_native": true,
+  "note": "Gradle symbol stripping changes native file bytes; parity checked through merge and strip outputs.",
+  "flutter_targeted_tests_passed": 38,
+  "source_lock_tests_passed": 15,
+  "device_tested": false,
+  "ios_rebuilt": false
+}

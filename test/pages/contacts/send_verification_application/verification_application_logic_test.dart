@@ -391,7 +391,7 @@ void main() {
         });
         await pending;
         await tester.pumpAndSettle();
-        expect(find.text('你已被对方拉黑，无法添加好友。'), findsOneWidget);
+        expect(find.text('对方将您加入黑名单暂无法添加对方'), findsOneWidget);
         expect(find.text(StrRes.sendSuccessfully), findsNothing);
         expect(find.text('verification'), findsOneWidget);
         expect(logic.inputCtrl.text, '保留我的申请');

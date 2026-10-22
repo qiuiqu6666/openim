@@ -1,0 +1,73 @@
+--- a/internal/api/router.go
++++ b/internal/api/router.go
+@@ -3,6 +3,7 @@
+ import (
+ 	"context"
+ 	"github.com/openimsdk/open-im-server/v3/internal/api/batchread"
++	"github.com/openimsdk/open-im-server/v3/internal/api/uploadrelay"
+ 	"github.com/openimsdk/open-im-server/v3/pkg/messagesearch"
+ 	"github.com/redis/go-redis/v9"
+ 	"net/http"
+@@ -258,6 +259,7 @@
+ 		objectGroup.POST("/part_size", t.PartSize)
+ 		objectGroup.POST("/initiate_multipart_upload", t.InitiateMultipartUpload)
+ 		objectGroup.POST("/auth_sign", t.AuthSign)
++		objectGroup.POST("/upload_relay", uploadrelay.New(nil))
+ 		objectGroup.POST("/complete_multipart_upload", t.CompleteMultipartUpload)
+ 		objectGroup.POST("/access_url", t.AccessURL)
+ 		objectGroup.POST("/initiate_form_data", t.InitiateFormData)
+--- a/pkg/common/storage/objectstorage/cos.go
++++ b/pkg/common/storage/objectstorage/cos.go
+@@ -16,6 +16,7 @@
+ // COS uses the origin for all signed uploads and the optional CDN for public reads.
+ type COS struct {
+ 	*cos.Cos
++	regional    *cos.Cos
+ 	origin      string
+ 	cdn         string
+ 	config      Config
+@@ -48,7 +49,11 @@
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	c := &COS{Cos: backend, origin: strings.TrimRight(conf.BucketURL, "/"), cdn: strings.TrimRight(readCDN, "/"), config: cfg, lifetime: ctx}
++	regional, err := newRegionalUploader(conf)
++	if err != nil {
++		return nil, err
++	}
++	c := &COS{Cos: backend, regional: regional, origin: strings.TrimRight(conf.BucketURL, "/"), cdn: strings.TrimRight(readCDN, "/"), config: cfg, lifetime: ctx}
+ 	if rdb != nil {
+ 		queue := newCleanupQueue(rdb, "tencent-cos/"+c.origin, c.deleteNow)
+ 		c.cleanup = queue
+@@ -62,19 +67,19 @@
+ func (c *COS) StatObject(ctx context.Context, name string) (*s3.ObjectInfo, error) {
+ 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.OperationTimeoutMS)*time.Millisecond)
+ 	defer cancel()
+-	return c.Cos.StatObject(ctx, name)
++	return c.metadataClient().StatObject(ctx, name)
+ }
+ 
+ func (c *COS) CopyObject(ctx context.Context, src, dst string) (*s3.CopyObjectInfo, error) {
+ 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.OperationTimeoutMS)*time.Millisecond)
+ 	defer cancel()
+-	return c.Cos.CopyObject(ctx, src, dst)
++	return c.metadataClient().CopyObject(ctx, src, dst)
+ }
+ 
+ func (c *COS) CompleteMultipartUpload(ctx context.Context, uploadID, name string, parts []s3.Part) (*s3.CompleteMultipartUploadResult, error) {
+ 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.OperationTimeoutMS)*time.Millisecond)
+ 	defer cancel()
+-	return c.Cos.CompleteMultipartUpload(ctx, uploadID, name, parts)
++	return c.metadataClient().CompleteMultipartUpload(ctx, uploadID, name, parts)
+ }
+ 
+ func (c *COS) DeleteObject(ctx context.Context, name string) error {
+@@ -88,7 +93,7 @@
+ func (c *COS) deleteNow(ctx context.Context, name string) error {
+ 	ctx, cancel := context.WithTimeout(ctx, time.Duration(c.config.OperationTimeoutMS)*time.Millisecond)
+ 	defer cancel()
+-	return c.Cos.DeleteObject(ctx, name)
++	return c.metadataClient().DeleteObject(ctx, name)
+ }
+ 
+ func (c *COS) AccessURL(ctx context.Context, key string, expiry time.Duration, opt *s3.AccessURLOption) (string, error) {

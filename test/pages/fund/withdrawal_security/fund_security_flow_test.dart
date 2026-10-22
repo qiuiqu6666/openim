@@ -79,6 +79,7 @@ Future<void> _open(
   _Api api,
   _Result result, {
   bool authorize = true,
+  FundSecurityRequest? request,
   Brightness brightness = Brightness.light,
   Size size = const Size(375, 812),
   double scale = 1,
@@ -105,7 +106,7 @@ Future<void> _open(
                   onPressed: () async {
                     result.value = authorize
                         ? await authorizeFundSecurity(context,
-                            request: _request(),
+                            request: request ?? _request(),
                             api: api,
                             isCurrent: () => result.current)
                         : await showModalBottomSheet<Object>(
@@ -218,6 +219,43 @@ void main() {
     expect(result.value, isNull);
     expect(result.finished, isTrue);
   });
+
+  for (final request in [
+    FundSecurityRequest.transfer({
+      'clientOrderID': 'transfer', 'currency': 'USDT', 'amount': '10',
+      'scene': 'single', 'recvID': 'recipient',
+    }),
+    FundSecurityRequest.packet({
+      'clientOrderID': 'packet', 'currency': 'USDT', 'amount': '10',
+      'biz': 'packet_normal', 'scene': 'single', 'recvID': 'recipient',
+    }),
+    FundSecurityRequest.swap({
+      'clientOrderID': 'swap', 'fromCurrency': 'USDT', 'toCurrency': 'BI99',
+      'amount': '10', 'quoteID': 'quote',
+    }),
+  ]) {
+    testWidgets('${request.kind} shows the shared two-hour waiting dialog',
+        (tester) async {
+      final api = _Api()
+        ..blockedUntil =
+            DateTime.utc(2026, 10, 21, 10, 47, 1).millisecondsSinceEpoch;
+      final result = _Result();
+      await _open(tester, api, result, request: request);
+      expect(find.text('暂时无法转出'), findsOneWidget);
+      expect(
+          find.text('手机号或密码变更后需等待2小时。\n'
+              '允许转出时间：2026-10-21 18:47:01（UTC+8）'),
+          findsOneWidget);
+      expect(api.calls.single.body, request.toJson());
+      expect(api.sends, 0);
+      expect(result.finished, isFalse);
+      await tester.tap(find.text('知道了'));
+      await tester.pumpAndSettle();
+      expect(result.finished, isTrue);
+      expect(result.value, isNull);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('missing sender phone never skips required SMS', (tester) async {
     final api = _Api()..phone = '';

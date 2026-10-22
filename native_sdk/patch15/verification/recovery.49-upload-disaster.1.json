@@ -1,0 +1,43 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.49-upload-disaster.1",
+  "date": "2026-10-23",
+  "routes": [
+    "Guangzhou direct pair",
+    "Hong Kong direct pair",
+    "Guangzhou backend relay",
+    "Hong Kong backend relay"
+  ],
+  "deadlines": {
+    "connect_seconds": 3,
+    "TLS_seconds": 3,
+    "idle_seconds_approx": 8,
+    "signing_seconds": 5,
+    "small_image_max_bytes": 10485760,
+    "small_image_total_seconds": 30,
+    "other_total_seconds": 540,
+    "failed_route_cooldown_seconds": 30
+  },
+  "server_tests": "targeted storage, RPC and API tests/race passed",
+  "sdk_tests": "six routes, correct cross-bucket resets/same-bucket resume, country ordering, cooldown, idle progress, legacy resume, permissions/cancellation passed",
+  "mobile_tests": "Go1.24 race and required core native build tests passed",
+  "live": "Guangzhou and Hong Kong relay; Hong Kong acceleration and regional PUT; HK completion and logical-name read bytes verified; temporary content, mappings, sessions cleaned",
+  "server_deployed": true,
+  "full_rollback": "/srv/99chat-production/backups/upload-disaster-20261023-004202/rollback.sh",
+  "last_patch_rollback": "/srv/99chat-production/backups/upload-disaster-20261023-004522/rollback.sh",
+  "source_lock_tests": 15,
+  "source_files": 713,
+  "android_aar_sha256": "54cfbdf5adb253f57e605789ee49422bc4a9902b059c6845dad2c53b1bd766ae",
+  "android_apk": "D:\\openim-build-output\\android-app\\outputs\\flutter-apk\\app-debug.apk",
+  "android_apk_sha256": "fcbe56623f4983f23bb8737f56a722900a6dac8119e2995bd112cbf9112638d6",
+  "packaged_arm64_sha256": "c5d82fdeb85e387985404e40f85c0186a9449a95cdc1346d669d5c3027ef72cf",
+  "aar_matches_merged": true,
+  "apk_matches_stripped": true,
+  "ios_rebuilt": false,
+  "device_tested": false,
+  "limitations": [
+    "30s applies per recognized image file <=10MiB, excluding preparation/delivery",
+    "Cross-bucket restart; unfinished sessions follow bucket lifecycle; no historical replication",
+    "Both buckets share Tencent cloud",
+    "iOS requires macOS rebuild"
+  ]
+}

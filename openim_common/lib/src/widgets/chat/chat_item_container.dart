@@ -22,6 +22,7 @@ class ChatItemContainer extends StatelessWidget {
     this.timeStr,
     required this.isBubbleBg,
     this.mediaOverlay = false,
+    this.centerSendingStatus = false,
     this.bareMedia = false,
     this.stickerMedia = false,
     this.standaloneCard = false,
@@ -40,6 +41,7 @@ class ChatItemContainer extends StatelessWidget {
     this.showRightNickname = false,
     required this.child,
     this.childWithStatusBuilder,
+    this.bubbleWrapper,
     this.embeddedStatusColor,
     this.sendStatusStream,
     this.transferStatus,
@@ -67,6 +69,7 @@ class ChatItemContainer extends StatelessWidget {
   final String? timeStr;
   final bool isBubbleBg;
   final bool mediaOverlay;
+  final bool centerSendingStatus;
   final bool bareMedia;
   final bool stickerMedia;
   final bool standaloneCard;
@@ -85,6 +88,7 @@ class ChatItemContainer extends StatelessWidget {
   final bool showLeftNickname;
   final bool showRightNickname;
   final Widget child;
+  final Widget Function(Widget bubble)? bubbleWrapper;
 
   /// Content that reserves a place for the same delivery state inside itself.
   final Widget Function(Widget? status)? childWithStatusBuilder;
@@ -144,6 +148,7 @@ class ChatItemContainer extends StatelessWidget {
     final textStyle = textBubbleStyle;
     final dark = Theme.of(context).brightness == Brightness.dark;
     final overlay = mediaOverlay || stickerMedia;
+    final centeredStatus = centerSendingStatus && isSending && !isSendFailed;
     final showReadStatus = this.showReadStatus &&
         (textStyle?.showReadStatus ?? true) &&
         FriendDisplayPreferences.showReadReceipts;
@@ -173,9 +178,11 @@ class ChatItemContainer extends StatelessWidget {
                         status: transferStatus!,
                         onCheck: onCheckDelivery,
                         color: embeddedStatusColor ??
-                            (overlay ? AppTokens.onAccent : null))
+                            (overlay || centeredStatus ? AppTokens.onAccent : null))
                     : ChatDelayedStatusView(
-                        isSending: true, color: embeddedStatusColor)
+                        isSending: true,
+                        color: embeddedStatusColor ??
+                            (centeredStatus ? AppTokens.onAccent : null))
                 : SizedBox.square(
                     dimension: ChatBubbleTokens.deliveryStatusSize.w,
                     child: Center(
@@ -198,11 +205,31 @@ class ChatItemContainer extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (time != null) time,
-        if (status != null) ...[5.horizontalSpace, Flexible(child: status)],
+        if (status != null && !centeredStatus) ...[
+          5.horizontalSpace, Flexible(child: status)],
       ],
     );
-    final hasMetadata = time != null || status != null;
-    final contentChild = childWithStatusBuilder?.call(status) ?? child;
+    final hasMetadata = time != null || (status != null && !centeredStatus);
+    final baseChild = childWithStatusBuilder?.call(status) ?? child;
+    final contentChild = centeredStatus && status != null
+        ? Stack(children: [
+            baseChild,
+            Positioned.fill(
+              child: Center(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.scrim.withValues(alpha: .4),
+                    borderRadius: BorderRadius.circular(ChatBubbleTokens.radius),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppTokens.s2),
+                    child: status,
+                  ),
+                ),
+              ),
+            ),
+          ])
+        : baseChild;
     final content = overlay
         ? ChatMessageContentAnchor(
             messageID: id,
@@ -287,7 +314,7 @@ class ChatItemContainer extends StatelessWidget {
                     isISend ? CrossAxisAlignment.end : CrossAxisAlignment.start,
                 children: [
                   ChatMessageContentAnchor(messageID: id, child: contentChild),
-                  if (time != null || status != null) ...[
+                  if (hasMetadata) ...[
                     SizedBox(height: 4.h),
                     metadata,
                   ],
@@ -383,13 +410,13 @@ class ChatItemContainer extends StatelessWidget {
                       ),
                     ),
                   );
-    if (messageMenus.isEmpty) return content;
-    return ChatMessageMenu(
+    final bubble = messageMenus.isEmpty ? content : ChatMessageMenu(
       menus: messageMenus,
       controller: menuController,
       isOutgoing: isISend,
       child: content,
     );
+    return bubbleWrapper?.call(bubble) ?? bubble;
   }
 
   Widget _buildLeftView(BuildContext context) => Row(

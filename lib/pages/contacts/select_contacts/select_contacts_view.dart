@@ -70,102 +70,116 @@ class SelectContactsPage extends StatelessWidget {
           Flexible(
             child: Obx(() {
               final conversations = logic.visibleConversations;
-              return CustomScrollView(
-                controller: logic.recentScrollController,
-                keyboardDismissBehavior:
-                    ScrollViewKeyboardDismissBehavior.onDrag,
-                slivers: [
-                  SliverFixedExtentList(
-                    delegate: SliverChildListDelegate(
-                      [
-                        _buildCategoryItemView(
-                          label: StrRes.myFriend,
-                          onTap: logic.selectFromMyFriend,
-                        ),
-                        if (!logic.hiddenGroup)
+              return NotificationListener<ScrollNotification>(
+                onNotification: (notification) {
+                  if (notification.depth == 0 &&
+                      notification.metrics.extentAfter <
+                          notification.metrics.viewportDimension / 2 &&
+                      !logic.recentLoadFailed.value) {
+                    logic.loadMoreRecentConversations();
+                  }
+                  return false;
+                },
+                child: CustomScrollView(
+                  controller: logic.recentScrollController,
+                  keyboardDismissBehavior:
+                      ScrollViewKeyboardDismissBehavior.onDrag,
+                  slivers: [
+                    SliverFixedExtentList(
+                      delegate: SliverChildListDelegate(
+                        [
                           _buildCategoryItemView(
-                            label: StrRes.myGroup,
-                            onTap: logic.selectFromMyGroup,
+                            label: StrRes.myFriend,
+                            onTap: logic.selectFromMyFriend,
                           ),
-                      ],
+                          if (!logic.hiddenGroup)
+                            _buildCategoryItemView(
+                              label: StrRes.myGroup,
+                              onTap: logic.selectFromMyGroup,
+                            ),
+                        ],
+                      ),
+                      itemExtent: 56.h,
                     ),
-                    itemExtent: 56.h,
-                  ),
-                  if (logic.recentLoading.value)
-                    const SliverToBoxAdapter(
-                      child: Padding(
-                        padding: EdgeInsets.all(AppTokens.s3),
+                    if (conversations.isNotEmpty)
+                      SliverToBoxAdapter(
+                        child: Container(
+                          constraints: BoxConstraints(minHeight: 29.h),
+                          alignment: Alignment.centerLeft,
+                          margin: EdgeInsets.symmetric(horizontal: 16.w),
+                          padding: EdgeInsets.symmetric(
+                              vertical:
+                                  ContactCardPickerTokens.verticalPadding.h),
+                          child: StrRes.recentConversations.toText
+                            ..style = Styles.ts_8E9AB0_12sp,
+                        ),
+                      ),
+                    SliverList.separated(
+                      itemCount: conversations.length,
+                      itemBuilder: (context, index) =>
+                          _buildRecentConversationsItemView(
+                        context,
+                        conversations[index],
+                      ),
+                      separatorBuilder: (context, index) => ColoredBox(
+                        color: Styles.c_FFFFFF,
+                        child: Divider(
+                          height: ContactCardPickerTokens.dividerThickness,
+                          thickness: ContactCardPickerTokens.dividerThickness,
+                          color: ContactCardPickerTokens.divider(context),
+                          indent: 16.w +
+                              (logic.isMultiModel ? 30.w : 0) +
+                              math.min(44.w, 44.h) +
+                              10.w,
+                          endIndent: 16.w,
+                        ),
+                      ),
+                    ),
+                    if (logic.recentLoading.value)
+                      const SliverToBoxAdapter(
+                        child: Padding(
+                          padding: EdgeInsets.all(AppTokens.s3),
+                          child: Center(
+                              child: SizedBox.square(
+                            dimension: AppTokens.s5,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )),
+                        ),
+                      ),
+                    if (logic.recentLoadFailed.value)
+                      SliverToBoxAdapter(
                         child: Center(
-                            child: SizedBox.square(
-                          dimension: AppTokens.s5,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                            child: TextButton(
+                          onPressed: logic.recentLoading.value
+                              ? null
+                              : logic.loadMoreRecentConversations,
+                          child: Text(
+                              Localizations.localeOf(context).languageCode ==
+                                      'zh'
+                                  ? AppCopy.text('会话加载失败，点击重试')
+                                  : 'Could not load chats. Retry'),
                         )),
                       ),
-                    ),
-                  if (logic.recentLoadFailed.value)
-                    SliverToBoxAdapter(
-                      child: Center(
-                          child: TextButton(
-                        onPressed: logic.recentLoading.value
-                            ? null
-                            : logic.reloadRecentConversations,
-                        child: Text(
-                            Localizations.localeOf(context).languageCode == 'zh'
-                                ? AppCopy.text('会话加载失败，点击重试')
-                                : 'Could not load chats. Retry'),
-                      )),
-                    ),
-                  if (conversations.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: Container(
-                        constraints: BoxConstraints(minHeight: 29.h),
-                        alignment: Alignment.centerLeft,
-                        margin: EdgeInsets.symmetric(horizontal: 16.w),
-                        padding: EdgeInsets.symmetric(
-                            vertical:
-                                ContactCardPickerTokens.verticalPadding.h),
-                        child: StrRes.recentConversations.toText
-                          ..style = Styles.ts_8E9AB0_12sp,
-                      ),
-                    ),
-                  SliverList.separated(
-                    itemCount: conversations.length,
-                    itemBuilder: (context, index) =>
-                        _buildRecentConversationsItemView(
-                      context,
-                      conversations[index],
-                    ),
-                    separatorBuilder: (context, index) => ColoredBox(
-                      color: Styles.c_FFFFFF,
-                      child: Divider(
-                        height: ContactCardPickerTokens.dividerThickness,
-                        thickness: ContactCardPickerTokens.dividerThickness,
-                        color: ContactCardPickerTokens.divider(context),
-                        indent: 16.w +
-                            (logic.isMultiModel ? 30.w : 0) +
-                            math.min(44.w, 44.h) +
-                            10.w,
-                        endIndent: 16.w,
-                      ),
-                    ),
-                  ),
-                  if (conversations.isEmpty &&
-                      logic.conversationSearch.isNotEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Padding(
-                          padding: ContactCardPickerTokens.searchPadding,
-                          child: Text(
-                            StrRes.searchNotFound,
-                            style:
-                                ContactCardPickerTokens.subtitleStyle(context),
-                            textAlign: TextAlign.center,
+                    if (conversations.isEmpty &&
+                        !logic.recentLoading.value &&
+                        !logic.recentLoadFailed.value &&
+                        logic.conversationSearch.isNotEmpty)
+                      SliverFillRemaining(
+                        hasScrollBody: false,
+                        child: Center(
+                          child: Padding(
+                            padding: ContactCardPickerTokens.searchPadding,
+                            child: Text(
+                              StrRes.searchNotFound,
+                              style: ContactCardPickerTokens.subtitleStyle(
+                                  context),
+                              textAlign: TextAlign.center,
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                ],
+                  ],
+                ),
               );
             }),
           ),

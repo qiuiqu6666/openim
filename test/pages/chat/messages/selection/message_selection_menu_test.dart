@@ -16,6 +16,13 @@ import 'package:visibility_detector/visibility_detector.dart';
 import 'support/selection_test_messages.dart';
 
 class _SelectionTileLogic extends GetxController implements ChatLogic {
+  @override
+  Message resolveGroupNotice(Message message) => message;
+  @override
+  bool get isChannel => false;
+  @override
+  bool get isChannelSubscriber => false;
+
   _SelectionTileLogic(Message message, {required VoidCallback onStart}) {
     messageList.add(message);
     messageSelection = MessageSelectionController(

@@ -1,6 +1,11 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
 import 'dart:async';
 
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_screenutil/flutter_screenutil.dart';
+import 'package:openim_common/src/widgets/chat/chat_item_view.dart';
+import 'package:openim_common/src/widgets/chat/chat_attachment_view.dart';
+import 'package:openim_common/src/widgets/chat/chat_bubble.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:just_audio/just_audio.dart';
@@ -16,7 +21,28 @@ class _Player implements AudioPlayer {
   bool disposed = false;
   int playCount = 0;
   @override
-  ProcessingState get processingState => ProcessingState.ready;
+  double speed = 1;
+  final appliedSpeeds = <double>[];
+  @override
+  Future<void> setSpeed(double value) async {
+    speed = value;
+    appliedSpeeds.add(value);
+  }
+
+  @override
+  Stream<Duration> get positionStream => const Stream.empty();
+  Duration offset = const Duration(seconds: 1);
+  Duration? loadedPosition;
+  @override
+  Duration get position => offset;
+  ProcessingState state = ProcessingState.ready;
+  void finish() {
+    state = ProcessingState.completed;
+    if (!_playing.isCompleted) _playing.complete();
+  }
+
+  @override
+  ProcessingState get processingState => state;
   @override
   Future<void> stop() async => onStop?.call();
   @override
@@ -34,6 +60,7 @@ class _Player implements AudioPlayer {
   Future<Duration?> setFilePath(String path,
       {Duration? initialPosition, bool preload = true, dynamic tag}) async {
     files.add(path);
+    loadedPosition = initialPosition;
     return onLoad?.call() ?? const Duration(seconds: 2);
   }
 
@@ -70,6 +97,247 @@ Future<void> _flush() async {
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('speed cycles in place and the next voice inherits it', () async {
+    final coordinator = MediaCoordinator(
+        readMode: () async => null,
+        writeMode: (_) async {},
+        configure: (_, __) async {});
+    final players = [_Player(), _Player()];
+    final messages = [_message('a'), _message('b')];
+    var created = 0;
+    final controller = VoicePlaybackController(
+      messages: () => messages,
+      coordinator: coordinator,
+      playerFactory: () => players[created++],
+      sourceLoader: (_) async => const VoicePlaybackSource.file('/audio'),
+    );
+    addTearDown(controller.dispose);
+    unawaited(controller.toggle(messages.first));
+    await _flush();
+    final progress = players.first.position;
+    await Future.wait([
+      controller.cycleSpeed(),
+      controller.cycleSpeed(),
+      controller.cycleSpeed()
+    ]);
+    expect(players.first.appliedSpeeds, [2.0, 1.0, 2.0]);
+    expect(players.first.position, progress);
+    expect(players.first.files, ['/audio']);
+    expect(players.first.playCount, 1);
+    players.first.finish();
+    await _flush();
+    expect(players.last.speed, 2.0);
+    expect(players.last.playCount, 1);
+    await controller.stop();
+  });
+
+  testWidgets('speed button cycles without toggling playback', (tester) async {
+    final coordinator = MediaCoordinator(
+        readMode: () async => null,
+        writeMode: (_) async {},
+        configure: (_, __) async {});
+    final player = _Player();
+    final resumed = _Player();
+    var created = 0;
+    // No source URL: waveform extraction has nothing to download.
+    final message = Message.fromJson({
+      'clientMsgID': 'speed-widget',
+      'soundElem': {'duration': 20}
+    });
+    final controller = VoicePlaybackController(
+        messages: () => [],
+        coordinator: coordinator,
+        playerFactory: () => created++ == 0 ? player : resumed,
+        sourceLoader: (_) async => const VoicePlaybackSource.file('/audio'));
+    addTearDown(controller.dispose);
+    await tester.runAsync(() async {
+      unawaited(controller.toggle(message));
+      await _flush();
+    });
+    tester.view.physicalSize = const Size(320, 800);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    OpenIM.iMManager.userID = 'me';
+    message.contentType = MessageType.voice;
+    message.sendTime = 100000;
+    for (final outgoing in [false, true]) {
+      message.sendID = outgoing ? 'me' : 'other';
+      await tester.pumpWidget(ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (_, __) => MaterialApp(
+              theme: outgoing ? ThemeData.dark() : ThemeData.light(),
+              home: Scaffold(
+                  body: ChatItemView(
+                      message: message,
+                      rightNickname: 'Me',
+                      rightFaceUrl: '',
+                      showAvatar: false,
+                      showLeftNickname: false,
+                      voicePlayback: controller,
+                      onTapUserProfile: (_) {})))));
+      final button = find.byKey(const ValueKey('voice-playback-speed'));
+      final bubble = find.byType(ChatBubble);
+      expect(find.descendant(of: bubble, matching: button), findsNothing);
+      final bubbleRect = tester.getRect(bubble);
+      final buttonRect = tester.getRect(button);
+      if (outgoing) {
+        expect(buttonRect.right, lessThan(bubbleRect.left));
+      } else {
+        expect(buttonRect.left, greaterThan(bubbleRect.right));
+      }
+      for (final label in ['原速播放', '倍速播放']) {
+        expect(tester.getSize(button).height, greaterThanOrEqualTo(48));
+        await tester.tap(button);
+        await tester.pump();
+        expect(find.text(label), findsOneWidget);
+        expect(tester.getRect(bubble).size, bubbleRect.size);
+        expect(controller.playing, isTrue);
+        expect(player.playCount, 1);
+        expect(player.disposed, isFalse);
+      }
+    }
+    expect(tester.takeException(), isNull);
+    final voiceState = tester.state(find.byType(ChatVoiceMessageView));
+    await tester.runAsync(controller.stop);
+    await tester.pump();
+    expect(tester.state(find.byType(ChatVoiceMessageView)), same(voiceState));
+    expect(find.text('继续播放'), findsOneWidget);
+    final pendingResume = Completer<Duration?>();
+    resumed.onLoad = () => pendingResume.future;
+    await tester.tap(find.text('继续播放'));
+    await tester.runAsync(_flush);
+    await tester.pump();
+    expect(controller.loading, isTrue);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
+    expect(find.byIcon(Icons.play_arrow_rounded), findsOneWidget);
+    expect(tester.state(find.byType(ChatVoiceMessageView)), same(voiceState));
+    expect(find.byKey(const ValueKey('voice-playback-speed')), findsOneWidget);
+    await tester.runAsync(() async {
+      pendingResume.complete(const Duration(seconds: 20));
+      await _flush();
+    });
+    await tester.pump();
+    expect(tester.state(find.byType(ChatVoiceMessageView)), same(voiceState));
+    expect(find.text('倍速播放'), findsOneWidget);
+    expect(resumed.loadedPosition, player.position);
+    expect(resumed.playCount, 1);
+    expect(find.byIcon(Icons.pause_rounded), findsOneWidget);
+    await tester.runAsync(controller.stop);
+    await tester.pumpWidget(const SizedBox.shrink());
+  });
+  test(
+      'live routing does not reload or seek and the next voice uses the same mode',
+      () async {
+    final routes = <VoiceOutput>[];
+    final coordinator = MediaCoordinator(
+        readMode: () async => null,
+        writeMode: (_) async {},
+        configure: (kind, mode) async {
+          if (kind == MediaKind.voice) routes.add(mode);
+        });
+    final first = _Player();
+    final second = _Player();
+    var created = 0;
+    final messages = [_message('a'), _message('b')];
+    final controller = VoicePlaybackController(
+        messages: () => messages,
+        coordinator: coordinator,
+        playerFactory: () => created++ == 0 ? first : second,
+        sourceLoader: (m) async =>
+            VoicePlaybackSource.file('/${m.clientMsgID}'));
+    addTearDown(controller.dispose);
+    unawaited(controller.toggle(messages.first));
+    await _flush();
+    await coordinator.setOutput(VoiceOutput.earpiece);
+    expect(first.files, ['/a']);
+    expect(first.playCount, 1);
+    expect(first.disposed, isFalse);
+    expect(controller.playing, isTrue);
+    first.finish();
+    await _flush();
+    expect(second.playCount, 1);
+    expect(routes.last, VoiceOutput.earpiece);
+    expect(first.disposed, isTrue);
+    await controller.stop();
+  });
+
+  test('manual stop releases the player and replay resumes its saved progress',
+      () async {
+    final coordinator = MediaCoordinator(
+        readMode: () async => null,
+        writeMode: (_) async {},
+        configure: (_, __) async {});
+    final first = _Player()..offset = const Duration(milliseconds: 700);
+    final second = _Player();
+    var created = 0;
+    final controller = VoicePlaybackController(
+        messages: () => [],
+        coordinator: coordinator,
+        playerFactory: () => created++ == 0 ? first : second,
+        sourceLoader: (_) async => const VoicePlaybackSource.file('/audio'));
+    addTearDown(controller.dispose);
+    unawaited(controller.toggle(_message('a')));
+    await _flush();
+    await controller.toggle(_message('a'));
+    expect(first.disposed, isTrue);
+    unawaited(controller.toggle(_message('a')));
+    await _flush();
+    expect(second.loadedPosition, const Duration(milliseconds: 700));
+    await controller.stop();
+  });
+
+  test('recording preempts voice and blocks taps without automatic resume',
+      () async {
+    final coordinator = MediaCoordinator(
+        readMode: () async => null,
+        writeMode: (_) async {},
+        configure: (_, __) async {});
+    final player = _Player();
+    final controller = VoicePlaybackController(
+        messages: () => [],
+        coordinator: coordinator,
+        playerFactory: () => player,
+        sourceLoader: (_) async => const VoicePlaybackSource.file('/audio'));
+    addTearDown(controller.dispose);
+    unawaited(controller.toggle(_message('a')));
+    await _flush();
+    final recording =
+        await coordinator.acquire(MediaKind.recording, () async {});
+    expect(player.disposed, isTrue);
+    expect(controller.playing, isFalse);
+    await controller.toggle(_message('b'));
+    expect(controller.current!.clientMsgID, 'a');
+    await recording!.release(stopped: true);
+    await _flush();
+    expect(player.playCount, 1);
+    expect(controller.playing, isFalse);
+  });
+
+  test('completion cannot auto-advance over a pending video request', () async {
+    final coordinator = MediaCoordinator(
+        readMode: () async => null,
+        writeMode: (_) async {},
+        configure: (_, __) async {});
+    final player = _Player();
+    final messages = [_message('a'), _message('b')];
+    final controller = VoicePlaybackController(
+        messages: () => messages,
+        coordinator: coordinator,
+        playerFactory: () => player,
+        sourceLoader: (_) async => const VoicePlaybackSource.file('/audio'));
+    addTearDown(controller.dispose);
+    unawaited(controller.toggle(messages.first));
+    await _flush();
+    player.finish();
+    final video = await coordinator.acquire(MediaKind.video, () async {});
+    await _flush();
+    expect(video!.valid, isTrue);
+    expect(player.playCount, 1);
+    expect(controller.playing, isFalse);
+    await video.release();
+  });
+
   test('local decode failure tries the original remote source once', () async {
     final player = _Player();
     var loads = 0;

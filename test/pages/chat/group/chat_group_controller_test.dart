@@ -659,7 +659,7 @@ void main() {
     expect(h.profiles.last, ('Newest live name', 'newest'));
     expect(h.profileReads, 1);
     expect(h.joinedReads, 0);
-    expect(h.selfReads, 0);
+    expect(h.selfReads, 1);
   });
 
   test('late profile refresh cannot write into another account', () async {

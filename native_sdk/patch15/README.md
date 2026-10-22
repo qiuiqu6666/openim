@@ -1,3 +1,23 @@
+## recovery.49-upload-disaster.1：广州与香港自动容灾
+
+自动按“广州直传双线路 → 香港直传双线路 → 后端代传广州 → 后端代传香港”尝试；大陆网络在各桶内优先直连，其他地区优先加速。跨桶重新创建会话，同桶继续已完成分片。连接/TLS 各 3 秒、无进展约 8 秒、签名请求 5 秒、单个不超过 10 MiB 的图片总尝试 30 秒；故障线路暂避 30 秒。其他文件保留九分钟总期限，无手动切换入口。
+
+后端已上线，广州和香港真实代传通过，香港完成及按名读取逐字节验证通过。Android 四 ABI SDK 和 ARM64 调试 APK 已重建并核对原生库，专项 race 测试、核心构建测试与 15 项源码锁测试通过。iOS Framework 需 macOS 重建；未做真机验收。详细记录见 [验证证据](verification/recovery.49-upload-disaster.1.json) 和 [容灾说明](../../server/media_upload_fallback/README.md)。
+
+## recovery.48-upload-region.1：根据网络所在地选择上传线路
+
+中国大陆网络优先广州源站，失败后切换加速；其他地区及未知网络优先加速，失败后切换广州源站。最后均使用鉴权后端代传。同一上传固定排序，签名刷新不改变顺序。后端已上线并通过真实接口验证；共享源码通过 Go 1.24.0 race 检查。**recovery.48 尚需重建 Android AAR、iOS Framework 和 App，已有 recovery.47 Android 产物不包含地域排序。** 见 [验证记录](verification/recovery.48-upload-region.1.json) 和 [服务端说明](../../server/media_upload_fallback/README.md)。
+
+## recovery.47-upload-fallback.1：媒体上传备用线路与后端转存
+
+2026-10-23 补充：Android 四 ABI AAR 已通过现有构建脚本重建，源码锁、各 ABI 内嵌版本及产物验证通过，已放入插件使用的本地 Maven 仓库。构建要求的核心回归、13 项上传专项测试和 15 项构建锁测试通过。尚未安装设备；iOS Framework 仍需 macOS 重建。下文“本轮未重建”为此前源码修复阶段记录。
+
+同日 ARM64 调试 APK 构建通过，核对 AAR 与 Gradle 合并库一致、APK 与剥离符号后的库一致，内嵌版本为 recovery.47。此前三项客户端修复的 38 项定向回归通过。上传包全量测试的旧 `TestUpload` 依赖不存在的本机 `protoc.zip`，未通过；上述 13 项上传专项不依赖该文件。详细记录见 [Android 集成验证](verification/recovery.47-android-integration.json)。未进行设备或线上双账号验收。
+
+加速域名上传失败后，使用单独签发的广州源站地址；仍失败则通过已登录的 IM API 流式转存。同一上传任务保留已完成分片，继续遵守九分钟总期限和取消保护；权限错误不会无限重试。
+
+后端已部署，三条线路真实存储及上线后的鉴权转存验证通过。共享源码的故障切换、断点续传、取消/超时 race 测试在 Go 1.24.0 下通过，15 项源码锁工具测试通过。**本轮未重建 Android AAR、iOS Framework 或 App；现有手机安装包尚未获得自动切换功能。** 详细协议、发布与回滚信息见 [上传兜底说明](../../server/media_upload_fallback/README.md)，验证记录见 [recovery.47](verification/recovery.47-upload-fallback.1.json)。
+
 ## recovery.46-group-membership.1：已退出群的同步收尾
 
 成员批次收到权限错误后，重新查询完整的已加入群 ID。只有服务端确认不再加入的群才结束本次同步任务，复用现有退出清理与通知，并使旧的已加入群列表版本失效；保留聊天消息和会话历史。同批仍有效的群继续同步。

@@ -409,7 +409,7 @@ void main() {
       if (selection == 'grid') {
         await tester.tap(find.byTooltip('图片和视频'));
         await tester.pumpAndSettle();
-        await tester.tap(find.byType(MediaGridThumbnail).at(1));
+        await tester.tap(find.byType(MediaGridThumbnail).at(0));
       } else {
         await tester.dragFrom(const Offset(320, 400), const Offset(-275, 0));
       }

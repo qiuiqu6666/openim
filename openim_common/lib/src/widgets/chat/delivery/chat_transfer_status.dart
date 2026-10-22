@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 
+import '../../../res/app_tokens.dart';
+import '../../progress/sector_progress_painter.dart';
 import '../chat_delayed_status_view.dart';
 
 enum ChatTransferStage { queued, uploading, confirming, unknown }
@@ -13,7 +15,7 @@ class ChatTransferStatus {
   final int? percent;
 }
 
-/// Rebuilds only the sending label, not the conversation on every upload tick.
+/// Rebuilds only the sending indicator on every upload tick.
 class ChatTransferStatusView extends StatelessWidget {
   const ChatTransferStatusView(
       {super.key, required this.status, this.color, this.onCheck});
@@ -28,6 +30,26 @@ class ChatTransferStatusView extends StatelessWidget {
         builder: (context, value, _) {
           final statusColor =
               color ?? Theme.of(context).colorScheme.onSurfaceVariant;
+          if (value?.stage == ChatTransferStage.uploading) {
+            final percent = value!.percent?.clamp(0, 100);
+            return Semantics(
+              label: 'chatMediaUploading'.tr,
+              value: percent == null ? null : '$percent%',
+              child: SizedBox.square(
+                dimension: AppTokens.s8,
+                child: CustomPaint(
+                  painter: SectorProgressPainter(
+                    progress: percent == null ? null : percent / 100,
+                    color: statusColor,
+                  ),
+                  child: percent == null
+                      ? Icon(Icons.file_upload_outlined,
+                          color: statusColor, size: AppTokens.s5)
+                      : null,
+                ),
+              ),
+            );
+          }
           if (value == null || value.stage == ChatTransferStage.confirming) {
             return Semantics(
               label: 'chatSendConfirming'.tr,

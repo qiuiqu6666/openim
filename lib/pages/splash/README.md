@@ -2,7 +2,7 @@
 
 `splash_view.dart` 通过现有 GetX 绑定取得 `SplashLogic`。页面就绪且 SDK 初始化完成后，先等待共享的自动更新检查，再恢复登录或进入登录页。并发检查复用同一个 Future，强制更新弹窗未关闭时不执行登录及页面跳转，打开外部下载链接也不放行；可选更新关闭后继续。检查失败沿用现有放行策略。`widgets/splash_artwork.dart` 只负责显示启动画面，不执行网络请求。
 
-启动图来自 99chat `d7c3c65` 的 `assets/splash_new.webp`，原图保存在 `assets/splash_99chat.webp`。按参考 `lib/src/launch_page.dart` 居中、等比铺满整个视口，亮暗主题共用同一品牌图，复用 `AppSystemBars` 处理透明系统栏和浅色图标。图片裁切遵循 `BoxFit.cover`，不拉伸，也不在图上额外叠加内容。
+启动图使用用户于 2026-10-22 提供的「蓝色渐变99聊天启动页.png」，原图保存在 `assets/splash_99chat.png`，Flutter、Android 和 iOS 使用同一份 PNG。按参考 `lib/src/launch_page.dart` 居中、等比铺满整个视口，亮暗主题共用同一品牌图，复用 `AppSystemBars` 处理透明系统栏和浅色图标。图片裁切遵循 `BoxFit.cover`，不拉伸，也不在图上额外叠加内容。
 
 原生启动资源位于 Android `res` 和 iOS `LaunchScreen.storyboard`/启动图片集；配置入口是根目录的 `flutter_native_splash.yaml`。更新原生资源时保留已有系统栏、通话和平台配置，不能直接用生成器覆盖整个原生目录。Android 12 及以上的系统阶段采用品牌蓝底和透明占位图，随后进入 Flutter 全屏启动图；Android 12 以下按参考原生配置使用 `bitmap gravity="fill"`，与 Flutter 的等比裁切可能存在比例差异。iOS 原生启动图使用 `scaleAspectFill`。
 

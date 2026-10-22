@@ -4,7 +4,8 @@ import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
 import 'mark_six_style.dart';
 
-AppBar markSixLotteryAppBar(BuildContext context) {
+AppBar markSixLotteryAppBar(BuildContext context,
+    {String title = '京东微信红包', String? subtitle = '极速六合彩'}) {
   final style = MarkSixStyle.of(context);
   return AppBar(
       elevation: 0,
@@ -39,21 +40,24 @@ AppBar markSixLotteryAppBar(BuildContext context) {
       title: FittedBox(
           fit: BoxFit.scaleDown,
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            Text(AppCopy.text('京东微信红包'),
+            Text(AppCopy.text(title),
                 style: TextStyle(
                     color: style.text,
                     fontSize: 18,
                     height: 1.12,
                     fontWeight: FontWeight.w700,
                     letterSpacing: .4)),
-            const SizedBox(height: 1),
-            Text(AppCopy.text('极速六合彩'),
-                style: TextStyle(
-                    color:
-                        style.dark ? style.secondary : const Color(0xFF74839B),
-                    fontSize: 12,
-                    height: 1.15,
-                    fontWeight: FontWeight.w500,
-                    letterSpacing: .7)),
+            if (subtitle != null) ...[
+              const SizedBox(height: 1),
+              Text(AppCopy.text(subtitle),
+                  style: TextStyle(
+                      color: style.dark
+                          ? style.secondary
+                          : const Color(0xFF74839B),
+                      fontSize: 12,
+                      height: 1.15,
+                      fontWeight: FontWeight.w500,
+                      letterSpacing: .7)),
+            ],
           ])));
 }

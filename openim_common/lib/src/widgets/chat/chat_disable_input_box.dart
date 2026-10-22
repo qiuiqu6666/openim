@@ -21,10 +21,11 @@ class ChatDisableInputBox extends StatelessWidget {
     return type == 0
         ? Container(
             key: const ValueKey('chat-disabled-input-bar'),
-            constraints: BoxConstraints(minHeight: AppTokens.listItemHeight.h),
-            padding: EdgeInsets.symmetric(
-              horizontal: ChatComposerTokens.horizontalPadding.w,
-              vertical: AppTokens.s3.h,
+            constraints:
+                const BoxConstraints(minHeight: ChatComposerTokens.barHeight),
+            padding: const EdgeInsets.symmetric(
+              horizontal: ChatComposerTokens.horizontalPadding,
+              vertical: ChatComposerTokens.verticalPadding,
             ),
             color: chatComposerSurface(context),
             child: Row(

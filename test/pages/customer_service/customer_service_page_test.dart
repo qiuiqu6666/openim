@@ -287,6 +287,44 @@ void main() {
               .getRect(find.byKey(const ValueKey('customer-service-input')))
               .bottom,
           lessThanOrEqualTo(812 - 300));
+      final composer = find.byKey(const ValueKey('customer-service-composer'));
+      final composerRect = tester.getRect(composer);
+      expect(composerRect.bottom, closeTo(812 - 300, 1));
+      expect(
+          tester
+              .getRect(find.byKey(const ValueKey('customer-service-messages')))
+              .bottom,
+          closeTo(composerRect.top, 1));
+      for (final name in ['input', 'attach', 'send']) {
+        final rect =
+            tester.getRect(find.byKey(ValueKey('customer-service-$name')));
+        expect(rect.top, greaterThanOrEqualTo(composerRect.top));
+        expect(rect.bottom, lessThanOrEqualTo(composerRect.bottom));
+      }
+      final decoration =
+          tester.widget<DecoratedBox>(composer).decoration as BoxDecoration;
+      expect(decoration.color,
+          CustomerServiceTokens.surface(tester.element(composer)));
+      expect(decoration.color!.a, 1);
+      expect(
+          find.descendant(of: composer, matching: find.byType(BackdropFilter)),
+          findsNothing);
+      await _screenshot(tester, key, '${brightness.name}-composer-keyboard');
+      final input = find.byKey(const ValueKey('customer-service-input'));
+      await tester.enterText(input, 'Keep my draft');
+      expect(tester.testTextInput.isVisible, isTrue);
+      final inputRect = tester.getRect(input);
+      final sendRect =
+          tester.getRect(find.byKey(const ValueKey('customer-service-send')));
+      expect(inputRect.height, closeTo(sendRect.height, 1));
+      expect(inputRect.center.dy, closeTo(sendRect.center.dy, 1));
+      final canvas = tester
+          .getRect(find.byKey(const ValueKey('customer-service-messages')));
+      await tester.tapAt(canvas.bottomRight - const Offset(4, 4));
+      await _flush(tester);
+      expect(tester.testTextInput.isVisible, isFalse);
+      expect(tester.widget<TextField>(input).controller!.text, 'Keep my draft');
+      expect(sheet, findsOneWidget);
       tester.view.resetViewInsets();
       await _flush(tester);
       await _close(tester, harness);

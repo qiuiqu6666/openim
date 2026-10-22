@@ -143,6 +143,7 @@ class _ChatMessageMenuState extends State<ChatMessageMenu>
           'forwardMessage' => 2,
           'revoke' => 3,
           'voiceToText' => 4,
+          'voiceOutput' => 5,
           'favorite_message' => 8,
           'add_to_stickers' => 9,
           'delete' => 100,

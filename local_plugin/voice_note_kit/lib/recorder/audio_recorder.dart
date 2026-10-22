@@ -1,6 +1,16 @@
 import 'package:record/record.dart';
 
 class AudioRecorderClass {
+  AudioRecorderClass({this.acquireAudio});
+  final Future<Future<void> Function()> Function(Future<void> Function())?
+      acquireAudio;
+  Future<void> Function()? _releaseAudio;
+  Future<void> _release() async {
+    final release = _releaseAudio;
+    _releaseAudio = null;
+    await release?.call();
+  }
+
   AudioRecorder? _recorder = AudioRecorder();
   bool _needsRelease = false;
   bool _disposed = false;
@@ -15,11 +25,22 @@ class AudioRecorderClass {
       _needsRelease = false;
     }
     final recorder = _recorder ??= AudioRecorder();
-    await recorder.start(config, path: path);
+    _releaseAudio = await acquireAudio?.call(() async {
+      await recorder.stop();
+    });
+    try {
+      await recorder.start(config, path: path);
+    } catch (_) {
+      await discard();
+      rethrow;
+    }
   }
 
-  Future<String> stop({Function(String)? onWebCallback}) async =>
-      await _recorder?.stop() ?? '';
+  Future<String> stop({Function(String)? onWebCallback}) async {
+    final path = await _recorder?.stop() ?? '';
+    await _release();
+    return path;
+  }
 
   Stream<Amplitude> get amplitude =>
       _recorder?.onAmplitudeChanged(const Duration(milliseconds: 100)) ??
@@ -33,6 +54,7 @@ class AudioRecorderClass {
     if (recorder == null) return null;
     try {
       await recorder.stop();
+      await _release();
       return null;
     } catch (stopError) {
       // record_platform_interface 1.4.0 does not await its method-channel
@@ -43,6 +65,7 @@ class AudioRecorderClass {
         await recorder.dispose();
         _recorder = null;
         _needsRelease = false;
+        await _release();
         return stopError;
       } catch (releaseError) {
         _needsRelease = true;
@@ -57,5 +80,6 @@ class AudioRecorderClass {
     _disposed = true;
     await _recorder?.dispose();
     _recorder = null;
+    await _release();
   }
 }

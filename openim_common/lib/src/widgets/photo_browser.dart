@@ -1,3 +1,5 @@
+import 'media_browser/media_grid_order.dart';
+import 'media_browser/media_grid_pagination.dart';
 import 'package:openim_common/localization.dart';
 import 'dart:async';
 import 'dart:io';
@@ -47,6 +49,7 @@ class MediaBrowser extends StatefulWidget {
     this.onSave,
     this.onLongPress,
     this.onPageChanged,
+    this.loadMoreMedia,
     this.onForward,
     this.onDelete,
     this.onViewInChat,
@@ -63,6 +66,7 @@ class MediaBrowser extends StatefulWidget {
   /// Upgrade only the current full-screen page; neighboring warmups stay small.
   final bool autoLoadOriginal;
   final List<MediaSource> sources;
+  final Future<bool> Function()? loadMoreMedia;
   final bool muted;
   final bool showGallery;
   final bool showCounter;
@@ -142,6 +146,34 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   bool _showGrid = false;
+  bool _returnToGrid = false;
+  bool _allowRouteExit = false;
+
+  void _backToGallery() {
+    setState(() {
+      _showGrid = true;
+      _returnToGrid = false;
+    });
+    _notifyChrome();
+  }
+
+  void _previewBack() {
+    if (_returnToGrid) {
+      _backToGallery();
+    } else {
+      Navigator.of(context).pop();
+    }
+  }
+
+  void _exitPreview(VoidCallback action) {
+    setState(() => _allowRouteExit = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pop();
+      action();
+    });
+  }
+
   final _chromeTick = ValueNotifier(0);
   final _pageTick = ValueNotifier(0);
   final _galleryPrecache = ImagePreviewGalleryPrecache();
@@ -383,132 +415,157 @@ class _MediaBrowserState extends State<MediaBrowser> {
   Widget build(BuildContext context) {
     final size = MediaQuery.of(context).size;
     const background = Colors.black;
-    return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
-        systemNavigationBarColor: Colors.transparent,
-        systemNavigationBarDividerColor: Colors.transparent,
-        systemNavigationBarIconBrightness: Brightness.light,
-        systemStatusBarContrastEnforced: false,
-        systemNavigationBarContrastEnforced: false,
-      ),
-      child: Material(
-        color: background,
-        shadowColor: Colors.transparent,
-        child: Stack(children: [
-          ExtendedImageSlidePage(
-            key: slidePagekey,
-            slideAxis:
-                widget.sources.length > 1 ? SlideAxis.vertical : SlideAxis.both,
-            slideType: SlideType.wholePage,
-            resetPageDuration: const Duration(milliseconds: 300),
-            slidePageBackgroundHandler: (offset, pageSize) {
-              double rate = 1 - (offset.dy.abs() / (size.height / 2));
-              rate = rate > 0 ? rate : 0;
-              return background.withValues(alpha: rate);
-            },
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: widget.closeOnly
-                  ? () => Navigator.of(context).pop()
-                  : () {
-                      _showControls = !_showControls;
-                      _notifyChrome();
+    return PopScope(
+      canPop: !_returnToGrid || _allowRouteExit,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && _returnToGrid) _backToGallery();
+      },
+      child: AnnotatedRegion<SystemUiOverlayStyle>(
+        value: const SystemUiOverlayStyle(
+          statusBarColor: Colors.transparent,
+          statusBarIconBrightness: Brightness.light,
+          statusBarBrightness: Brightness.dark,
+          systemNavigationBarColor: Colors.transparent,
+          systemNavigationBarDividerColor: Colors.transparent,
+          systemNavigationBarIconBrightness: Brightness.light,
+          systemStatusBarContrastEnforced: false,
+          systemNavigationBarContrastEnforced: false,
+        ),
+        child: Material(
+          color: background,
+          shadowColor: Colors.transparent,
+          child: Stack(children: [
+            ExtendedImageSlidePage(
+              key: slidePagekey,
+              slideAxis: widget.sources.length > 1
+                  ? SlideAxis.vertical
+                  : SlideAxis.both,
+              slideType: SlideType.wholePage,
+              slideEndHandler: (offset,
+                  {ExtendedImageSlidePageState? state,
+                  ScaleEndDetails? details}) {
+                if (state == null) return null;
+                final dismiss = defaultSlideEndHandler(
+                    offset: offset,
+                    pageSize: state.pageSize,
+                    pageGestureAxis: widget.sources.length > 1
+                        ? SlideAxis.vertical
+                        : SlideAxis.both);
+                if (dismiss && _returnToGrid) {
+                  _backToGallery();
+                  return false;
+                }
+                return dismiss;
+              },
+              resetPageDuration: const Duration(milliseconds: 300),
+              slidePageBackgroundHandler: (offset, pageSize) {
+                double rate = 1 - (offset.dy.abs() / (size.height / 2));
+                rate = rate > 0 ? rate : 0;
+                return background.withValues(alpha: rate);
+              },
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: widget.closeOnly
+                    ? () => Navigator.of(context).pop()
+                    : () {
+                        _showControls = !_showControls;
+                        _notifyChrome();
+                      },
+                onLongPress: widget.closeOnly
+                    ? () {}
+                    : widget.onLongPress == null
+                        ? () => _showMoreMenu(context)
+                        : () => widget.onLongPress!(currentIndex),
+                child: NotificationListener<ScrollNotification>(
+                  onNotification: _observeGalleryScroll,
+                  child: Listener(
+                    onPointerDown: (event) {
+                      if (_activePointers.isEmpty) _dragOrigin = currentIndex;
+                      _activePointers.add(event.pointer);
                     },
-              onLongPress: widget.closeOnly
-                  ? () {}
-                  : widget.onLongPress == null
-                      ? () => _showMoreMenu(context)
-                      : () => widget.onLongPress!(currentIndex),
-              child: NotificationListener<ScrollNotification>(
-                onNotification: _observeGalleryScroll,
-                child: Listener(
-                  onPointerDown: (event) {
-                    if (_activePointers.isEmpty) _dragOrigin = currentIndex;
-                    _activePointers.add(event.pointer);
-                  },
-                  onPointerUp: (event) => _endPointer(event.pointer),
-                  onPointerCancel: (event) => _endPointer(event.pointer),
-                  child: ExtendedImageGesturePageView.builder(
-                    shouldAccpetHorizontalOrVerticalDrag: acceptMediaPageDrag,
-                    controller: _pageController,
-                    itemCount: widget.sources.length,
-                    onPageChanged: (int page) {
-                      currentIndex = page;
-                      _pageTick.value++;
-                      _notifyChrome();
-                      _schedulePrecache();
-                      widget.onPageChanged?.call(page);
-                      _retainCurrentRequests();
-                    },
-                    itemBuilder: (BuildContext context, int index) =>
-                        ValueListenableBuilder<int>(
-                            valueListenable: _pageTick,
-                            builder: (context, _, child) {
-                              final s = widget.sources[index];
+                    onPointerUp: (event) => _endPointer(event.pointer),
+                    onPointerCancel: (event) => _endPointer(event.pointer),
+                    child: ExtendedImageGesturePageView.builder(
+                      shouldAccpetHorizontalOrVerticalDrag: acceptMediaPageDrag,
+                      controller: _pageController,
+                      itemCount: widget.sources.length,
+                      onPageChanged: (int page) {
+                        currentIndex = page;
+                        _pageTick.value++;
+                        _notifyChrome();
+                        _schedulePrecache();
+                        widget.onPageChanged?.call(page);
+                        _retainCurrentRequests();
+                      },
+                      itemBuilder: (BuildContext context, int index) =>
+                          ValueListenableBuilder<int>(
+                              valueListenable: _pageTick,
+                              builder: (context, _, child) {
+                                final s = widget.sources[index];
 
-                              if (s.isVideo &&
-                                  index != currentIndex &&
-                                  index != _dragOrigin) {
-                                return const SizedBox.expand();
-                              }
-                              return s.isVideo
-                                  ? ExtendedImageSlidePageHandler(
-                                      child: OnDemandVideo(
-                                          key: ValueKey(
-                                              'deferred:${s.tag ?? s.url}'),
-                                          autoPlay:
-                                              widget.onAutoPlay?.call(index) ??
-                                                  false,
-                                          poster: MediaGridThumbnail(
-                                              source: s,
-                                              availability: _localFiles),
-                                          player: (_) => VideoPlayerView(
-                                                key: ValueKey(s.tag ?? s.url),
-                                                url: s.url,
-                                                coverUrl: s.thumbnail,
-                                                file: s.file,
-                                                heroTag: s.tag,
-                                                autoPlay: true,
-                                                muted: widget.closeOnly ||
-                                                    widget.muted,
-                                                showControls: !widget.closeOnly,
-                                                looping: widget.closeOnly,
-                                                onDownload: widget.closeOnly
-                                                    ? null
-                                                    : (url, file) => widget
-                                                        .onSave
-                                                        ?.call(currentIndex),
-                                              )),
-                                      heroBuilderForSlidingPage: (result) =>
-                                          MediaVideoHero(
+                                if (s.isVideo &&
+                                    index != currentIndex &&
+                                    index != _dragOrigin) {
+                                  return const SizedBox.expand();
+                                }
+                                return s.isVideo
+                                    ? ExtendedImageSlidePageHandler(
+                                        child: OnDemandVideo(
+                                            key: ValueKey(
+                                                'deferred:${s.tag ?? s.url}'),
+                                            autoPlay: widget.onAutoPlay
+                                                    ?.call(index) ??
+                                                false,
+                                            poster: MediaGridThumbnail(
+                                                source: s,
+                                                availability: _localFiles),
+                                            player: (_) => VideoPlayerView(
+                                                  key: ValueKey(s.tag ?? s.url),
+                                                  url: s.url,
+                                                  coverUrl: s.thumbnail,
+                                                  file: s.file,
+                                                  heroTag: s.tag,
+                                                  autoPlay: true,
+                                                  muted: widget.closeOnly ||
+                                                      widget.muted,
+                                                  showControls:
+                                                      !widget.closeOnly,
+                                                  looping: widget.closeOnly,
+                                                  onDownload: widget.closeOnly
+                                                      ? null
+                                                      : (url, file) => widget
+                                                          .onSave
+                                                          ?.call(currentIndex),
+                                                )),
+                                        heroBuilderForSlidingPage: (result) =>
+                                            MediaVideoHero(
+                                          tag: s.tag ?? s.thumbnail,
+                                          child: result,
+                                        ),
+                                      )
+                                    : HeroWidget(
                                         tag: s.tag ?? s.thumbnail,
-                                        child: result,
-                                      ),
-                                    )
-                                  : HeroWidget(
-                                      tag: s.tag ?? s.thumbnail,
-                                      slideType: SlideType.onlyImage,
-                                      slidePagekey: slidePagekey,
-                                      child: widget.closeOnly
-                                          ? _buildFullImage(s, index)
-                                          : MediaReadingViewport(
-                                              child: _buildFullImage(s, index)),
-                                    );
-                            }),
+                                        slideType: SlideType.onlyImage,
+                                        slidePagekey: slidePagekey,
+                                        child: widget.closeOnly
+                                            ? _buildFullImage(s, index)
+                                            : MediaReadingViewport(
+                                                child:
+                                                    _buildFullImage(s, index)),
+                                      );
+                              }),
+                    ),
                   ),
                 ),
               ),
             ),
-          ),
-          Positioned.fill(
-              child: ValueListenableBuilder<int>(
-            valueListenable: _chromeTick,
-            builder: (context, _, child) => _buildChrome(context),
-          )),
-        ]),
+            Positioned.fill(
+                child: ValueListenableBuilder<int>(
+              valueListenable: _chromeTick,
+              builder: (context, _, child) => _buildChrome(context),
+            )),
+          ]),
+        ),
       ),
     );
   }
@@ -525,7 +582,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
             child: _roundAction(context,
                 icon: Icons.close_rounded,
                 tooltip: MaterialLocalizations.of(context).closeButtonTooltip,
-                onPressed: () => Navigator.of(context).pop()),
+                onPressed: _previewBack),
           ),
         ),
       if (_showControls && !widget.closeOnly)
@@ -549,7 +606,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                         icon: Icons.arrow_back_ios_new,
                         tooltip:
                             MaterialLocalizations.of(context).backButtonTooltip,
-                        onPressed: () => Navigator.of(context).pop()),
+                        onPressed: _previewBack),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
@@ -665,7 +722,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
                         widget.onForward != null ||
                         widget.onFavorite != null ||
                         widget.showGallery ||
-                        (!source.isVideo && MediaImageRecognition.start != null) ||
+                        (!source.isVideo &&
+                            MediaImageRecognition.start != null) ||
                         widget.onDelete != null ||
                         widget.onViewInChat != null)
                       _roundAction(context,
@@ -678,8 +736,9 @@ class _MediaBrowserState extends State<MediaBrowser> {
             ),
           ),
         ),
-      if (_showGrid && !widget.closeOnly)
-        Positioned.fill(child: _buildGrid(context)),
+      if ((_showGrid || _returnToGrid) && !widget.closeOnly)
+        Positioned.fill(
+            child: Offstage(offstage: !_showGrid, child: _buildGrid(context))),
     ]);
   }
 
@@ -726,8 +785,11 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   void _selectGridPage(int index) {
-    currentIndex = index;
-    _showGrid = false;
+    setState(() {
+      currentIndex = index;
+      _showGrid = false;
+      _returnToGrid = true;
+    });
     _pageTick.value++;
     _notifyChrome();
     _schedulePrecache();
@@ -812,7 +874,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
     final recognize = MediaImageRecognition.start;
     final selection = await showMediaActionSheet(context,
         recognize: source.isVideo || source.loading || recognize == null
-            ? null : () => recognize(source),
+            ? null
+            : () => recognize(source),
         canSave: widget.onSave != null,
         canForward: widget.onForward != null,
         canViewInChat: widget.onViewInChat != null,
@@ -833,7 +896,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
     final recipient = selection?.recipient;
     final target = selection?.target;
     if (target != null) {
-      bool active() => mounted &&
+      bool active() =>
+          mounted &&
           context.mounted &&
           currentIndex == index &&
           index < widget.sources.length &&
@@ -869,8 +933,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
       case MediaAction.viewInChat:
         final locate = widget.onViewInChat;
         if (locate == null) return;
-        Navigator.of(context).pop();
-        locate(index);
+        _exitPreview(() => locate(index));
       case MediaAction.delete:
         _deleteCurrent(context, index);
       case null:
@@ -879,11 +942,11 @@ class _MediaBrowserState extends State<MediaBrowser> {
   }
 
   void _deleteCurrent(BuildContext context, int index) {
-    Navigator.of(context).pop();
-    widget.onDelete?.call(index);
+    _exitPreview(() => widget.onDelete?.call(index));
   }
 
   Widget _buildGrid(BuildContext context) {
+    final gridOrder = newestMediaFirst(widget.sources);
     final dark = Theme.of(context).brightness == Brightness.dark;
     final zh = Localizations.localeOf(context).languageCode == 'zh';
     return Material(
@@ -900,7 +963,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     color: AppTokens.accent,
                     icon: const Icon(Icons.chevron_left_rounded, size: 32),
                     onPressed: () {
-                      _showGrid = false;
+                      setState(() {
+                        _showGrid = false;
+                        _returnToGrid = false;
+                      });
                       _notifyChrome();
                     },
                   )),
@@ -916,61 +982,61 @@ class _MediaBrowserState extends State<MediaBrowser> {
               ),
             ]),
           ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-            child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                    zh
-                        ? AppCopy.format('共 {#0} 项', [widget.sources.length])
-                        : '${widget.sources.length} items',
-                    style: TextStyle(
-                        color: AppTokens.textSecondary(dark: dark),
-                        fontSize: 13))),
-          ),
           Expanded(
-            child: GridView.builder(
-              padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                  maxCrossAxisExtent: 160,
-                  crossAxisSpacing: 6,
-                  mainAxisSpacing: 6),
-              itemCount: widget.sources.length,
-              itemBuilder: (context, index) {
-                final item = widget.sources[index];
-                final thumb =
-                    MediaGridThumbnail(source: item, availability: _localFiles);
-                return Semantics(
-                  button: true,
-                  selected: currentIndex == index,
-                  label:
-                      '${item.isVideo ? (zh ? AppCopy.text('视频') : 'Video') : (zh ? AppCopy.text('图片') : 'Photo')} ${index + 1}',
-                  child: InkWell(
-                    onTap: () => _selectGridPage(index),
-                    borderRadius: BorderRadius.circular(8),
-                    child: Container(
-                      decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: currentIndex == index
-                              ? Border.all(color: AppTokens.accent, width: 2)
-                              : null),
-                      padding: currentIndex == index
-                          ? const EdgeInsets.all(2)
-                          : EdgeInsets.zero,
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Stack(fit: StackFit.expand, children: [
-                          thumb,
-                          if (item.isVideo)
-                            const Center(
-                                child: Icon(Icons.play_circle_fill,
-                                    color: Colors.white, size: 32)),
-                        ]),
+            child: MediaGridPagination(
+              load: widget.loadMoreMedia,
+              onLoaded: () {
+                if (mounted) {
+                  setState(() {
+                    _notifyChrome();
+                  });
+                }
+              },
+              builder: (controller) => GridView.builder(
+                controller: controller,
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 20),
+                gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                    maxCrossAxisExtent: 160,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 6),
+                itemCount: widget.sources.length,
+                itemBuilder: (context, position) {
+                  final index = gridOrder[position];
+                  final item = widget.sources[index];
+                  final thumb = MediaGridThumbnail(
+                      source: item, availability: _localFiles);
+                  return Semantics(
+                    button: true,
+                    selected: currentIndex == index,
+                    label:
+                        '${item.isVideo ? (zh ? AppCopy.text('视频') : 'Video') : (zh ? AppCopy.text('图片') : 'Photo')} ${position + 1}',
+                    child: InkWell(
+                      onTap: () => _selectGridPage(index),
+                      borderRadius: BorderRadius.circular(8),
+                      child: Container(
+                        decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: currentIndex == index
+                                ? Border.all(color: AppTokens.accent, width: 2)
+                                : null),
+                        padding: currentIndex == index
+                            ? const EdgeInsets.all(2)
+                            : EdgeInsets.zero,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Stack(fit: StackFit.expand, children: [
+                            thumb,
+                            if (item.isVideo)
+                              const Center(
+                                  child: Icon(Icons.play_circle_fill,
+                                      color: Colors.white, size: 32)),
+                          ]),
+                        ),
                       ),
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
           ),
         ]),

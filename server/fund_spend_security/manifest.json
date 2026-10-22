@@ -1,0 +1,112 @@
+[
+  {
+    "path": "internal/api/chat/fund_withdraw_security.go",
+    "before": "b5350835d1ca742a6d6c726bc300929d2c278498106ce09a4d0a4b8e01271137",
+    "after": "6d7e6ae628a289dfd9477a7454fd41e3c6623c048ad065d7a8fdb9e5d17489f6"
+  },
+  {
+    "path": "internal/api/chat/risk.go",
+    "before": "0ac0c49576e3383210b62eb402e4ce9ceda959fcae7337fa8ee3b2f3f7fc6bc1",
+    "after": "bed6beb5549a437fac7eac595cfcc763b4722f5ac9f5e3170439b5953a92903f"
+  },
+  {
+    "path": "internal/api/chat/risk_activity.go",
+    "before": "5b873d9d15ed8cbbbc535692ca84d8e62272438e5feaab67651696f7fdab9fce",
+    "after": "009970fcab232b59bd39f7f5110650880ba7c6ef01684357be3a942dd7d05f9d"
+  },
+  {
+    "path": "internal/rpc/chat/fund.go",
+    "before": "ce5e943da4bf8b628e0350470b57737370ed72f993acfefd89609ccba0f431e1",
+    "after": "9de27984e114c8b566138ce0bc22bde69f24da291d2ecec6144eadeb30b55f4c"
+  },
+  {
+    "path": "internal/rpc/chat/fund_spend_security.go",
+    "before": null,
+    "after": "8aaada014064a07f7832e8d4c7e86dc14deadad3ffb9e62b962ab8145fbd65ae"
+  },
+  {
+    "path": "internal/rpc/chat/fund_spend_security_test.go",
+    "before": null,
+    "after": "33b48ce4e0a5b47da045f1b78f17f5cb72161e2ef2708340b9e48cdf9b72fe3a"
+  },
+  {
+    "path": "internal/rpc/chat/fund_swap_quotes.go",
+    "before": "60fd056dfb42938b6128f044ec05ab5a643f2389d3bab2106a7061b885aa0441",
+    "after": "fdb2b60a4383e1e125e8c0b8cbaa12070e996c5c7581e45d63d1e47362606124"
+  },
+  {
+    "path": "internal/rpc/chat/fund_withdraw_security.go",
+    "before": "75ea8caa381cbaf992e8c5ce4e83a7896ca8e8f05dccf428eca4e089bb62f818",
+    "after": "5047dc0b0017341ee3816368a815caeee8ec89d0042bde9cd21fcdc5067b6d96"
+  },
+  {
+    "path": "internal/rpc/chat/live.go",
+    "before": "913f4ec7803f42a263dde356eb8a4f4fccef8de3563d05ae1633a6e966648fe8",
+    "after": "31e04efd407af464360c39304c2b12f96404963b742ba7212ad285021a10827b"
+  },
+  {
+    "path": "pkg/common/db/database/chat.go",
+    "before": "e792e7fcd6c5a2a9b65929cdb02a14e57bd4b5c68274096c4628d3e8617f5ee4",
+    "after": "42b9686bc9f5bb98a80df56db7b142c56e114d107d376bc5b15687a16f1f8808"
+  },
+  {
+    "path": "pkg/common/db/database/chat_fund.go",
+    "before": "7cbe8901a19e129201deba7c582ba4e25e0b889621cb1be16c6a5cc5e6b8764b",
+    "after": "c93178dad1be74c306779c6f1ae0cbf3d8c061cc3dbd7e10b073c68c57c13241"
+  },
+  {
+    "path": "pkg/common/db/database/chat_live_ops.go",
+    "before": "4ed5c02ab83da6ac01d53798c875d4c426465c8e4c485d6d954691effe276932",
+    "after": "a9515ce4579f0b9df5a1b312154f20c7cd4c6a73df38c0dc7e13b8359a973821"
+  },
+  {
+    "path": "pkg/common/db/database/spend_security_ledger_test.go",
+    "before": null,
+    "after": "7d715a6b068efecfd0e288c9915ebd669374ca581ce7231e96f2fbaa40e3e5c3"
+  },
+  {
+    "path": "pkg/common/fundsecurity/spend_guard.go",
+    "before": null,
+    "after": "c9c0d0b0b40d99917fdd8dc2b649ef218bc084289f6e7bb1b78bd1bf909a8a8c"
+  },
+  {
+    "path": "pkg/common/fundswap/spend_security_integration_test.go",
+    "before": null,
+    "after": "63bbd3884e8a29dad8bcd4e87569e3198f25da1d10b874903c4c8aa27e1eee3e"
+  },
+  {
+    "path": "pkg/common/fundswap/submit.go",
+    "before": "baebc409b9f5d557813edd63215278e25d71eda16856bf98b2402f172d28ce1b",
+    "after": "6bca5ac4552640866910a98caa226b2591f87c7846bdffb950c5a10a58a6046d"
+  },
+  {
+    "path": "pkg/protocol/chat/chat.pb.go",
+    "before": "e8425443de25bfc0ffbd5167e4aac479dbcb9592708f353277062aeaaa7c200b",
+    "after": "3ecb592d809ff4cbd4529e983e1092ba13e228d95821669e285738fba8febbbe"
+  },
+  {
+    "path": "pkg/protocol/chat/chat.proto",
+    "before": "2527e9dfcc979cf6640219dd68fa09190a4eec1dc24f68efca9844a00000da2b",
+    "after": "18eb5d4bafedbf42cff9fb8bceeaa77b049878ce565cc10938ca49af076ca7a2"
+  },
+  {
+    "path": "pkg/protocol/chat/fund_security_request.go",
+    "before": null,
+    "after": "635458ba24a90afa37396c42c2116a562e9239a2587c31dd12a0dbafda89f879"
+  },
+  {
+    "path": "pkg/protocol/live/live.pb.go",
+    "before": "7bf0ac0d5630d37fd7842213c1ada01eef83173618ead35c09193e25b4f81efa",
+    "after": "3fd347779828f643269e6febe42b8b73a8b28eca06aebac0b6dab3c214da3229"
+  },
+  {
+    "path": "pkg/protocol/live/live.proto",
+    "before": "d59f109c2a6a93c6c1d03e39ac011ba26835ecf43a44901ed3fffd8f5da6b2c6",
+    "after": "ba133c14564c636aa40ca3bac5287fcfd454e418064ca3268efeab09b02666d3"
+  },
+  {
+    "path": "pkg/common/fundswap/swap_integration_test.go",
+    "before": "d274022f4629884b2091f4c4b72bf17b020c76b79df6b3f740958a2e3376a554",
+    "after": "f3121b20f4a5be1a04d1f8f4dee9d64a6c130d36927792474407a88611ddfebb"
+  }
+]
