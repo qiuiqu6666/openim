@@ -504,7 +504,8 @@ class _ChatItemViewState extends State<ChatItemView> {
           _message.contentType !=
               MessageType.groupInfoSetAnnouncementNotification,
       isSending: _message.status == MessageStatus.sending,
-      centerSendingStatus: _message.isVideoType && !widget.isStickerMedia,
+      centerSendingStatus: (_message.isPictureType || _message.isVideoType) &&
+          !widget.isStickerMedia,
       isSendFailed: _message.status == MessageStatus.failed,
       isBubbleBg: isBubbleBg,
       avatarSize: widget.avatarSize ??

@@ -30,6 +30,46 @@ void main() {
     OpenIM.iMManager.userID = 'self';
     OpenIM.iMManager.userInfo = UserInfo(userID: 'self', nickname: 'Me');
   });
+  for (final type in [MessageType.picture, MessageType.video]) {
+    testWidgets('upload sector is centered in media bubble type=$type',
+        (tester) async {
+      final status = ValueNotifier<ChatTransferStatus?>(
+          const ChatTransferStatus(ChatTransferStage.uploading, 51));
+      addTearDown(status.dispose);
+      addTearDown(Get.reset);
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => GetMaterialApp(
+          home: Scaffold(
+            body: ChatItemView(
+              message: Message.fromJson({
+                'clientMsgID': 'upload',
+                'sendID': 'self',
+                'recvID': 'peer',
+                'contentType': type,
+                'sessionType': ConversationType.single,
+                'sendTime': 1000000,
+                'status': MessageStatus.sending,
+              }),
+              transferStatus: status,
+              showAvatar: false,
+              mediaItemBuilder: (_, __) => const SizedBox(
+                  key: ValueKey('media-preview'), width: 120, height: 200),
+              onTapUserProfile: (_) {},
+            ),
+          ),
+        ),
+      ));
+      expect(find.byType(ChatTransferStatusView), findsOneWidget);
+      expect(
+          (tester.getCenter(find.byType(ChatTransferStatusView)) -
+                  tester.getCenter(find.byKey(const ValueKey('media-preview'))))
+              .distance,
+          lessThan(0.01));
+      expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
   for (final channel in [false, true]) {
     testWidgets(
         'video preparation and SDK bubble retain geometry channel=$channel',
@@ -134,14 +174,9 @@ void main() {
         final preview = find.descendant(
             of: find.byType(PendingChatMediaBubble),
             matching: find.byType(FutureBuilder<Uint8List?>));
-        if (type == 2) {
-          expect(
-              (tester.getCenter(spinner) - tester.getCenter(preview)).distance,
-              lessThan(0.01));
-        } else {
-          expect(tester.getRect(preview).contains(tester.getCenter(spinner)),
-              isTrue);
-        }
+        expect(
+            (tester.getCenter(spinner) - tester.getCenter(preview)).distance,
+            lessThan(0.01));
         asset.thumbnail.completeError(StateError('unavailable thumbnail'));
         await tester.pump();
         expect(

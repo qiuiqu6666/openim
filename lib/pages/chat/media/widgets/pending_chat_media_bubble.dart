@@ -73,7 +73,7 @@ class _PendingChatMediaBubbleState extends State<PendingChatMediaBubble> {
           hasRead: false,
           showReadStatus: false,
           isSending: true,
-          centerSendingStatus: video,
+          centerSendingStatus: true,
           isSendFailed: false,
           rightNickname: OpenIM.iMManager.userInfo.nickname,
           rightFaceUrl: OpenIM.iMManager.userInfo.faceURL,
