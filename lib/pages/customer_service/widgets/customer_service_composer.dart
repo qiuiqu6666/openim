@@ -1,9 +1,9 @@
 import 'package:openim_common/localization.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:openim_common/openim_common.dart';
 
-import '../customer_service_tokens.dart';
-
+/// Shares the IM composer's appearance while retaining the support transport.
 class CustomerServiceComposer extends StatelessWidget {
   const CustomerServiceComposer({
     super.key,
@@ -20,88 +20,85 @@ class CustomerServiceComposer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final zh = Localizations.localeOf(context).languageCode == 'zh';
+    final dark = Theme.of(context).brightness == Brightness.dark;
     return DecoratedBox(
       key: const ValueKey('customer-service-composer'),
       decoration: BoxDecoration(
-        color: CustomerServiceTokens.surface(context),
+        color: chatComposerSurface(context),
         border: Border(
-            top: BorderSide(color: CustomerServiceTokens.border(context))),
+          top: BorderSide(
+            color: chatComposerDivider(context),
+            width: ChatComposerTokens.dividerWidth,
+          ),
+        ),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: AppTokens.s2, vertical: AppTokens.s2),
-        child: Row(children: [
-          IconButton(
-            key: const ValueKey('customer-service-attach'),
-            tooltip: zh ? AppCopy.text('图片或视频') : 'Photo or video',
-            onPressed: enabled ? onAttach : null,
-            color: CustomerServiceTokens.text(context),
-            constraints: const BoxConstraints.tightFor(
+      child: ConstrainedBox(
+        constraints:
+            const BoxConstraints(minHeight: ChatComposerTokens.barHeight),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: ChatComposerTokens.horizontalPadding,
+            vertical: ChatComposerTokens.verticalPadding,
+          ),
+          child: Row(children: [
+            IconButton(
+              key: const ValueKey('customer-service-attach'),
+              tooltip: zh ? AppCopy.text('图片或视频') : 'Photo or video',
+              onPressed: enabled ? onAttach : null,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints.tightFor(
                 width: kMinInteractiveDimension,
-                height: kMinInteractiveDimension),
-            icon: const Icon(Icons.add_rounded),
-          ),
-          const SizedBox(width: AppTokens.s2),
-          Expanded(
-            child: TextField(
-              key: const ValueKey('customer-service-input'),
-              controller: controller,
-              enabled: enabled,
-              onTapOutside: (_) => FocusScope.of(context).unfocus(),
-              textAlignVertical: TextAlignVertical.center,
-              textInputAction: TextInputAction.send,
-              onSubmitted: enabled ? (_) => onSend() : null,
-              style: TextStyle(
-                  color: CustomerServiceTokens.text(context),
-                  fontSize: CustomerServiceTokens.faqFontSize,
-                  height: CustomerServiceTokens.answerLineHeight),
-              decoration: InputDecoration(
-                constraints:
-                    const BoxConstraints(minHeight: kMinInteractiveDimension),
-                hintText: zh ? AppCopy.text('输入您的问题') : 'Type your question',
-                hintStyle: TextStyle(
-                    color: CustomerServiceTokens.secondaryText(context),
-                    fontSize: CustomerServiceTokens.faqFontSize),
-                isDense: false,
-                visualDensity: VisualDensity.standard,
-                filled: true,
-                fillColor: CustomerServiceTokens.background(context),
-                contentPadding: const EdgeInsets.symmetric(
-                    horizontal: AppTokens.s4, vertical: AppTokens.s3),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rMd),
-                    borderSide: BorderSide(
-                        color: CustomerServiceTokens.border(context))),
-                enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rMd),
-                    borderSide: BorderSide(
-                        color: CustomerServiceTokens.border(context))),
-                focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rMd),
-                    borderSide:
-                        const BorderSide(color: CustomerServiceTokens.blue)),
+                height: kMinInteractiveDimension,
+              ),
+              icon: SvgPicture.asset(
+                'assets/chat/composer/add.svg',
+                package: 'openim_common',
+                width: ChatComposerTokens.iconSize,
+                height: ChatComposerTokens.iconSize,
+                colorFilter: ColorFilter.mode(
+                  chatComposerForeground(context)
+                      .withValues(alpha: enabled ? 1 : .38),
+                  BlendMode.srcIn,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: AppTokens.s2),
-          ValueListenableBuilder<TextEditingValue>(
-            valueListenable: controller,
-            builder: (_, value, __) => IconButton.filled(
-              key: const ValueKey('customer-service-send'),
-              tooltip: zh ? AppCopy.text('发送') : 'Send',
-              onPressed:
-                  enabled && value.text.trim().isNotEmpty ? onSend : null,
-              style: IconButton.styleFrom(
-                fixedSize: const Size.square(kMinInteractiveDimension),
-                shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(AppTokens.rMd)),
-                backgroundColor: CustomerServiceTokens.blue,
-                foregroundColor: AppTokens.onAccent,
+            const SizedBox(width: ChatComposerTokens.actionGap),
+            Expanded(
+              child: TextField(
+                key: const ValueKey('customer-service-input'),
+                controller: controller,
+                enabled: enabled,
+                autocorrect: false,
+                cursorColor: ChatComposerTokens.cursor(dark: dark),
+                onTapOutside: (_) => FocusScope.of(context).unfocus(),
+                textAlignVertical: TextAlignVertical.center,
+                textInputAction: TextInputAction.send,
+                onSubmitted: enabled ? (_) => onSend() : null,
+                style: chatComposerTextStyle(context),
+                decoration: chatComposerInputDecoration(context,
+                    hintText:
+                        zh ? AppCopy.text('输入您的问题') : 'Type your question'),
               ),
-              icon: const Icon(Icons.send_rounded, size: AppTokens.chevronSize),
             ),
-          ),
-        ]),
+            const SizedBox(width: ChatComposerTokens.actionGap),
+            ValueListenableBuilder<TextEditingValue>(
+              valueListenable: controller,
+              builder: (_, value, __) => SizedBox(
+                height: ChatComposerTokens.inputHeight,
+                child: ElevatedButton(
+                  key: const ValueKey('customer-service-send'),
+                  onPressed:
+                      enabled && value.text.trim().isNotEmpty ? onSend : null,
+                  style: chatComposerSendButtonStyle(),
+                  child: Text(zh ? AppCopy.text('发送') : 'Send',
+                      style: const TextStyle(
+                        fontSize: ChatComposerTokens.sendFontSize,
+                      )),
+                ),
+              ),
+            ),
+          ]),
+        ),
       ),
     );
   }

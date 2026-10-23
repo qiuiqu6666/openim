@@ -27,6 +27,7 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 
 flutter_ios_podfile_setup
 require_relative 'scripts/apns_only_plugins'
+require_relative 'scripts/file_picker_namespace'
 
 target 'Runner' do
   use_frameworks!
@@ -106,5 +107,6 @@ post_install do |installer|
       ]
 
     end
+    IOSFilePickerNamespace.apply!(target)
   end
 end

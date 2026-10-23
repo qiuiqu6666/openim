@@ -7,7 +7,6 @@ import 'package:flutter_svg/flutter_svg.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'chat_emoji_panel.dart';
-import 'chat_composer_palette.dart';
 import 'toolbox/chat_composer_toolbox_slot.dart';
 import 'composer/chat_composer_panel_viewport.dart';
 import 'composer/chat_composer_keyboard_handoff.dart';
@@ -334,17 +333,7 @@ class _ChatInputBoxState extends State<ChatInputBox>
                           height: ChatComposerTokens.sendHeight,
                           child: ElevatedButton(
                             onPressed: widget.enabled ? send : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppTokens.accent,
-                              foregroundColor: AppTokens.onAccent,
-                              elevation: 0,
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal:
-                                      ChatComposerTokens.sendHorizontalPadding),
-                              minimumSize:
-                                  const Size(0, ChatComposerTokens.sendHeight),
-                              shape: const StadiumBorder(),
-                            ),
+                            style: chatComposerSendButtonStyle(),
                             child: Text(StrRes.send,
                                 style: const TextStyle(
                                   color: AppTokens.onAccent,
@@ -508,30 +497,8 @@ class _ChatInputBoxState extends State<ChatInputBox>
         ),
         child: ChatTextField(
           key: const ValueKey('chat-composer-input-fill'),
-          decoration: InputDecoration(
-            border: InputBorder.none,
-            enabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
-              borderSide: BorderSide.none,
-            ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
-              borderSide: BorderSide.none,
-            ),
-            disabledBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
-              borderSide: BorderSide.none,
-            ),
-            filled: true,
-            fillColor: chatComposerInputFill(context),
-            isDense: true,
-            hintText: widget.hintText ?? '',
-            hintStyle: chatComposerTextStyle(context, hint: true),
-            contentPadding: const EdgeInsets.symmetric(
-              horizontal: ChatComposerTokens.textHorizontalPadding,
-              vertical: ChatComposerTokens.textVerticalPadding,
-            ),
-          ),
+          decoration:
+              chatComposerInputDecoration(context, hintText: widget.hintText),
           keyboardType: TextInputType.text,
           textInputAction: TextInputAction.send,
           onEditingComplete: send,

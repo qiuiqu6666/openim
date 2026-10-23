@@ -59,9 +59,10 @@ class CustomerServiceSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final media = MediaQuery.of(context);
-    final bottom = media.viewInsets.bottom > 0
-        ? media.viewInsets.bottom
-        : media.padding.bottom;
+    // Keyboard dismissal can report an inset smaller than the home indicator
+    // before it reaches zero. Keep the final safe-area position as a floor,
+    // rather than moving below it and jumping back on the last metrics update.
+    final bottom = math.max(media.viewInsets.bottom, media.viewPadding.bottom);
     return Material(
       key: const ValueKey('customer-service-sheet'),
       color: CustomerServiceTokens.surface(context),

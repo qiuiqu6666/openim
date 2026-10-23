@@ -2766,12 +2766,11 @@ packages:
     source: path
     version: "1.3.3"
   volume_controller:
-    dependency: transitive
+    dependency: "direct overridden"
     description:
-      name: volume_controller
-      sha256: d75039e69c0d90e7810bfd47e3eedf29ff8543ea7a10392792e81f9bded7edf5
-      url: "https://pub.dev"
-    source: hosted
+      path: "local_plugin/volume_controller"
+      relative: true
+    source: path
     version: "3.4.0"
   wakelock_plus:
     dependency: transitive

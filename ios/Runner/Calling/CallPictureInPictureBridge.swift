@@ -5,7 +5,7 @@ import UIKit
 /// Uses the real remote WebRTC renderer, not a synthetic video for arbitrary UI.
 final class CallPictureInPictureBridge: NSObject, AVPictureInPictureControllerDelegate {
     private let channel: FlutterMethodChannel
-    private weak var sourceController: FlutterViewController?
+    private let sourceController: () -> FlutterViewController?
     private var pip: AVPictureInPictureController?
     private var contentController: UIViewController?
     private var frameView: CallVideoFrameView?
@@ -17,9 +17,9 @@ final class CallPictureInPictureBridge: NSObject, AVPictureInPictureControllerDe
     private var cameraSupported = false
     private var possibleObserver: NSKeyValueObservation?
 
-    init(controller: FlutterViewController) {
+    init(messenger: FlutterBinaryMessenger, controller: @escaping () -> FlutterViewController?) {
         sourceController = controller
-        channel = FlutterMethodChannel(name: "openim_call_pip", binaryMessenger: controller.binaryMessenger)
+        channel = FlutterMethodChannel(name: "openim_call_pip", binaryMessenger: messenger)
         super.init()
         channel.setMethodCallHandler { [weak self] call, result in
             guard let self = self else { result(false); return }
@@ -55,7 +55,7 @@ final class CallPictureInPictureBridge: NSObject, AVPictureInPictureControllerDe
               let requestedTrack = args["remoteVideoTrackId"] as? String,
               !requestedTrack.isEmpty,
               supported,
-              let source = sourceController?.view,
+              let source = sourceController()?.view,
               source.window != nil else {
             stop()
             // Audio-only calls have no video source; retain the application
@@ -180,7 +180,7 @@ final class CallPictureInPictureBridge: NSObject, AVPictureInPictureControllerDe
         restoring = true
         emit("restored")
         // The Flutter call overlay remains mounted throughout PiP.
-        completionHandler(sourceController?.view.window != nil)
+        completionHandler(sourceController()?.view.window != nil)
     }
 
     func pictureInPictureControllerDidStopPictureInPicture(_ controller: AVPictureInPictureController) {

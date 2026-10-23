@@ -5,13 +5,13 @@ import UIKit
 final class HomeTabBarFactory: NSObject, FlutterPlatformViewFactory {
     private let messenger: FlutterBinaryMessenger
     private let assetKey: (String) -> String
-    private weak var parent: UIViewController?
+    private let registrar: FlutterPluginRegistrar
     private let capability: FlutterMethodChannel
 
-    init(registrar: FlutterPluginRegistrar, parent: UIViewController) {
+    init(registrar: FlutterPluginRegistrar) {
         messenger = registrar.messenger()
         assetKey = { registrar.lookupKey(forAsset: $0) }
-        self.parent = parent
+        self.registrar = registrar
         capability = FlutterMethodChannel(
             name: "openim/home-navigation", binaryMessenger: registrar.messenger())
         super.init()
@@ -36,6 +36,6 @@ final class HomeTabBarFactory: NSObject, FlutterPlatformViewFactory {
     func create(withFrame frame: CGRect, viewIdentifier viewId: Int64,
                 arguments args: Any?) -> FlutterPlatformView {
         HomeTabBarPlatformView(frame: frame, identifier: viewId, args: args,
-                               messenger: messenger, parent: parent, assetKey: assetKey)
+                               messenger: messenger, parent: registrar.viewController, assetKey: assetKey)
     }
 }

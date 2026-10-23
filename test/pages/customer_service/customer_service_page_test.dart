@@ -303,8 +303,7 @@ void main() {
       }
       final decoration =
           tester.widget<DecoratedBox>(composer).decoration as BoxDecoration;
-      expect(decoration.color,
-          CustomerServiceTokens.surface(tester.element(composer)));
+      expect(decoration.color, chatComposerSurface(tester.element(composer)));
       expect(decoration.color!.a, 1);
       expect(
           find.descendant(of: composer, matching: find.byType(BackdropFilter)),
@@ -327,6 +326,32 @@ void main() {
       expect(sheet, findsOneWidget);
       tester.view.resetViewInsets();
       await _flush(tester);
+      await _close(tester, harness);
+    });
+
+    testWidgets('composer returns monotonically to safe area in $brightness',
+        (tester) async {
+      final harness = CustomerServiceTestHarness();
+      tester.view.viewPadding = const FakeViewPadding(bottom: 34);
+      addTearDown(tester.view.resetViewPadding);
+      await _open(tester, harness, brightness: brightness);
+      final composer = find.byKey(const ValueKey('customer-service-composer'));
+      final input = find.byKey(const ValueKey('customer-service-input'));
+      final restingBottom = tester.getRect(composer).bottom;
+      expect(restingBottom, closeTo(812 - 34, 1));
+      await tester.tap(input);
+      await tester.enterText(input, 'Retain draft');
+      double previous = 0;
+      for (final inset in [300.0, 120.0, 35.0, 20.0, 1.0, 0.0]) {
+        tester.view.viewInsets = FakeViewPadding(bottom: inset);
+        await _flush(tester);
+        final bottom = tester.getRect(composer).bottom;
+        expect(bottom, greaterThanOrEqualTo(previous));
+        expect(bottom, lessThanOrEqualTo(restingBottom));
+        expect(bottom, closeTo(812 - (inset > 34 ? inset : 34), 1));
+        previous = bottom;
+      }
+      expect(tester.widget<TextField>(input).controller!.text, 'Retain draft');
       await _close(tester, harness);
     });
 

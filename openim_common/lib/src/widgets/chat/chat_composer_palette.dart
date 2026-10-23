@@ -19,6 +19,40 @@ Color chatComposerForeground(BuildContext context) => AppTokens.textPrimary(
 Color chatComposerHint(BuildContext context) => AppTokens.textSecondary(
     dark: Theme.of(context).brightness == Brightness.dark);
 
+/// Shared by IM and support composers; neither owns the other's send flow.
+InputDecoration chatComposerInputDecoration(BuildContext context,
+    {String? hintText}) {
+  final border = OutlineInputBorder(
+    borderRadius: BorderRadius.circular(ChatComposerTokens.radius),
+    borderSide: BorderSide.none,
+  );
+  return InputDecoration(
+    border: InputBorder.none,
+    enabledBorder: border,
+    focusedBorder: border,
+    disabledBorder: border,
+    filled: true,
+    fillColor: chatComposerInputFill(context),
+    isDense: true,
+    hintText: hintText ?? '',
+    hintStyle: chatComposerTextStyle(context, hint: true),
+    contentPadding: const EdgeInsets.symmetric(
+      horizontal: ChatComposerTokens.textHorizontalPadding,
+      vertical: ChatComposerTokens.textVerticalPadding,
+    ),
+  );
+}
+
+ButtonStyle chatComposerSendButtonStyle() => ElevatedButton.styleFrom(
+      backgroundColor: AppTokens.accent,
+      foregroundColor: AppTokens.onAccent,
+      elevation: 0,
+      padding: const EdgeInsets.symmetric(
+          horizontal: ChatComposerTokens.sendHorizontalPadding),
+      minimumSize: const Size(0, ChatComposerTokens.sendHeight),
+      shape: const StadiumBorder(),
+    );
+
 /// 99chat's input typography does not inherit Material body/label spacing.
 /// Mobile uses the system font; desktop uses the same CJK UI font fallbacks.
 TextStyle chatComposerTextStyle(BuildContext context, {bool hint = false}) {

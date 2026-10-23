@@ -24,16 +24,29 @@ class HomeBottomNavBar extends StatefulWidget {
   State<HomeBottomNavBar> createState() => _HomeBottomNavBarState();
 }
 
-class _HomeBottomNavBarState extends State<HomeBottomNavBar> {
+class _HomeBottomNavBarState extends State<HomeBottomNavBar>
+    with WidgetsBindingObserver {
   static const _channel = MethodChannel('openim/home-navigation');
   bool _nativeAvailable = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.iOS) {
       _checkNativeSupport();
     }
+  }
+
+  @override
+  void didChangeMetrics() {
+    if (mounted) setState(() {});
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
   }
 
   Future<void> _checkNativeSupport() async {
@@ -53,6 +66,12 @@ class _HomeBottomNavBarState extends State<HomeBottomNavBar> {
   Widget build(BuildContext context) => AnimatedBuilder(
         animation: NavigationGlassController.instance,
         builder: (context, _) {
+          // Read the actual view: a nested Scaffold may remove MediaQuery's
+          // keyboard inset while the root customer-service dialog owns focus.
+          // Remove platform views too, so UIKit cannot lift its bar over input.
+          if (View.of(context).viewInsets.bottom > 0) {
+            return const SizedBox.shrink();
+          }
           if (_nativeAvailable &&
               NavigationGlassController.instance.mode !=
                   NavigationGlassMode.translucent) {

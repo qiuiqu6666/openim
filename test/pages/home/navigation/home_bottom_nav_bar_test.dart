@@ -115,6 +115,39 @@ void main() {
   });
 
   platformTest(
+      'keyboard removes native navigation and restores selection and badges',
+      (tester) async {
+    addTearDown(tester.view.reset);
+    await pumpHost(tester);
+    await emitSelection(1);
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    expect(find.byType(UiKitView), findsNothing);
+    expect(find.byType(GlassBottomNavBar), findsNothing);
+    rebuild(() => badges = [0, 27, 0, 0, 0]);
+    await tester.pumpAndSettle();
+    tester.view.viewInsets = const FakeViewPadding();
+    await tester.pumpAndSettle();
+    expect(find.byType(UiKitView), findsOneWidget);
+    expect(updates.last['selectedIndex'], 1);
+    expect(((updates.last['items'] as List)[1] as Map)['badge'], '27');
+  });
+
+  platformTest('keyboard also hides and restores the Flutter navigation',
+      (tester) async {
+    addTearDown(tester.view.reset);
+    await pumpHost(tester);
+    expect(find.byType(GlassBottomNavBar), findsOneWidget);
+    tester.view.viewInsets = const FakeViewPadding(bottom: 300);
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassBottomNavBar), findsNothing);
+    tester.view.viewInsets = const FakeViewPadding();
+    await tester.pumpAndSettle();
+    expect(find.byType(GlassBottomNavBar), findsOneWidget);
+  }, platform: TargetPlatform.android);
+
+  platformTest(
       'native updates badges, theme, labels and authoritative selection',
       (tester) async {
     tester.view.devicePixelRatio = 1;

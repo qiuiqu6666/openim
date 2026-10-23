@@ -3,12 +3,11 @@ import Flutter
 import UserNotifications
 
 @main
-@objc class AppDelegate: FlutterAppDelegate {
+@objc class AppDelegate: FlutterAppDelegate, FlutterImplicitEngineDelegate {
     
     var replayKitChannel: FlutterMethodChannel! = nil
     var observeTimer: Timer?
-    var inviteChannel: FlutterMethodChannel?
-    var pendingInvite: String?
+    private let friendInvites = FriendInviteBridge()
     var hasEmittedFirstSample = false;
     var chatNotifications: ChatCommunicationNotificationBridge?
     var callPictureInPicture: CallPictureInPictureBridge?
@@ -25,47 +24,50 @@ import UserNotifications
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         voipCalls.start()
-        guard let controller = window?.rootViewController as? FlutterViewController else {
-            return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+        if let url = launchOptions?[.url] as? URL {
+            _ = handleFriendInvite(url)
         }
+        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+    }
 
-        apnsPush.attach(messenger: controller.binaryMessenger)
-        mediaAudioBridge = MediaAudioBridge(messenger: controller.binaryMessenger)
-        youmeng.attach(messenger: controller.binaryMessenger)
-        voipCalls.attach(messenger: controller.binaryMessenger)
-        pendingInvite = (launchOptions?[.url] as? URL)?.absoluteString
-        inviteChannel = FlutterMethodChannel(name: "openim_friend_invites", binaryMessenger: controller.binaryMessenger)
-        inviteChannel?.setMethodCallHandler { [weak self] call, result in
-            guard call.method == "takeInvite" else { result(FlutterMethodNotImplemented); return }
-            let value = self?.pendingInvite
-            self?.pendingInvite = nil
-            result(value)
-        }
-        
-        replayKitChannel = FlutterMethodChannel(name: "io.livekit.example.flutter/replaykit-channel",binaryMessenger: controller.binaryMessenger)
+    // UIScene creates the window after process launch. Register the engine's
+    // plugins/channels here instead of reading AppDelegate.window at launch.
+    func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
+        let registry = engineBridge.pluginRegistry
+        let messenger = engineBridge.applicationRegistrar.messenger()
+        GeneratedPluginRegistrant.register(with: registry)
+
+        apnsPush.attach(messenger: messenger)
+        mediaAudioBridge = MediaAudioBridge(messenger: messenger)
+        youmeng.attach(messenger: messenger)
+        voipCalls.attach(messenger: messenger)
+        friendInvites.attach(messenger: messenger)
+        replayKitChannel = FlutterMethodChannel(name: "io.livekit.example.flutter/replaykit-channel",binaryMessenger: messenger)
         
         replayKitChannel.setMethodCallHandler({
             (call: FlutterMethodCall, result: @escaping  FlutterResult)  -> Void in
             self.handleReplayKitFromFlutter(result: result, call:call)
         })
         
-        locationAddressBridge = ChatLocationAddressBridge(messenger: controller.binaryMessenger)
-        GeneratedPluginRegistrant.register(with: self)
-        if let registrar = controller.registrar(forPlugin: "HomeNativeNavigation") {
-            registrar.register(HomeTabBarFactory(registrar: registrar, parent: controller),
+        locationAddressBridge = ChatLocationAddressBridge(messenger: messenger)
+        if let registrar = registry.registrar(forPlugin: "HomeNativeNavigation") {
+            registrar.register(HomeTabBarFactory(registrar: registrar),
                                withId: "openim/home-tab-bar")
         }
-        controller.registrar(forPlugin: "NativeChatLocationMap")?.register(
-            NativeChatLocationMapFactory(messenger: controller.binaryMessenger),
+        registry.registrar(forPlugin: "NativeChatLocationMap")?.register(
+            NativeChatLocationMapFactory(messenger: messenger),
             withId: "openim/chat-location-map")
-        deviceSyncOriginals = DeviceSyncOriginalsBridge(messenger: controller.binaryMessenger)
-        callPictureInPicture = CallPictureInPictureBridge(controller: controller)
-        controller.registrar(forPlugin: "GroupLiveCast")?.register(
+        deviceSyncOriginals = DeviceSyncOriginalsBridge(messenger: messenger)
+        if let registrar = registry.registrar(forPlugin: "CallPictureInPicture") {
+            callPictureInPicture = CallPictureInPictureBridge(messenger: messenger) {
+                registrar.viewController as? FlutterViewController
+            }
+        }
+        registry.registrar(forPlugin: "GroupLiveCast")?.register(
             LiveAirPlayViewFactory(),
             withId: "openim_group_live_airplay_picker")
         chatNotifications = ChatCommunicationNotificationBridge(
-            messenger: controller.binaryMessenger)
-        return super.application(application, didFinishLaunchingWithOptions: launchOptions)
+            messenger: messenger)
     }
 
     override func application(
@@ -113,17 +115,13 @@ import UserNotifications
     
     override func application(_ app: UIApplication, open url: URL,
         options: [UIApplication.OpenURLOptionsKey: Any] = [:]) -> Bool {
-        guard ["chat99", "openim"].contains(url.scheme?.lowercased() ?? ""), url.host == "user" else {
-            return super.application(app, open: url, options: options)
-        }
-        let value = url.absoluteString
-        pendingInvite = value
-        inviteChannel?.invokeMethod("openInvite", arguments: value) { [weak self] result in
-            if result as? Bool == true && self?.pendingInvite == value {
-                self?.pendingInvite = nil
-            }
-        }
-        return true
+        if handleFriendInvite(url) { return true }
+        return super.application(app, open: url, options: options)
+    }
+
+    @discardableResult
+    func handleFriendInvite(_ url: URL) -> Bool {
+        friendInvites.open(url)
     }
 
     func handleReplayKitFromFlutter(result:FlutterResult, call: FlutterMethodCall){

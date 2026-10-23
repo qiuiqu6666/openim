@@ -77,6 +77,7 @@ export 'src/widgets/chat/chat_friend_relationship_hint_view.dart';
 export 'src/widgets/chat/chat_hint_text_view.dart';
 export 'src/widgets/chat/chat_image_view.dart';
 export 'src/widgets/chat/chat_input_box.dart';
+export 'src/widgets/chat/chat_composer_palette.dart';
 export 'src/widgets/chat/chat_composer_context_preview.dart';
 export 'src/widgets/chat/chat_item_container.dart';
 export 'src/widgets/chat/chat_message_content_anchor.dart';

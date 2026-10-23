@@ -1,0 +1,107 @@
+--- a/ios/volume_controller/Sources/volume_controller/Extension.swift
++++ b/ios/volume_controller/Sources/volume_controller/Extension.swift
+@@ -7,38 +7,10 @@
+   }
+ }
+ 
++// Volume controls observe the media owner's session; they must never activate,
++// deactivate or change its category (CallKit/WebRTC/players own that lifecycle).
+ extension AVAudioSession {
+   func getVolume() -> Float {
+-    do {
+-      try setActive(true)
+-      return outputVolume
+-    } catch {
+-      print("Error activating audio session: \(error)")
+-      return 0
+-    }
+-  }
+-
+-  func activateAudioSession() {
+-    do {
+-      try setActive(true)
+-    } catch {
+-      print("Error activating audio session: \(error)")
+-    }
+-  }
+-
+-  func deactivateAudioSession() {
+-    do {
+-      try setActive(false)
+-    } catch {
+-      print("Error deactivating audio session: \(error)")
+-    }
+-  }
+-
+-  func setAudioSessionCategory() {
+-    do {
+-      try setCategory(.playback, options: .mixWithOthers)
+-    } catch {
+-      print("Error setting audio session category: \(error)")
+-    }
++    return outputVolume
+   }
+ }
+--- a/ios/volume_controller/Sources/volume_controller/VolumeControllerPlugin.swift
++++ b/ios/volume_controller/Sources/volume_controller/VolumeControllerPlugin.swift
+@@ -55,9 +55,6 @@
+ 
+ extension VolumeControllerPlugin: FlutterApplicationLifeCycleDelegate {
+   public func applicationWillEnterForeground(_ application: UIApplication) {
+-    VolumeControllerPlugin.audioSession.activateAudioSession()
+-    VolumeControllerPlugin.audioSession.setAudioSessionCategory()
+-
+     if VolumeControllerPlugin.volumeListener.isObservingVolume {
+       VolumeControllerPlugin.volumeListener.sendVolumeChangeEvent()
+     }
+--- a/ios/volume_controller/Sources/volume_controller/VolumeListener.swift
++++ b/ios/volume_controller/Sources/volume_controller/VolumeListener.swift
+@@ -35,7 +35,6 @@
+   }
+ 
+   public func onCancel(withArguments arguments: Any?) -> FlutterError? {
+-    audioSession.deactivateAudioSession()
+     eventSink = nil
+     removeVolumeObserver()
+ 
+@@ -43,20 +42,13 @@
+   }
+ 
+   private func registerVolumeObserver() {
+-    do {
+-      try audioSession.setAudioSessionCategory()
+-      try audioSession.activateAudioSession()
+-      if !isObserving {
+-        audioSession.addObserver(
+-          self,
+-          forKeyPath: volumeKey,
+-          options: .new,
+-          context: nil)
+-        isObserving = true
+-      }
+-    } catch {
+-      print("Error setting up volume observer: \(error)")
+-    }
++    guard !isObserving else { return }
++    audioSession.addObserver(
++      self,
++      forKeyPath: volumeKey,
++      options: .new,
++      context: nil)
++    isObserving = true
+   }
+ 
+   private func removeVolumeObserver() {
+@@ -75,7 +67,11 @@
+     guard keyPath == volumeKey else {
+       return
+     }
+-    eventSink?(audioSession.getVolume())
++    // KVO may run on an audio thread; Flutter events belong on the main thread.
++    DispatchQueue.main.async { [weak self] in
++      guard let self, self.isObserving else { return }
++      self.sendVolumeChangeEvent()
++    }
+   }
+ 
+   public func sendVolumeChangeEvent() {

@@ -137,6 +137,9 @@ dependencies:
   brotli: 0.6.0
 
 dependency_overrides:
+  # Observe system volume without taking audio-session ownership from calls.
+  volume_controller:
+    path: local_plugin/volume_controller
   # Unregister native callbacks before releasing Dart FFI trampolines.
   media_kit:
     path: local_plugin/media_kit
