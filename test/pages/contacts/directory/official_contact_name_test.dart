@@ -68,7 +68,12 @@ Finder _name(String id) => find.byWidgetPredicate(
     (widget) => widget is OfficialAccountNameLabel && widget.userID == id);
 
 Finder _presenceText(String id, String text) => find.descendant(
-    of: find.byKey(ValueKey('contact-presence-$id')),
+    of: find.byWidgetPredicate((widget) =>
+        widget.key is ValueKey<String> &&
+        (widget.key as ValueKey<String>)
+            .value
+            .startsWith('contact-presence-') &&
+        (widget.key as ValueKey<String>).value.endsWith('-$id')),
     matching: find.text(text));
 
 Finder _badge() => find.byWidgetPredicate((widget) =>
@@ -212,13 +217,13 @@ void main() {
       addTearDown(logic.presence.dispose);
       addTearDown(logic.stars.dispose);
       await _mount(tester, ContactsPage(logic: logic), brightness);
-      expect(find.text('公告备注'), findsOneWidget);
+      expect(find.text('公告备注'), findsNWidgets(2));
       expect(find.text('99Message'), findsOneWidget);
-      expect(_badge(), findsNWidgets(2));
+      expect(_badge(), findsNWidgets(3));
       expect(find.descendant(of: _name('ordinary'), matching: _badge()),
           findsNothing);
-      expect(find.byIcon(Icons.star_rounded), findsOneWidget);
-      await tester.tap(find.text('公告备注'));
+      expect(find.byIcon(Icons.star_rounded), findsNWidgets(2));
+      await tester.tap(find.text('公告备注').first);
       expect(logic.openedFriend, same(official));
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());

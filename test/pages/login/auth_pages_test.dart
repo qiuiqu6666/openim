@@ -392,7 +392,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('registration validates five fields and offers direct registration',
+  testWidgets(
+      'registration validates five fields and offers direct registration',
       (tester) async {
     addTearDown(() => _unmount(tester));
     await _mount(tester, RegisterPage());
@@ -588,6 +589,7 @@ void main() {
     await _enter(tester, register.verificationCodeCtrl, '123456');
     await _enter(tester, register.pwdCtrl, 'password1');
     await _enter(tester, register.pwdAgainCtrl, 'password1');
+    await _enter(tester, register.nicknameCtrl, '测试昵称');
     await _tapSubmit(tester);
     expect(find.byType(SetPasswordPage), findsOneWidget);
     expect(find.byKey(const ValueKey('registration-step-2')), findsOneWidget);
@@ -597,7 +599,7 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('register-profile-back')));
     await tester.pumpAndSettle();
     expect(find.byType(RegisterPage), findsOneWidget);
-    expect(find.byType(EditableText), findsNWidgets(4));
+    expect(find.byType(EditableText), findsNWidgets(5));
     expect(register.phoneCtrl.text, '13800138000');
     expect(register.verificationCodeCtrl.text, '123456');
     expect(register.pwdCtrl.text, 'password1');
@@ -789,4 +791,3 @@ void main() {
     }
   }, skip: _previewDirectory.isEmpty);
 }
-

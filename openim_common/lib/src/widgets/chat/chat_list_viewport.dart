@@ -92,8 +92,8 @@ class _ChatListViewportState extends State<ChatListViewport>
     super.didUpdateWidget(oldWidget);
     final latestLayout =
         widget.positionController?.takeLatestLayoutRequest() == true;
-    final messageLayout = widget.positionController
-        ?.takeMessageLayoutRequest(widget.messageIDs);
+    final messageLayout =
+        widget.positionController?.takeMessageLayoutRequest(widget.messageIDs);
     if (oldWidget.positionController != widget.positionController) {
       oldWidget.positionController?.detach(this);
       widget.positionController?.attach(
@@ -143,7 +143,8 @@ class _ChatListViewportState extends State<ChatListViewport>
         _restoreAttempts = 0;
       }
     }
-    if (latestLayout || messageLayout != null ||
+    if (latestLayout ||
+        messageLayout != null ||
         oldWidget.controller != widget.controller ||
         !listEquals(_ids, widget.messageIDs)) {
       _updatePartition();
@@ -270,6 +271,13 @@ class _ChatListViewportState extends State<ChatListViewport>
         row.hasSize &&
         viewport is RenderBox &&
         viewport.hasSize &&
+        // A newer sliver outside the viewport may retain a cached row whose
+        // transform is clamped to the viewport edge. Its geometry cannot prove
+        // proximity when returning from several screens of history.
+        (!latest ||
+            _distance <=
+                viewport.size.height *
+                    ChatPositionMotion.farViewportThreshold) &&
         (row.localToGlobal(Offset.zero, ancestor: viewport).dy -
                     math.max(
                         0.0,

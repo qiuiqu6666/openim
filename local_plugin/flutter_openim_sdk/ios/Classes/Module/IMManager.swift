@@ -10,12 +10,16 @@ public class IMMananger: BaseServiceManager {
     private var isInBackground = false
     private var networkCheck: DispatchWorkItem?
     private var networkPath = IMNetworkPathPolicy()
+    private var pendingLogin: FlutterResult?
+    private var loginRevision = 0
+    private var pendingLoginID: String?
     
     public override func registerHandlers() {
         super.registerHandlers()
         self["initSDK"] = initSDK
         self["unInitSDK"] = unInitSDK
         self["login"] = login
+        self["cancelLogin"] = cancelLogin
         self["logout"] = logout
         self["getLoginStatus"] = getLoginStatus
         self["uploadFile"] = uploadFile
@@ -131,15 +135,51 @@ public class IMMananger: BaseServiceManager {
     }
     
     func login(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {
-        Open_im_sdkLogin(BaseCallback(result: result), methodCall[string: "operationID"], methodCall[string: "userID"], methodCall[string: "token"])
+        guard pendingLogin == nil else {
+            result(FlutterError(code: "LOGIN_PENDING", message: "Login is still pending", details: nil))
+            return
+        }
+        loginRevision += 1
+        let revision = loginRevision
+        pendingLogin = result
+        pendingLoginID = methodCall[string: "operationID"]
+        Open_im_sdkLogin(BaseCallback(result: { [weak self] value in
+            guard let self = self, self.loginRevision == revision,
+                  let reply = self.pendingLogin else { return }
+            self.pendingLogin = nil
+            reply(value)
+        }), methodCall[string: "operationID"], methodCall[string: "userID"], methodCall[string: "token"])
     }
     
     func logout(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {
         Open_im_sdkLogout(BaseCallback(result: result), methodCall[string: "operationID"])
     }
+    func cancelLogin(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {
+        let target = methodCall[string: "targetOperationID"]
+        let revision = loginRevision
+        guard target == pendingLoginID else { callBack(result); return }
+        Open_im_sdkCancelLogin(BaseCallback(result: { [weak self] value in
+            guard let self = self else { return }
+            if !(value is FlutterError), self.loginRevision == revision,
+               self.pendingLoginID == target, let reply = self.pendingLogin {
+                self.pendingLogin = nil
+                if Open_im_sdkGetLoginStatus(methodCall[string: "operationID"]) == 3 {
+                    reply("")
+                } else {
+                    reply(FlutterError(code: "10004", message: "Login cancelled after cleanup", details: nil))
+                }
+            }
+            result(value)
+        }), methodCall[string: "operationID"], target)
+    }
     
     func getLoginStatus(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {
-        callBack(result, Open_im_sdkGetLoginStatus(methodCall[string: "operationID"]))
+        let status = Open_im_sdkGetLoginStatus(methodCall[string: "operationID"])
+        if status == 3, let reply = pendingLogin {
+            pendingLogin = nil
+            reply("")
+        }
+        callBack(result, status)
     }
     
     func uploadFile(methodCall: FlutterMethodCall, result: @escaping FlutterResult) {

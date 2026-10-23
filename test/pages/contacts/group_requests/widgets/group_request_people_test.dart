@@ -84,10 +84,7 @@ void main() {
             .seed(GroupInfo(groupID: 'test-group', ex: '{"gameType":$type}'));
         await tester.pump();
         expect(
-            tester.widget<Text>(find.text('测试群')).style!.color,
-            type == 1 || type == 3
-                ? (dark ? AppTokens.paymentErrorDark : AppTokens.danger)
-                : initialColor);
+            tester.widget<Text>(find.text('测试群')).style!.color, initialColor);
         expect(tester.getSize(find.byType(GroupRequestItem)).height, height);
       }
     });

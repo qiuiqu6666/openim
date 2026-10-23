@@ -1,3 +1,4 @@
+import 'package:openim/pages/mine/settings/node_switch/node_probe_controller.dart';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -29,6 +30,30 @@ import 'package:openim/pages/mine/settings/pages/trade_password_page.dart';
 import 'package:openim/pages/mine/settings/settings_draft_store.dart';
 import 'package:openim/pages/mine/settings/settings_service.dart';
 import 'package:openim_common/openim_common.dart';
+
+// This file verifies the settings shell. Probe protocol and cancellation are
+// covered by node_probe_controller_test and the startup route tests.
+class _SettingsNodeController extends NodeProbeController {
+  _SettingsNodeController() : super(networkChanges: const Stream.empty());
+
+  @override
+  Future<void> test() async {
+    hasManualTest = true;
+    testedAt = DateTime(2026, 10, 24);
+    status = NodeProbeStatus.normal;
+    for (final node in nodes) {
+      results[node.signature] =
+          const NodeProbeResult(NodeProbeStatus.normal, latencyMs: 20);
+    }
+    notifyListeners();
+  }
+}
+
+NodeProbeController _nodeController() {
+  final controller = _SettingsNodeController();
+  addTearDown(controller.dispose);
+  return controller;
+}
 
 Widget _host(Widget child) => ScreenUtilInit(
       designSize: const Size(375, 812),
@@ -273,7 +298,9 @@ void main() {
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
+    final controller = _nodeController();
     await tester.pumpWidget(_host(NodeSwitchPage(
+      controller: controller,
       store: store,
       service: const StubSettingsService(),
     )));
@@ -283,9 +310,10 @@ void main() {
     expect(find.textContaining(Config.appAuthUrl), findsNothing);
     expect(find.textContaining(Config.imApiUrl), findsNothing);
     expect(find.textContaining(Config.imWsUrl), findsNothing);
-    expect(find.text('尚未测速'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('尚未测速'), findsNothing);
     expect(find.text('节点03'), findsOneWidget);
-    expect(find.text('未知'), findsNWidgets(3));
+    expect(find.text('未知'), findsNothing);
   });
 
   testWidgets(
@@ -467,11 +495,14 @@ void main() {
       (tester) async {
     final store = SettingsDraftStore();
     addTearDown(store.dispose);
+    final controller = _nodeController();
     await tester.pumpWidget(_host(NodeSwitchPage(
+      controller: controller,
       store: store,
       service: const StubSettingsService(),
       embedded: true,
     )));
+    await tester.pumpAndSettle();
     expect(find.byType(AppBar), findsNothing);
     expect(find.text('节点01'), findsOneWidget);
     expect(find.textContaining(Config.appAuthUrl), findsNothing);

@@ -39,6 +39,9 @@ public class MainActivity extends FlutterFragmentActivity {
             .setMethodCallHandler((call, result) -> {
                 if ("start".equals(call.method)) {
                     io.openim.youmeng.YoumengService.start(getApplicationContext(), call.arguments(), result);
+                } else if ("cancel".equals(call.method)) {
+                    io.openim.youmeng.YoumengService.cancel(getApplicationContext());
+                    result.success(null);
                 } else result.notImplemented();
             });
         nativeNotificationBridge = new io.openim.messaging.NativeNotificationBridge(this, flutterEngine);

@@ -17,6 +17,7 @@ import '../widgets/wallet_99chat_tokens.dart';
 import '../widgets/wallet_page_colors.dart';
 import '../withdraw_coin_picker_screen.dart';
 import 'wallet_home_tokens.dart';
+import 'tron_address/wallet_tron_address_row.dart';
 import 'trend/wallet_asset_trend_panel.dart';
 import 'widgets/wallet_asset_list.dart';
 import 'widgets/wallet_balance_overview.dart';
@@ -120,6 +121,23 @@ class _WalletHomeViewState extends State<WalletHomeView> {
                     children: [
                       _overview(context),
                       const SizedBox(height: AppTokens.s5),
+                      ColoredBox(
+                        color: colors.card,
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: gutter),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const WalletTronAddressRow(),
+                              Divider(
+                                height: AppTokens.s2,
+                                thickness: WalletHomeTokens.divider,
+                                color: colors.line,
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
                       _assets(context, gutter: gutter),
                       if (widget.activeTabIndexListenable != null)
                         ValueListenableBuilder<int>(

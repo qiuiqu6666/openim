@@ -1,3 +1,5 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 
 import 'package:flutter/material.dart';
@@ -12,9 +14,12 @@ import '../../../support/performance/render_test_fakes.dart';
 class _Video extends VideoPlayerPlatform {
   DataSource? source;
   int plays = 0;
+  int pauses = 0;
   bool released = false;
   @override
   Future<void> init() async {}
+  @override
+  Future<void> setMixWithOthers(bool value) async {}
   @override
   Future<int?> createWithOptions(VideoCreationOptions options) async {
     source = options.dataSource;
@@ -38,7 +43,10 @@ class _Video extends VideoPlayerPlatform {
   }
 
   @override
-  Future<void> pause(int id) async {}
+  Future<void> pause(int id) async {
+    pauses++;
+  }
+
   @override
   Future<Duration> getPosition(int id) async => Duration.zero;
   @override
@@ -66,6 +74,11 @@ const _post =
 ]);
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
   tearDown(Get.reset);
   for (final revoke in ['session', 'post', 'background']) {
     testWidgets('legacy video streams with owner token and stops on $revoke',
@@ -82,17 +95,21 @@ void main() {
       await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 30)));
       await tester.pumpAndSettle();
+      expect(video.source, isNull);
+      expect(video.plays, 0);
+      await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 30)));
+      await tester.pumpAndSettle();
       expect(
           find.byKey(const ValueKey('protected-moment-video')), findsOneWidget);
       expect(video.source!.sourceType, DataSourceType.network);
       expect(video.source!.httpHeaders, {'token': 'synthetic-moment-token'});
       expect(video.source!.uri,
           'http://129.226.192.93:10008/moments/media/video-media/content');
-      expect(video.plays, 0);
+      expect(video.plays, 1);
       expect(api.mediaCalls, isEmpty,
           reason: 'Video must not download into shared image or disk caches');
-      await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-      await tester.pump();
       expect(video.plays, 1);
       switch (revoke) {
         case 'session':
@@ -107,10 +124,23 @@ void main() {
       await tester.pump();
       await tester.runAsync(
           () => Future<void>.delayed(const Duration(milliseconds: 20)));
-      expect(
-          find.byKey(const ValueKey('protected-moment-video')), findsNothing);
-      expect(video.released, isTrue);
+      if (revoke == 'background') {
+        expect(video.pauses, greaterThan(0));
+        expect(video.released, isFalse,
+            reason:
+                'Background pauses playback; route disposal releases the player.');
+      } else {
+        expect(
+            find.byKey(const ValueKey('protected-moment-video')), findsNothing);
+        expect(video.released, isTrue);
+      }
+      // A paused binding does not draw the replacement widget until resumed.
+      tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       await tester.pumpWidget(const SizedBox.shrink());
+      await tester.pumpAndSettle();
+      await tester.runAsync(
+          () => Future<void>.delayed(const Duration(milliseconds: 20)));
+      expect(video.released, isTrue);
       tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
       expect(tester.takeException(), isNull);
     });

@@ -122,19 +122,6 @@ class NodeAvailabilityProbe {
     return uri;
   }
 
-  Future<void> _gateway(Dio client, Uri ws, CancelToken token) async {
-    final response = await client.get<Map<String, dynamic>>(
-        ws.replace(scheme: ws.scheme == 'wss' ? 'https' : 'http').toString(),
-        cancelToken: token,
-        options: Options(headers: await PublicHealthCheck.diagnosticHeaders()));
-    final body = response.data;
-    // An unauthenticated gateway returns the OpenIM argument error rather
-    // than opening a user connection. Reject proxies, HTML and server errors.
-    if (response.statusCode != 200 ||
-        body?['errCode'] != 1602 ||
-        body?['errMsg'] is! String ||
-        !(body!['errMsg'] as String).contains('token')) {
-      throw StateError('WebSocket gateway unavailable');
-    }
-  }
+  Future<void> _gateway(Dio client, Uri ws, CancelToken token) =>
+      PublicHealthCheck.gateway(client, ws.toString(), token);
 }

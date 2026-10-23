@@ -44,7 +44,11 @@ public class IMManager extends BaseManager {
     }
 
     public void getLoginStatus(MethodCall methodCall, MethodChannel.Result result) {
-        CommonUtil.runMainThreadReturn(result, Open_im_sdk.getLoginStatus(value(methodCall, "operationID")));
+        CommonUtil.runMainThreadReturn(result, io.openim.flutter_openim_sdk.runtime.NativeIMRuntime.get().loginStatus(value(methodCall, "operationID")));
+    }
+    public void cancelLogin(MethodCall methodCall, MethodChannel.Result result) {
+        io.openim.flutter_openim_sdk.runtime.NativeIMRuntime.get().cancelLogin(
+            new OnBaseListener(result, methodCall), value(methodCall, "operationID"), value(methodCall, "targetOperationID"));
     }
 
     public void uploadFile(MethodCall methodCall, MethodChannel.Result result) {

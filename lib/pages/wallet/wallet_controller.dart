@@ -8,6 +8,7 @@ import 'order/wallet_order_events.dart';
 import 'wallet_repository.dart';
 import 'wallet_repository_provider.dart';
 import 'data/wallet_trend_data.dart';
+import 'home/tron_address/wallet_tron_address_source.dart';
 
 class WalletController extends ChangeNotifier {
   final WalletRepository _repo;
@@ -75,6 +76,42 @@ class WalletController extends ChangeNotifier {
   String dailyAmountCny = '--';
   String dailyPercentage = '--';
   String trxAddr = '';
+  bool addressLoading = false;
+  bool addressFailed = false;
+
+  Future<void> loadTronAddress() async {
+    final source = _repo;
+    if (_dead ||
+        !_active ||
+        !_sameAccount ||
+        addressLoading ||
+        source is! WalletTronAddressSource) {
+      return;
+    }
+    addressLoading = true;
+    addressFailed = false;
+    try {
+      final address = await (source as WalletTronAddressSource)
+          .getTronAddress()
+          .timeout(const Duration(seconds: 6));
+      if (!_dead && _sameAccount) {
+        trxAddr = address;
+      }
+    } catch (_) {
+      if (!_dead && _sameAccount) addressFailed = true;
+    } finally {
+      addressLoading = false;
+      if (!_dead) {
+        if (!_sameAccount) _clearAccountSnapshot();
+        if (_active) {
+          notifyListeners();
+        } else {
+          _paintPending = true;
+        }
+      }
+    }
+  }
+
   List<CoinDto> coins = [];
 
   bool _dead = false;
@@ -171,7 +208,7 @@ class WalletController extends ChangeNotifier {
     dailyAmountCny = data.dailyAmountCny;
     dailyPercentage = data.dailyPercentage;
     totalBalUsd = data.totalBalUsd;
-    trxAddr = data.trxAddr;
+    if (_repo is! WalletTronAddressSource) trxAddr = data.trxAddr;
     coins = data.coins;
     _hasSnapshot = true;
   }
@@ -199,6 +236,7 @@ class WalletController extends ChangeNotifier {
     }
 
     _busy = true;
+    unawaited(loadTronAddress());
     final trace = WalletLoadLog.start('assets',
         watchPending: true,
         details: {'force': force, 'hasSnapshot': _hasSnapshot});
@@ -276,6 +314,7 @@ class WalletController extends ChangeNotifier {
     dailyPercentage = '--';
     totalBalUsd = '';
     trxAddr = '';
+    addressFailed = false;
     coins = [];
     _hasSnapshot = false;
     _dirty = false;

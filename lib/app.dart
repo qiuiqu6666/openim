@@ -8,7 +8,6 @@ import 'package:openim_common/openim_common.dart';
 import 'core/controller/im_controller.dart';
 import 'core/server_nodes/automatic_node_runtime.dart';
 import 'core/server_nodes/startup/startup_network_preparation.dart';
-import 'core/youmeng/youmeng_runtime.dart';
 import 'core/controller/app_controller.dart';
 import 'core/user_activity/activity_runtime.dart';
 import 'routes/app_pages.dart';
@@ -80,12 +79,11 @@ class InitBinding extends Bindings {
   void dependencies() {
     InAppBrowserShare.send = shareBrowserLink;
     MediaImageRecognition.start = recognizePreviewImage;
-    final network = Get.put(StartupNetworkPreparation(
-        prepareNetwork: (onShieldStarting) =>
-            YoumengRuntime.prepare(onShieldStarting: onShieldStarting)));
-    Get.put<IMController>(IMController(prepareStartup: network.prepare));
+    final network = Get.put(StartupNetworkPreparation());
+    Get.put<IMController>(IMController(
+        prepareStartup: network.prepare, onStartupFailure: network.sdkFailed));
     Get.put<AutomaticNodeRuntime>(
-        AutomaticNodeRuntime(startupReady: () => network.ready));
+        AutomaticNodeRuntime(startupReady: () => network.handoffComplete));
     Get.put<PushController>(PushController());
     Get.put<CacheController>(CacheController());
   }

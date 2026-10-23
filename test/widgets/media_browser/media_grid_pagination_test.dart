@@ -25,13 +25,13 @@ void main() {
                   itemBuilder: (_, i) => Text('item $i'));
             })));
     await tester.pumpAndSettle();
-    expect(find.text('No more items'), findsNothing);
+    expect(find.text('No more items').hitTestable(), findsNothing);
     scroll!.jumpTo(scroll!.position.maxScrollExtent);
     await tester.pumpAndSettle();
-    expect(find.text('No more items'), findsOneWidget);
+    expect(find.text('No more items').hitTestable(), findsOneWidget);
     scroll!.jumpTo(0);
     await tester.pumpAndSettle();
-    expect(find.text('No more items'), findsNothing);
+    expect(find.text('No more items').hitTestable(), findsNothing);
   });
   testWidgets('fills viewport then loads near bottom without parallel requests',
       (tester) async {
@@ -76,7 +76,7 @@ void main() {
             builder: (controller) => ListView(controller: controller))));
     await tester.pumpAndSettle();
     expect(calls, 1);
-    expect(find.text('No more items'), findsNothing);
+    expect(find.text('No more items').hitTestable(), findsNothing);
     await tester.tap(find.text('Loading failed. Retry'));
     await tester.pumpAndSettle();
     expect(calls, 2);

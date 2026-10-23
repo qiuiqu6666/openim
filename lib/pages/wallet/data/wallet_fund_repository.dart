@@ -10,6 +10,7 @@ import 'wallet_fund_api.dart';
 import 'wallet_history_source_boundary.dart';
 import 'wallet_session_source.dart';
 import 'wallet_trend_data.dart';
+import '../home/tron_address/wallet_tron_address_source.dart';
 
 /// Converts the user-facing fund APIs into the existing Wallet view contract.
 /// Uses server valuations for all available balances without repricing locally.
@@ -20,7 +21,8 @@ class WalletFundRepository extends UnavailableWalletRepository
         WalletJournalSource,
         WalletJournalCounterpartySource,
         WalletJournalCounterpartyProfileSource,
-        WalletTrendSource {
+        WalletTrendSource,
+        WalletTronAddressSource {
   WalletFundRepository({
     WalletFundApi? api,
     String Function()? accountProvider,
@@ -35,6 +37,15 @@ class WalletFundRepository extends UnavailableWalletRepository
   }
 
   final WalletFundApi _api;
+
+  @override
+  Future<String> getTronAddress() async {
+    _requireCurrentAccount();
+    final result = await _api.fetchDepositAddress();
+    _requireCurrentAccount();
+    return result.isReady ? result.address : '';
+  }
+
   final String Function() _accountProvider;
   late final WalletJournalCounterpartySource _counterpartySource;
   @override

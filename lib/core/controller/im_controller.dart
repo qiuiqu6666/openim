@@ -17,6 +17,7 @@ import '../calling/data/call_state_runtime.dart';
 import '../notifications/legacy_notification_preferences.dart';
 import '../notifications/message_notification_preferences.dart';
 import '../session/sdk_session_queue.dart';
+import '../session/pending_login.dart';
 import '../session/connection/im_connection_recovery.dart';
 import '../session/connection/api_connection_health.dart';
 import '../session/connection/im_native_connection_wake.dart';
@@ -35,11 +36,18 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
   IMController({
     Duration loginStartTimeout = const Duration(seconds: 15),
     Future<void> Function()? prepareStartup,
+    this.onStartupFailure,
   })  : _loginStartTimeout = loginStartTimeout,
         _prepareStartup = prepareStartup;
   final Future<void> Function()? _prepareStartup;
+  final void Function(Future<void> Function() retry)? onStartupFailure;
   final Duration _loginStartTimeout;
   final _sessionQueue = SdkSessionQueue();
+  Future<bool>? _sdkInitialization;
+  int _loginOperations = 0;
+  final _pendingLogin = PendingLogin<dynamic>();
+  bool get sessionTransitionBusy =>
+      _sdkInitialization != null || _loginOperations > 0;
   IMConnectionRecovery? _connectionRecovery;
   final connectionChecking = ValueNotifier<bool>(false);
   final connectionVerified = ValueNotifier<bool>(false);
@@ -209,11 +217,24 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
     }
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       await _prepareStartup?.call();
-      if (!isClosed) await initOpenIM();
+      if (!isClosed) await _initializeAtStartup();
     });
   }
 
-  Future<bool> initOpenIM({bool notifyStartup = true}) async {
+  Future<void> _initializeAtStartup() async {
+    try {
+      if (await initOpenIM()) return;
+    } catch (error) {
+      Logger.print('Startup SDK initialization failed: ${error.runtimeType}');
+    }
+    if (!isClosed) onStartupFailure?.call(_initializeAtStartup);
+  }
+
+  Future<bool> initOpenIM({bool notifyStartup = true}) =>
+      _sdkInitialization ??= _initializeOpenIM(notifyStartup: notifyStartup)
+          .whenComplete(() => _sdkInitialization = null);
+
+  Future<bool> _initializeOpenIM({required bool notifyStartup}) async {
     final initialized = await OpenIM.iMManager.initSDK(
       platformID: IMUtils.getPlatform(),
       apiAddr: Config.imApiUrl,
@@ -241,6 +262,11 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
         onUserTokenInvalid: userTokenInvalid,
       ),
     );
+
+    if (!initialized) {
+      if (notifyStartup) initializedSubject.sink.add(false);
+      return false;
+    }
 
     OpenIM.iMManager
       ..setUploadLogsListener(
@@ -385,6 +411,23 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       _login(userID, token, afterRouteChange: true);
 
   Future _login(String userID, String token,
+      {bool afterRouteChange = false}) => _pendingLogin.run(
+          (userID, token, afterRouteChange),
+          () => _ownedLogin(userID, token, afterRouteChange: afterRouteChange),
+          timeout: const Duration(seconds: 20));
+
+  Future _ownedLogin(String userID, String token,
+      {bool afterRouteChange = false}) async {
+    _loginOperations++;
+    try {
+      return await _performLogin(userID, token,
+          afterRouteChange: afterRouteChange);
+    } finally {
+      _loginOperations--;
+    }
+  }
+
+  Future _performLogin(String userID, String token,
       {bool afterRouteChange = false}) async {
     apiConnectionHealth?.close();
     apiConnectionHealth = null;

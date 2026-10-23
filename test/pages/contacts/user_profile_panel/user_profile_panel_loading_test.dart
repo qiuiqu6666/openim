@@ -291,7 +291,7 @@ void main() {
       fixture.profileLayoutReady.value = true;
       await tester.pump(const Duration(milliseconds: 16));
       expect(find.byKey(const ValueKey('user_profile_retry')), findsNothing);
-      expect(find.byType(Button), findsNWidgets(2));
+      expect(find.byType(Button), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

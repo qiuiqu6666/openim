@@ -32,6 +32,8 @@ public final class NativeIMRuntime {
     private VisibilityListener visibility;
     private volatile boolean initialized;
     private boolean sessionOperation;
+    private Base pendingLogin;
+    private String pendingLoginID;
     private volatile long sessionGeneration;
     private String configuration;
     private volatile String account = "";
@@ -109,26 +111,59 @@ public final class NativeIMRuntime {
         if (core.getLoginStatus(operationID) == 3) { callback.onError(-1, "SDK still logged in; logout required"); return; }
         sessionOperation = true;
         sessionGeneration++;
+        pendingLoginID = operationID;
         messages = new OnAdvancedMsgListener(messageListenerID, sessionGeneration);
         core.setAdvancedMsgListener(messages);
         account = userID;
         token = loginToken;
-        core.login(new Base() {
+        final java.util.concurrent.atomic.AtomicBoolean completed = new java.util.concurrent.atomic.AtomicBoolean();
+        pendingLogin = new Base() {
             @Override public void onError(int code, String error) {
+                if (!completed.compareAndSet(false, true)) return;
                 synchronized (NativeIMRuntime.this) { sessionOperation = false; clearSession(); }
                 callback.onError(code, error);
             }
             @Override public void onSuccess(String value) {
+                if (!completed.compareAndSet(false, true)) return;
                 synchronized (NativeIMRuntime.this) { sessionOperation = false; }
                 post.accept(() -> { if (visibility != null) visibility.resetReport(); emitLocal("onSessionReady"); });
                 callback.onSuccess(value);
             }
-        }, operationID, userID, loginToken);
+        };
+        core.login(pendingLogin, operationID, userID, loginToken);
+    }
+    /** Reconcile a lost callback only when Core confirms login completed. */
+    public synchronized long loginStatus(String operationID) {
+        long status = core.getLoginStatus(operationID);
+        if (status == 3 && sessionOperation && pendingLogin != null) {
+            Base callback = pendingLogin;
+            pendingLogin = null;
+            callback.onSuccess("");
+        }
+        return status;
+    }
+    public synchronized void cancelLogin(Base reply, String operationID, String target) {
+        if (!target.equals(pendingLoginID) || pendingLogin == null) { reply.onSuccess(""); return; }
+        final Base pending = pendingLogin;
+        core.cancelLogin(new Base() {
+            public void onError(int code, String error) { reply.onError(code, error); }
+            public void onSuccess(String value) {
+                synchronized (NativeIMRuntime.this) {
+                    if (target.equals(pendingLoginID) && pending == pendingLogin) {
+                        if (core.getLoginStatus(operationID) == 3) pending.onSuccess("");
+                        else pending.onError(10004, "Login cancelled after cleanup");
+                        pendingLogin = null;
+                    }
+                }
+                reply.onSuccess("");
+            }
+        }, operationID, target);
     }
     public synchronized void logout(Base callback, String operationID) {
         if (!initialized) { callback.onError(-1, "SDK is not initialized"); return; }
         if (sessionOperation) { callback.onError(-1, "SDK session transition in progress"); return; }
         sessionOperation = true;
+        pendingLogin = null;
         clearSession(); // immediately invalidate notification work, even if network logout fails
         core.logout(new Base() {
             @Override public void onError(int code, String error) {

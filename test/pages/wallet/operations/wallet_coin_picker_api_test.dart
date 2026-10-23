@@ -28,7 +28,7 @@ void main() {
               initialTargetKind: kind, repository: repository));
       await tester.pumpAndSettle();
       expect(find.text('USDT'), findsWidgets);
-      expect(find.text('TRX'), findsWidgets);
+      expect(find.text('TRX'), findsNothing);
       expect(
           find.text('99'),
           kind == WithdrawTransferTargetKind.chain

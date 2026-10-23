@@ -81,6 +81,9 @@ func (d *DataBase) InitDB(ctx context.Context, userID string, dataDir string) er
 }
 
 func (d *DataBase) Close(ctx context.Context) error {
+	if d.conn == nil {
+		return nil
+	}
 	dbConn, err := d.conn.WithContext(ctx).DB()
 	if err != nil {
 		return err
@@ -159,14 +162,14 @@ func (d *DataBase) initDB(ctx context.Context, logLevel int) error {
 	d.conn = db
 
 	// base
-	if err = db.AutoMigrate(&model_struct.LocalAppSDKVersion{}); err != nil {
+	if err = db.WithContext(ctx).AutoMigrate(&model_struct.LocalAppSDKVersion{}); err != nil {
 		return err
 	}
 
 	if err = d.versionDataMigrate(ctx); err != nil {
 		return err
 	}
-	if err = db.AutoMigrate(&messageCacheEntry{}, &messageCacheAnchor{}, &messageCacheCursor{}, &messageCacheConversation{}, &messageRevokeRecord{}, &messageReadState{}); err != nil {
+	if err = db.WithContext(ctx).AutoMigrate(&messageCacheEntry{}, &messageCacheAnchor{}, &messageCacheCursor{}, &messageCacheConversation{}, &messageRevokeRecord{}, &messageReadState{}); err != nil {
 		return err
 	}
 

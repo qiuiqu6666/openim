@@ -24,7 +24,9 @@ void registerChatKeyboardScrollCases({
     await tester.pump();
     expect(logic.focusNode.hasFocus, isTrue);
     expect(tester.testTextInput.isVisible, isTrue);
-    await tester.pump(const Duration(milliseconds: 80));
+    for (var frame = 0; frame < 10; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
     expect(logic.scrollController.offset, lessThan(original));
     expect(logic.scrollController.offset,
         greaterThan(logic.scrollController.position.minScrollExtent + 1));
@@ -36,6 +38,9 @@ void registerChatKeyboardScrollCases({
     tester.view.viewInsets = const FakeViewPadding(bottom: 300);
     await tester.pump(const Duration(milliseconds: 60));
     tester.view.viewInsets = const FakeViewPadding(bottom: 420);
+    for (var frame = 0; frame < 60; frame++) {
+      await tester.pump(const Duration(milliseconds: 16));
+    }
     await tester.pumpAndSettle();
     expect(logic.scrollController.offset,
         closeTo(logic.scrollController.position.minScrollExtent, 1));

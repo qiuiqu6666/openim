@@ -125,11 +125,14 @@ void main() {
     await _flush(tester);
     expect(fixture.api.settingsRequests, 1);
     fixture.ownerUserId = 'preview-next-owner';
-    await fixture.repository.loadPrivacySelections();
+    // Invalidate the owner through the local cache without starting a second
+    // settings request behind the deliberately unresolved old-owner gate.
+    await fixture.repository.loadPrivacySelections(refreshRemote: false);
     await _flush(tester);
     gate.complete(const MomentsSettings());
     await tester.pumpAndSettle();
     expect(find.text('登录状态已变化'), findsOneWidget);
+    expect(fixture.api.settingsRequests, 1);
     expect(fixture.api.notificationRequests, 0);
     await _close(tester);
   });

@@ -76,7 +76,7 @@ void main() {
         expect(tester.getRect(surface), const Rect.fromLTWH(12, 714, 351, 64));
         final material = tester.widget<LiquidGlassSurface>(surface);
         expect(material.borderRadius, BorderRadius.circular(32));
-        expect(material.opacity, brightness == Brightness.dark ? .40 : .44);
+        expect(material.opacity, brightness == Brightness.dark ? .24 : .30);
         expect(material.preferLiquid, isTrue);
         expect(tester.getRect(find.byType(BottomNavigationBar)).bottom, 778);
         expect(

@@ -76,6 +76,26 @@ void main() {
   setUp(() => Get.testMode = true);
   tearDown(Get.reset);
 
+  for (final read in [false, true]) {
+    testWidgets('private text remains openable before expiry; read=$read',
+        (tester) async {
+      final message = _message();
+      message.attachedInfoElem = AttachedInfoElem(
+        isPrivateChat: true,
+        burnDuration: 60,
+        hasReadTime: read ? DateTime.now().millisecondsSinceEpoch : null,
+      );
+      var taps = 0;
+      await _mount(tester, message, onTap: () => taps++);
+      expect(find.text('sdkExpired'.tr), findsNothing);
+      final content = find.text(message.textElem!.content!);
+      expect(content, findsOneWidget);
+      await tester.tap(content);
+      expect(taps, 1);
+      await _unmount(tester);
+    });
+  }
+
   for (final brightness in Brightness.values) {
     testWidgets('${brightness.name}: long result fits 320px at 200% text',
         (tester) async {

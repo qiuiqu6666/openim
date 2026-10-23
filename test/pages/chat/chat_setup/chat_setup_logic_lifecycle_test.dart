@@ -1,3 +1,4 @@
+import 'package:openim/pages/chat/complaints/complaint_reason_page.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -331,7 +332,7 @@ void main() {
     expect(logic.clearing.value, isTrue);
   });
 
-  testWidgets('report confirmation is single and can reopen after cancellation',
+  testWidgets('report route is single and can reopen after cancellation',
       (tester) async {
     await mount(tester);
     initialRead.complete(jsonEncode(_conversation().toJson()));
@@ -339,20 +340,28 @@ void main() {
     final report = logic.reportConversation();
     await tester.pumpAndSettle();
     await logic.reportConversation();
-    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-    expect(find.text('如需投诉此聊天，请联系人工客服，并提供对方账号：peer。'), findsOneWidget);
+    expect(find.byType(ComplaintReasonPage), findsOneWidget);
+    expect(
+        tester
+            .widget<ComplaintReasonPage>(find.byType(ComplaintReasonPage))
+            .reportedUserID,
+        'peer');
     expect(find.byKey(const ValueKey('customer-service-sheet')), findsNothing);
-    await tester.tap(find.byType(CupertinoDialogAction).first);
+    Get.back<void>();
     await tester.pumpAndSettle();
     await report;
-    expect(find.byType(CupertinoAlertDialog), findsNothing);
+    expect(find.byType(ComplaintReasonPage), findsNothing);
     expect(find.byKey(const ValueKey('customer-service-sheet')), findsNothing);
 
     final reopened = logic.reportConversation();
     await tester.pumpAndSettle();
-    expect(find.byType(CupertinoAlertDialog), findsOneWidget);
-    expect(find.text('如需投诉此聊天，请联系人工客服，并提供对方账号：peer。'), findsOneWidget);
-    await tester.tap(find.byType(CupertinoDialogAction).first);
+    expect(find.byType(ComplaintReasonPage), findsOneWidget);
+    expect(
+        tester
+            .widget<ComplaintReasonPage>(find.byType(ComplaintReasonPage))
+            .reportedUserID,
+        'peer');
+    Get.back<void>();
     await tester.pumpAndSettle();
     await reopened;
     expect(find.byKey(const ValueKey('customer-service-sheet')), findsNothing);
@@ -361,20 +370,21 @@ void main() {
 
   for (final changeAccount in [false, true]) {
     testWidgets(
-        'report cannot open customer service after ${changeAccount ? 'account change' : 'token rotation'}',
+        'stale setup cannot reopen reporting after ${changeAccount ? 'account change' : 'token rotation'}',
         (tester) async {
       await mount(tester);
       initialRead.complete(jsonEncode(_conversation().toJson()));
       await tester.pump();
       final report = logic.reportConversation();
       await tester.pumpAndSettle();
-      expect(find.byType(CupertinoAlertDialog), findsOneWidget);
+      expect(find.byType(ComplaintReasonPage), findsOneWidget);
       await _identity(
           owner: changeAccount ? 'next-owner' : 'owner', suffix: '-new');
-      await tester.tap(find.byType(CupertinoDialogAction).last);
+      Get.back<void>();
       await tester.pumpAndSettle();
       await report;
-      expect(find.byType(CupertinoAlertDialog), findsNothing);
+      await logic.reportConversation();
+      expect(find.byType(ComplaintReasonPage), findsNothing);
       expect(
           find.byKey(const ValueKey('customer-service-sheet')), findsNothing);
       expect(tester.takeException(), isNull);

@@ -13,6 +13,7 @@ final class GoCoreLifecycle implements CoreLifecycle {
     public void unInitSDK(String operation) { Open_im_sdk.unInitSDK(operation); }
     public long getLoginStatus(String operation) { return Open_im_sdk.getLoginStatus(operation); }
     public void login(Base callback, String operation, String user, String token) { Open_im_sdk.login(callback, operation, user, token); }
+    public void cancelLogin(Base callback, String operation, String target) { Open_im_sdk.cancelLogin(callback, operation, target); }
     public void logout(Base callback, String operation) { Open_im_sdk.logout(callback, operation); }
     public void getOneConversation(Base callback, String operation, int type, String source) { Open_im_sdk.getOneConversation(callback, operation, type, source); }
     public void getSelfUserInfo(Base callback, String operation) { Open_im_sdk.getSelfUserInfo(callback, operation); }

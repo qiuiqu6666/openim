@@ -182,7 +182,7 @@ void main() {
             'Friend deletion must use the same buffer cleanup/tombstone as conversation deletion.');
   });
 
-  testWidgets('blocking hides the conversation and retains local history',
+  testWidgets('blocking filters the conversation and retains local history',
       (tester) async {
     await tester.pumpWidget(ScreenUtilInit(
         designSize: const Size(375, 812),
@@ -214,9 +214,11 @@ void main() {
     await action;
     await tester.pump(const Duration(seconds: 1));
     expect(profile.userInfo.value.isBlacklist, isTrue);
-    expect(owner.list, isEmpty);
-    expect(calls.map((c) => c.method),
-        containsAllInOrder(['addBlacklist', 'hideConversation']));
+    expect(owner.list, contains(row));
+    expect(owner.allowsSearchConversation(row), isFalse);
+    expect(owner.allowsSearchUser('peer'), isFalse);
+    expect(calls.map((c) => c.method), contains('addBlacklist'));
+    expect(calls.any((c) => c.method == 'hideConversation'), isFalse);
     expect(calls.any((c) => c.method == 'deleteConversationAndDeleteAllMsg'),
         isFalse);
     expect(ChatHistoryCache.read('self', row.conversationID).single.clientMsgID,
@@ -236,8 +238,9 @@ void main() {
     ChatHistoryCache.write('self', 'chat', [Message(clientMsgID: 'kept')]);
     var failing = true;
     handler = (call) async {
-      if (call.method != 'hideConversation')
+      if (call.method != 'hideConversation') {
         throw StateError('Unexpected ${call.method}');
+      }
       if (failing) throw PlatformException(code: '500');
       return null;
     };

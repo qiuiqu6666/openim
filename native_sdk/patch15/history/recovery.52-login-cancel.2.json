@@ -1,0 +1,73 @@
+{
+  "upstream": "https://github.com/openimsdk/openim-sdk-core",
+  "tag": "v3.8.3-patch.15",
+  "commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+  "sdk_version": "v3.8.3-patch.15+recovery.52-login-cancel.2",
+  "go_version": "1.24.0",
+  "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+  "patch": "0001-background-message-recovery.patch",
+  "patch_sha256": "2e51b6e220c8c91ddfd27943c28d669bbf0969342e026a6209c0c57bcfcccc4a",
+  "source_directory": "core-source",
+  "source_manifest": "core-source-manifest.json",
+  "source_sha256": "cecfef4871af2e233df8883bfc0b26812421d5534674018938f1f5b2d6ea00b8",
+  "created": "2026-10-23",
+  "previous_release": "history/recovery.52-login-cancel.1.json",
+  "native_binary_integrated": false,
+  "checks": {
+    "login_cancellation": "targeted worker cleanup acknowledgement tests passed; cancellation timeout retains slot",
+    "native_binaries": "Android four-ABI AAR and ARM64 Debug APK rebuilt; iOS requires macOS rebuild",
+    "device_runtime": "not tested",
+    "regressions": "Flutter 138 passed, 2 skipped; Core build tests passed; Android cancellation bridge regression passed"
+  },
+  "android": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "coordinate": "io.openim:core-sdk:3.8.3-patch15-recovery.52-login-cancel.2",
+    "sdk_version": "v3.8.3-patch.15+recovery.52-login-cancel.2",
+    "abis": [
+      "armeabi-v7a",
+      "arm64-v8a",
+      "x86",
+      "x86_64"
+    ],
+    "recovery_patch_included": true,
+    "build_script": "build-android.ps1",
+    "apk_native_parity_verified": true,
+    "runtime_validation": "Debug APK built; cancellation bridge regression passed; no device fault injection",
+    "native_binary_integrated": true,
+    "aar_built": true,
+    "sdk_artifact_verified": true
+  },
+  "ios": {
+    "gomobile": "v0.0.0-20250711185624-d5bb5ecc55c0",
+    "version": "v3.8.3-patch.15+recovery.52-login-cancel.2",
+    "framework_prepared": false,
+    "recovery_patch_included": true,
+    "build_script": "build-ios.sh",
+    "runtime_validation": "macOS rebuild required",
+    "framework_sha256": {},
+    "pod_resolution_and_build": "user will rebuild on macOS",
+    "app_validation_scope": "shared group membership recovery; macOS Framework and App rebuild required",
+    "native_binary_integrated": false,
+    "source_consistency_verified": true,
+    "source_files": 718
+  },
+  "patch_base_commit": "d6e0b549db904d0327d76ef7c9c283203879a095",
+  "build_overlays": [
+    "go.mod and go.sum: pinned gomobile dependency closure",
+    "version/version: recovery.51-idle-recovery.1 runtime identity",
+    "internal/third/file/upload.go, upload_lock.go and upload_deadline_test.go: retain existing frontend upload deadline and cancellation protections",
+    "third_party/tools: pinned upstream tools with diagnostic output branding; original licenses retained",
+    "internal/third/file/upload.go and upload_fallback*.go: signed regional fallback and authenticated relay; canonical source change retained in upload-fallback.patch",
+    "internal/third/file/upload_region_test.go: network region ordering and stable retry preference",
+    "upload_disaster.go and tests: isolated cross-bucket sessions, bounded deadlines and per-session cooldown"
+  ],
+  "verification_evidence": "verification/recovery.51-idle-recovery.1.json",
+  "local_changes": {
+    "base_commit": "88d76afecdd31c22ee07acf2f51d8f6d5b6e2815",
+    "description": "Retain recovery.50 fixes; skip persisted fully covered recent windows before visibility scanning and scheduling, while preserving notifications, missing ranges, cancellation and unread reconciliation."
+  },
+  "chat_window_verification_evidence": "verification/recovery.26-chat-window.json",
+  "previous_ios_verification_evidence": "verification/recovery.30-image-upload-ios.json",
+  "cocoapods_verification_evidence": "verification/cocoapods-download-repair-ios.json",
+  "core_revision": "abb9fb7dbee7f787021e8932c7e9b819617aa036"
+}

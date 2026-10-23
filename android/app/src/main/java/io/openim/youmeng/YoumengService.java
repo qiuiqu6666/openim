@@ -8,40 +8,71 @@ import io.flutter.plugin.common.MethodChannel;
 import java.util.*;
 import java.util.concurrent.*;
 
-/** Owns forwarding for the application lifetime, independently of Activity recreation. */
+/** Main-thread callbacks are generation-owned; cleanup never queues behind start. */
 public final class YoumengService extends Service {
     private static MethodChannel.Result pending;
     private static boolean ready;
+    private static int generation;
+    private static YoumengService activeService;
+    private static final Handler main = new Handler(Looper.getMainLooper());
     private final ExecutorService worker = Executors.newSingleThreadExecutor();
-    private GameShieldClient client;
+    private volatile GameShieldClient client;
+    private volatile boolean destroyed;
+    private int attempt;
 
     public static synchronized void start(Context context, Map<String, Object> args, MethodChannel.Result result) {
         if (ready) { result.success(true); return; }
         if (pending != null) { result.error("BUSY", "正在启动网络保护", null); return; }
         pending = result;
+        final int current = ++generation;
         Intent intent = new Intent(context, YoumengService.class);
+        intent.putExtra("generation", current);
         intent.putExtra("cp", (String) args.get("cp"));
         intent.putExtra("token", (String) args.get("token"));
         intent.putExtra("key", (String) args.get("key"));
         try {
             if (Build.VERSION.SDK_INT >= 26) context.startForegroundService(intent);
             else context.startService(intent);
-        } catch (RuntimeException error) { complete(false); }
+            main.postDelayed(() -> {
+                synchronized (YoumengService.class) {
+                    if (generation != current || pending == null) return;
+                    cancel(context);
+                }
+            }, 18000);
+        } catch (RuntimeException error) { complete(current, false); }
     }
 
-    private static void complete(boolean success) {
-        new Handler(Looper.getMainLooper()).post(() -> {
-            MethodChannel.Result result;
-            synchronized (YoumengService.class) { ready = success; result = pending; pending = null; }
-            if (result != null) {
-                if (success) result.success(true);
-                else result.error("START_FAILED", "网络保护启动失败，请检查配置和转发规则", null);
+    public static synchronized void cancel(Context context) {
+        if (pending == null) return; // Keep an initialized standby available.
+        MethodChannel.Result callback = pending;
+        pending = null; ready = false; ++generation;
+        // Never stop a not-yet-created foreground service: Android would kill
+        // the process before it has a chance to call startForeground().
+        if (activeService != null) activeService.cancelWork();
+        callback.error("CANCELLED", "网络保护准备已取消", null);
+    }
+
+    private static void complete(int owner, boolean success) {
+        main.post(() -> {
+            MethodChannel.Result callback;
+            synchronized (YoumengService.class) {
+                if (owner != generation) return;
+                ready = success; callback = pending; pending = null;
+            }
+            if (callback != null) {
+                if (success) callback.success(true);
+                else callback.error("START_FAILED", "网络保护启动失败", null);
             }
         });
     }
 
     @Override public void onCreate() {
         super.onCreate();
+        promote();
+        synchronized (YoumengService.class) { activeService = this; }
+    }
+
+    private void promote() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         if (Build.VERSION.SDK_INT >= 26) manager.createNotificationChannel(
             new NotificationChannel("youmeng_shield", "网络保护", NotificationManager.IMPORTANCE_LOW));
@@ -53,31 +84,53 @@ public final class YoumengService extends Service {
     }
 
     @Override public int onStartCommand(Intent intent, int flags, int startId) {
+        promote(); // Each startForegroundService request must be acknowledged.
         if (intent == null) { stopSelf(); return START_NOT_STICKY; }
+        final int owner = intent.getIntExtra("generation", -1);
+        synchronized (YoumengService.class) {
+            if (owner != generation) { stopSelf(startId); return START_NOT_STICKY; }
+        }
+        attempt = owner;
         final String cp = intent.getStringExtra("cp"), token = intent.getStringExtra("token"), key = intent.getStringExtra("key");
         worker.execute(() -> {
+            GameShieldClient candidate = null;
             try {
-                client = new GameShieldClient(cp, token, key);
-                client.start();
-                if (!client.boundTcpPorts().containsAll(Arrays.asList(10008, 10002, 10001, 8815)))
+                synchronized (YoumengService.class) {
+                    if (owner != generation || destroyed) return;
+                    candidate = new GameShieldClient(cp, token, key);
+                    client = candidate;
+                }
+                candidate.start();
+                synchronized (YoumengService.class) {
+                    if (owner != generation || destroyed) throw new IllegalStateException("Cancelled");
+                }
+                if (!candidate.boundTcpPorts().containsAll(Arrays.asList(10008, 10002, 10001, 8815)))
                     throw new IllegalStateException("Missing service rule");
-                complete(true);
+                complete(owner, true);
             } catch (Exception error) {
-                if (client != null) { try { client.stop(); } catch (Exception ignored) {} client = null; }
-                stopSelf();
+                if (candidate != null) candidate.stop();
+                complete(owner, false);
+                stopSelf(startId);
             }
         });
         return START_NOT_STICKY;
     }
 
     @Override public IBinder onBind(Intent intent) { return null; }
+    private void cancelWork() {
+        final GameShieldClient old = client;
+        if (old != null) new Thread(old::stop, "shield-cancel").start();
+    }
     @Override public void onDestroy() {
-        synchronized (YoumengService.class) { ready = false; }
-        worker.execute(() -> {
-            try { if (client != null) client.stop(); }
-            finally { client = null; complete(false); }
-        });
-        worker.shutdown();
+        destroyed = true;
+        synchronized (YoumengService.class) {
+            if (activeService == this) activeService = null;
+        }
+        final GameShieldClient old = client; client = null;
+        // Http reads may be blocked; interrupt/close outside their executor.
+        if (old != null) new Thread(old::stop, "shield-cleanup").start();
+        worker.shutdownNow();
+        complete(attempt, false);
         super.onDestroy();
     }
 }

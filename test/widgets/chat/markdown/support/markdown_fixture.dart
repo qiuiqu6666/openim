@@ -149,6 +149,8 @@ Future<void> saveMarkdownPreview(WidgetTester tester, String name) async {
 }
 
 class MarkdownTileLogic extends GetxController implements ChatLogic {
+  @override
+  bool canStopMediaSend(Message message) => false;
   MarkdownTileLogic(Message message) {
     messageList.add(message);
     messageSelection = MessageSelectionController(
@@ -183,6 +185,8 @@ class MarkdownTileLogic extends GetxController implements ChatLogic {
   bool get isSingleChat => true;
   @override
   bool get isGroupChat => false;
+  @override
+  bool get isChannel => false;
   @override
   bool get isOfficialNotificationChat => false;
   @override

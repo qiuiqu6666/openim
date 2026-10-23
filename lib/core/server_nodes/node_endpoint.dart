@@ -33,6 +33,8 @@ class NodeEndpoint {
       imWs: 'ws://127.0.0.1:10001',
       customerServiceUrl: 'http://127.0.0.1:8815');
   static const builtIn = [direct, backup];
+  static bool isProduction(NodeEndpoint node) =>
+      [...builtIn, shield].any((n) => n.signature == node.signature);
   static List<NodeEndpoint> selectable(NodeEndpoint current) =>
       [...builtIn, shield].any((node) => node.signature == current.signature)
           ? [...builtIn, shield]
@@ -55,7 +57,7 @@ class NodeEndpoint {
   /// Custom servers belong to a different deployment and must not inherit
   /// production fallback routes or send their saved credentials to them.
   static List<NodeEndpoint> candidates(NodeEndpoint current) =>
-      builtIn.any((node) => node.signature == current.signature)
+      isProduction(current)
           ? builtIn
           : [current];
 }

@@ -274,7 +274,7 @@ void main() {
     final decoration = tester
         .widget<DecoratedBox>(find.byKey(const Key('fund-card-surface')))
         .decoration as BoxDecoration;
-    final opened = FundCardPalette.packet.opened();
+    final opened = FundCardPalette.packet.opened(referencePacket: true);
     expect((decoration.gradient! as LinearGradient).colors,
         [opened.bodyHighlight, opened.body]);
     expect(next.requests, 1);

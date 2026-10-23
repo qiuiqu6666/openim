@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import '../res/strings.dart';
 import '../utils/text/unicode_text.dart';
+import 'fund_message_recipient.dart';
+
+export 'fund_message_recipient.dart';
 
 /// A server-created funds message is an order reference, never proof of funds
 /// received or permission to claim. Opening it must load the actual order.
@@ -13,6 +16,7 @@ class FundMessageData {
     required this.amount,
     required this.status,
     this.remark = '',
+    this.recipient,
   });
 
   final String orderID;
@@ -21,6 +25,7 @@ class FundMessageData {
   final String amount;
   final String status;
   final String remark;
+  final FundMessageRecipient? recipient;
 
   bool get isPacket => biz.startsWith('packet_');
   bool get isTransfer => biz == 'transfer' || biz == 'group_transfer';
@@ -47,6 +52,7 @@ class FundMessageData {
         amount: amount,
         status: status ?? this.status,
         remark: remark == null ? this.remark : normalizeRemark(remark),
+        recipient: recipient,
       );
 
   /// Remarks are optional display text. Invalid optional text must not hide
@@ -104,6 +110,9 @@ class FundMessageData {
         amount: amount,
         status: status,
         remark: normalizeRemark(json['remark']),
+        recipient: biz == 'packet_exclusive' || biz == 'group_transfer'
+            ? FundMessageRecipient.tryParse(json['recipient'])
+            : null,
       );
     } on FormatException {
       return null;

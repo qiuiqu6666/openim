@@ -1,3 +1,4 @@
+import 'package:openim/pages/register/set_password/set_password_logic.dart';
 import 'dart:async';
 import 'dart:typed_data';
 
@@ -50,7 +51,21 @@ class _Login extends LoginLogic {
   }
 }
 
+class _Registration extends SetPasswordLogic {
+  _Registration(Map<String, dynamic> arguments)
+      : super(initialArguments: arguments);
+  int submissions = 0;
+  @override
+  Future<void> register() async {
+    submissions++;
+  }
+}
+
 class _Register extends RegisterLogic {
+  _Registration? submitted;
+  @override
+  SetPasswordLogic createRegistration(Map<String, dynamic> arguments) =>
+      submitted = _Registration(Map.unmodifiable(arguments));
   int codeRequests = 0;
   Completer<bool> response = Completer<bool>();
 
@@ -101,7 +116,6 @@ class _Forget extends ForgetPasswordLogic {
     return true;
   }
 
-  @override
   Future<void> checkVerificationCode() {
     checks++;
     return response.future;
@@ -372,6 +386,7 @@ void main() {
     login.operateType = LoginType.email;
     final register =
         Get.put<RegisterLogic>(_InvitedRegister()) as _InvitedRegister;
+    register.nicknameCtrl.text = 'Captured name';
     register.phoneCtrl.text = 'user@example.com';
     register.verificationCodeCtrl.text = '123456';
     register.pwdCtrl.text = 'password1';
@@ -437,6 +452,7 @@ void main() {
     await tester.pumpWidget(_app());
     login.operateType = LoginType.email;
     final register = Get.put<RegisterLogic>(_Register()) as _Register;
+    register.nicknameCtrl.text = 'Captured name';
     register.phoneCtrl.text = '  first@example.com  ';
     register.verificationCodeCtrl.text = '123456';
     register.pwdCtrl.text = 'password1';
@@ -445,6 +461,7 @@ void main() {
     expect(register.submitting.value, isTrue);
     await register.next();
     expect(register.codeRequests, 1);
+    register.nicknameCtrl.text = 'Captured name';
     register.phoneCtrl.text = 'second@example.com';
     register.verificationCodeCtrl.text = '654321';
     register.pwdCtrl.text = 'password2';
@@ -452,11 +469,12 @@ void main() {
     await pending;
     await tester.pumpAndSettle();
 
-    expect(find.text('profile form'), findsOneWidget);
-    expect(Get.arguments['email'], 'first@example.com');
-    expect(Get.arguments['verificationCode'], '123456');
-    expect(Get.arguments['password'], 'password1');
-    expect(Get.arguments['profileDraft'], same(register.profileDraft));
+    expect(register.submitted!.submissions, 1);
+    expect(register.submitted!.initialArguments!['email'], 'first@example.com');
+    expect(register.submitted!.initialArguments!['verificationCode'], '123456');
+    expect(register.submitted!.initialArguments!['password'], 'password1');
+    expect(register.submitted!.initialArguments!['nickname'], 'Captured name');
+    expect(find.text('profile form'), findsNothing);
     expect(register.submitting.value, isFalse);
   });
 
@@ -465,6 +483,7 @@ void main() {
     await tester.pumpWidget(_app());
     login.operateType = LoginType.phone;
     final register = Get.put<RegisterLogic>(_Register()) as _Register;
+    register.nicknameCtrl.text = 'Captured name';
     register.phoneCtrl.text = '13800138000';
     register.verificationCodeCtrl.text = '123456';
     register.pwdCtrl.text = 'password1';
@@ -484,6 +503,7 @@ void main() {
     await tester.pumpWidget(_app());
     login.operateType = LoginType.phone;
     final register = Get.put<RegisterLogic>(_Register()) as _Register;
+    register.nicknameCtrl.text = 'Captured name';
     register.phoneCtrl.text = '13800138000';
     register.verificationCodeCtrl.text = '123456';
     register.pwdCtrl.text = 'password1';

@@ -1,3 +1,5 @@
+import '../../wallet/data/wallet_fund_test_transport.dart';
+import 'package:openim/pages/wallet/data/wallet_fund_api.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -167,6 +169,26 @@ Future<void> _prepareCreate(WidgetTester tester) async {
 class _Security extends StubSettingsService {
   @override
   Future<bool> hasTradePassword() async => true;
+}
+
+WalletFundApi _tipWallet() {
+  final transport = WalletFundTestTransport()
+    ..securityCheck = ((request) => {
+          'smsRequired': false,
+          'reasons': <String>[],
+          'blockedUntil': 0,
+          'phoneMasked': '',
+          'currency': (request['tip'] as Map)['currency'],
+          'smsThreshold': '5',
+          'cooldownHours': 2,
+        });
+  transport.respond({
+    'balances': [
+      {'currency': 'USDT', 'available': '12.345678', 'frozen': '0'}
+    ]
+  });
+  addTearDown(transport.close);
+  return transport.wallet;
 }
 
 void main() {
@@ -698,7 +720,8 @@ void main() {
                         featureContext: fixture.snapshot,
                         session: liveSession(status: LiveStatus.live),
                         security: _Security(),
-                        pendingStore: store),
+                        pendingStore: store,
+                        walletApi: _tipWallet()),
                     child: const Text('打开打赏')))));
     await tester.tap(find.text('打开打赏'));
     await tester.pumpAndSettle();

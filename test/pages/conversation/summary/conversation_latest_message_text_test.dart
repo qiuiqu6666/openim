@@ -9,6 +9,7 @@ import 'package:openim/core/controller/im_controller.dart';
 import 'package:openim/pages/conversation/conversation_logic.dart';
 import 'package:openim/pages/conversation/summary/conversation_latest_message_text.dart';
 import 'package:openim/pages/home/home_logic.dart';
+import 'package:openim/services/chat_history_cache.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -27,9 +28,10 @@ class _Home extends GetxController implements HomeLogic {
   dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }
 
+int _messageSequence = 0;
 Message _message(int type, [Map<String, dynamic> elements = const {}]) =>
     Message.fromJson({
-      'clientMsgID': 'latest',
+      'clientMsgID': 'latest-${_messageSequence++}',
       'contentType': type,
       'sendID': 'peer',
       'senderNickname': '小林',
@@ -48,6 +50,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUp(() async {
+    ChatHistoryCache.clear();
     Get.testMode = true;
     Get.addTranslations(TranslationService().keys);
     Get.locale = const Locale('zh', 'CN');
@@ -61,7 +64,9 @@ void main() {
     OpenIM.iMManager.userID = 'self';
   });
 
-  test('recall preview displays actor without sender prefix or unsupported text', () {
+  test(
+      'recall preview displays actor without sender prefix or unsupported text',
+      () {
     final notice = _message(MessageType.revokeMessageNotification, {
       'notificationElem': {
         'detail': jsonEncode({'revokerID': 'peer', 'revokerNickname': '秋666'})
@@ -69,9 +74,12 @@ void main() {
     });
     expect(conversationLatestMessageText(_conversation(notice, group: true)),
         '秋666撤回了一条消息');
-    notice.notificationElem!.detail = jsonEncode({'revokerID': 'self'});
-    expect(conversationLatestMessageText(_conversation(notice)),
-        '你撤回了一条消息');
+    final ownNotice = _message(MessageType.revokeMessageNotification, {
+      'notificationElem': {
+        'detail': jsonEncode({'revokerID': 'self'})
+      }
+    });
+    expect(conversationLatestMessageText(_conversation(ownNotice)), '你撤回了一条消息');
   });
 
   for (final locale in [const Locale('zh', 'CN'), const Locale('en', 'US')]) {
@@ -165,7 +173,8 @@ void main() {
     expect(conversationLatestMessageText(_conversation(message)), 'hello');
   });
 
-  test('missing group sender names keep text and exclusive packet summaries', () {
+  test('missing group sender names keep text and exclusive packet summaries',
+      () {
     final messages = <(Message, String)>[
       (
         _message(MessageType.text, {

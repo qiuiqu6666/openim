@@ -1,7 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:openim_common/openim_common.dart';
 
-/// Exact palettes and opened-tone transformation from the 99chat fund cards.
+/// Business color tokens with the 99chat opened-tone transformation.
 class FundCardPalette {
   const FundCardPalette({
     required this.body,
@@ -31,10 +31,33 @@ class FundCardPalette {
     footer: Color(0xFFE8553C),
     iconBg: Color(0xFFFFF4E8),
     icon: Color(0xFFF55E44),
-    title: Color(0xFFFFFBF5),
-    subtitle: Color(0xFFFFE8C4),
-    meta: Color(0xFFFFDDB8),
-    footerText: Color(0xFFFFD4B0),
+    title: AppTokens.onAccent,
+    subtitle: AppTokens.onAccent,
+    meta: AppTokens.onAccent,
+    footerText: AppTokens.onAccent,
+  );
+  static const luckyPacket = FundCardPalette(
+    body: Color(0xFFE07A2E),
+    bodyHighlight: Color(0xFFF2994A),
+    footer: Color(0xFFD67127),
+    iconBg: Color(0xFFFFF4E8),
+    icon: Color(0xFFE07A2E),
+    title: AppTokens.onAccent,
+    subtitle: AppTokens.onAccent,
+    meta: AppTokens.onAccent,
+    footerText: AppTokens.onAccent,
+  );
+
+  static const exclusivePacket = FundCardPalette(
+    body: Color(0xFFBE5963),
+    bodyHighlight: Color(0xFFCD6870),
+    footer: Color(0xFFB5535D),
+    iconBg: Color(0xFFFFF2F1),
+    icon: Color(0xFFBE5963),
+    title: AppTokens.onAccent,
+    subtitle: AppTokens.onAccent,
+    meta: AppTokens.onAccent,
+    footerText: AppTokens.onAccent,
   );
 
   static const transfer = FundCardPalette(
@@ -43,24 +66,46 @@ class FundCardPalette {
     footer: Color(0xFFC06258),
     iconBg: Color(0xFFFFF1EE),
     icon: Color(0xFFA85A52),
-    title: Color(0xFFFFF9F7),
-    subtitle: Color(0xFFFFECE8),
-    meta: Color(0xFFFFECE8),
-    footerText: Color(0xFFFFDED8),
+    title: AppTokens.onAccent,
+    subtitle: AppTokens.onAccent,
+    meta: AppTokens.onAccent,
+    footerText: AppTokens.onAccent,
   );
 
-  FundCardPalette opened() => FundCardPalette(
-        body: _openedTone(body, towardWhite: .34, saturation: .72),
-        bodyHighlight:
-            _openedTone(bodyHighlight, towardWhite: .40, saturation: .76),
-        footer: _openedTone(footer, towardWhite: .30, saturation: .70),
-        iconBg: _openedTone(iconBg, towardWhite: .22, saturation: .85),
-        icon: icon,
-        title: _openedTone(title, towardWhite: .10, saturation: .92),
-        subtitle: _openedTone(subtitle, towardWhite: .18, saturation: .80),
-        meta: _openedTone(meta, towardWhite: .20, saturation: .78),
-        footerText: _openedTone(footerText, towardWhite: .24, saturation: .75),
-      );
+  static const groupTransfer = FundCardPalette(
+    body: Color(0xFF2FAE8F),
+    bodyHighlight: Color(0xFF2FAE8F),
+    footer: Color(0xFF1F8A72),
+    iconBg: Color(0xFFEAF8F3),
+    icon: Color(0xFF1F8A72),
+    title: AppTokens.onAccent,
+    subtitle: AppTokens.onAccent,
+    meta: AppTokens.onAccent,
+    footerText: AppTokens.onAccent,
+  );
+
+  FundCardPalette opened({bool referencePacket = false}) {
+    final paleBody = _openedTone(body, towardWhite: .34, saturation: .72);
+    final paleHighlight = _openedTone(bodyHighlight,
+        towardWhite: referencePacket ? .40 : .34,
+        saturation: referencePacket ? .76 : .72);
+    final paleFooter = _openedTone(footer,
+        towardWhite: referencePacket ? .30 : .34,
+        saturation: referencePacket ? .70 : .72);
+    return FundCardPalette(
+      body: paleBody,
+      bodyHighlight: paleHighlight,
+      footer: paleFooter,
+      iconBg: referencePacket
+          ? _openedTone(iconBg, towardWhite: .22, saturation: .85)
+          : iconBg,
+      icon: icon,
+      title: AppTokens.onAccent,
+      subtitle: AppTokens.onAccent,
+      meta: AppTokens.onAccent,
+      footerText: AppTokens.onAccent,
+    );
+  }
 
   static Color _openedTone(Color color,
       {required double towardWhite, required double saturation}) {
@@ -73,7 +118,7 @@ class FundCardPalette {
   }
 
   static FundCardPalette forCard({
-    required bool isPacket,
+    required String biz,
     required bool settled,
     required bool dark,
     required bool highContrast,
@@ -93,6 +138,15 @@ class FundCardPalette {
         footerText: AppTokens.textPrimary(dark: dark),
       );
     }
-    return isPacket ? (settled ? packet.opened() : packet) : transfer;
+    final base = switch (biz) {
+      'packet_lucky' => luckyPacket,
+      'packet_exclusive' => exclusivePacket,
+      'transfer' => transfer,
+      'group_transfer' => groupTransfer,
+      _ => packet,
+    };
+    return settled && biz.startsWith('packet_') && biz != 'packet_exclusive'
+        ? base.opened(referencePacket: true)
+        : base;
   }
 }

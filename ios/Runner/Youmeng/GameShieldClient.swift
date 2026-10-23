@@ -164,6 +164,8 @@ public final class GameShieldClient {
     }
 
     public func stop() {
+        pendingRequests.values.forEach { $0.cancel() }
+        pendingRequests.removeAll()
         let tunnels = Array(ownedTunnels.values); ownedTunnels.removeAll()
         tunnels.forEach { $0.cancel() }
         generation += 1; started = false; finishStart(false)
@@ -362,15 +364,23 @@ public final class GameShieldClient {
         p.resume(); tickTimer = p
     }
 
+    private var pendingRequests = [UUID: URLSessionDataTask]()
+
     private func api(_ path: String, _ completion: @escaping ([String: Any]?) -> Void) {
         guard let url = URL(string: cp + path) else { return completion(nil) }
         var request = URLRequest(url: url)
         request.timeoutInterval = 15
-        URLSession.shared.dataTask(with: request) { data, response, _ in
+        let requestID = UUID()
+        let task = URLSession.shared.dataTask(with: request) { [weak self] data, response, _ in
             let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
             let valid = (response as? HTTPURLResponse).map { (200...299).contains($0.statusCode) } ?? false
-            youmengQueue.async { completion(valid ? json : nil) }
-        }.resume()
+            youmengQueue.async {
+                self?.pendingRequests.removeValue(forKey: requestID)
+                completion(valid ? json : nil)
+            }
+        }
+        pendingRequests[requestID] = task
+        task.resume()
     }
 
     private func apiPost(_ path: String, _ body: [String: Any], _ done: @escaping (Bool) -> Void) {

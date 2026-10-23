@@ -14,6 +14,7 @@ void main() {
     expect(GroupGameType.fromEx('{"gameType":3.0}'), GroupGameType.markSix);
     expect(
         GroupGameType.fromEx('{"gameType":4.0}'), GroupGameType.sangongAgent);
+    expect(GroupGameType.fromEx('{"gameType":5}'), GroupGameType.bingoMarkSix);
     expect(GroupGameType.fromEx('{"gameType":1e0}'), GroupGameType.sangong);
   });
 
@@ -39,7 +40,7 @@ void main() {
       '{"gameType":true}',
       '{"gameType":false}',
       '{"gameType":-1}',
-      '{"gameType":5}',
+      '{"gameType":6}',
       '{"gameType":1.5}',
       '{"gameType":{}}',
       '{"gameType":[]}',

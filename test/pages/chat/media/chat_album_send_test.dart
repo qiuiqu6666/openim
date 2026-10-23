@@ -179,9 +179,12 @@ void main() {
         return null;
       },
       compressImage: (file) => compress(file),
-      assetReadTimeout: const Duration(milliseconds: 40),
+      // Real filesystem I/O shares the machine with the full suite. Keep the
+      // injected deadline bounded, without treating scheduler contention as a
+      // media failure. Explicit hung-future cases still exercise this timeout.
+      assetReadTimeout: const Duration(milliseconds: 500),
       imageCompressionTimeout: const Duration(milliseconds: 500),
-      messageCreationTimeout: const Duration(milliseconds: 40),
+      messageCreationTimeout: const Duration(milliseconds: 500),
       onPreparationFailed: () => failures++,
     );
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -232,7 +235,8 @@ void main() {
     await directory.delete(recursive: true);
   });
 
-  test('default album send compresses images without a quality dialog', () async {
+  test('default album send compresses images without a quality dialog',
+      () async {
     media.close();
     var compressionCalls = 0;
     final compressed =
@@ -336,7 +340,8 @@ void main() {
     expect(PendingChatMedia.entries, isEmpty);
   });
 
-  test('all selected bubbles exist before source files are available', () async {
+  test('all selected bubbles exist before source files are available',
+      () async {
     final source = Completer<File?>();
     selected = [
       _Asset('first', source.future),
@@ -726,12 +731,15 @@ void main() {
       encoding.complete();
       return release.future;
     });
-    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
         .setMockMethodCallHandler(encoder, null));
-    selected = [_VideoAsset(photo, () async {
-      coverStarted = true;
-      return Uint8List.fromList([1, 2, 3]);
-    })];
+    selected = [
+      _VideoAsset(photo, () async {
+        coverStarted = true;
+        return Uint8List.fromList([1, 2, 3]);
+      })
+    ];
     final pending = media.onTapAlbum();
     await encoding.future;
     await Future<void>.delayed(Duration.zero);
@@ -747,10 +755,16 @@ void main() {
     const encoder = MethodChannel('video_compress');
     var encodes = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
-        .setMockMethodCallHandler(encoder, (_) async { encodes++; return null; });
-    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(encoder, (_) async {
+      encodes++;
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
         .setMockMethodCallHandler(encoder, null));
-    selected = [_VideoAsset(photo, () async => Uint8List.fromList([1,2,3]))];
+    selected = [
+      _VideoAsset(photo, () async => Uint8List.fromList([1, 2, 3]))
+    ];
     await media.onTapAlbum();
     expect(media.hasFailedVideos, isTrue);
     expect(sends, isEmpty);
@@ -760,5 +774,4 @@ void main() {
     expect(sends, hasLength(1));
     expect(media.failedPreparationCount.value, 0);
   });
-
 }

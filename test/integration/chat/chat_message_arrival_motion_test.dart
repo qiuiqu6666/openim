@@ -1,3 +1,4 @@
+import 'package:openim/pages/chat/receipts/chat_read_receipts.dart';
 import 'dart:async';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -800,6 +801,7 @@ void main() {
       await tester.pump();
       expect(_progress(tester, isolated), 1);
       expect(logic.messageArrivals.hasEntering, isFalse);
+      await tester.pump(ChatReadReceipts.viewportReadInterval);
       expect(nativeReadContains(isolated), isTrue);
     });
   });

@@ -99,11 +99,12 @@ void main() {
     addTearDown(() => unmountSangong(tester));
     await pumpSangongPage(tester, runtime, const SangongAgentDashboardPage());
     expect(find.text('你没有该功能的操作权限'), findsOneWidget);
-    expect(find.text('团队概览'), findsNothing);
+    expect(find.text('团队概览'),
+        findsOneWidget); // Static page title remains on failure.
     api.respond = sangongFixtureResponse;
     await tester.tap(find.text('重试'));
     await flushSangong(tester);
-    expect(find.text('团队概览'), findsOneWidget);
+    expect(find.text('团队概览'), findsNWidgets(2));
     expect(api.count('/team-summary'), 2);
     expect(tester.takeException(), isNull);
   });

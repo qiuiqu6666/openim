@@ -105,8 +105,9 @@ type LoginMgr struct {
 
 	justOnceFlag bool
 
-	w           sync.Mutex
-	loginStatus int
+	w            sync.Mutex
+	loginStatus  int
+	loginAttempt loginAttempt
 
 	groupListener        open_im_sdk_callback.OnGroupListener
 	friendshipListener   open_im_sdk_callback.OnFriendshipListener
@@ -325,24 +326,40 @@ func (u *LoginMgr) handlerSendingMsg(ctx context.Context, sendingMsg *model_stru
 	return nil
 }
 
-func (u *LoginMgr) login(ctx context.Context, userID, token string) error {
+func (u *LoginMgr) login(ctx context.Context, userID, token string) (err error) {
+	ctx, err = u.loginAttempt.begin(ctx, ccontext.Info(ctx).OperationID())
+	if err != nil {
+		return err
+	}
+	defer u.loginAttempt.finish()
 	if u.getLoginStatus(ctx) == Logged {
 		return sdkerrs.ErrLoginRepeat
 	}
 	u.setLoginStatus(Logging)
-	log.ZDebug(ctx, "login start... ", "userID", userID, "token", token)
+	defer func() {
+		if err != nil {
+			if u.db != nil {
+				_ = u.db.Close(context.Background())
+				u.db = nil
+			}
+			u.setLoginStatus(LogoutStatus)
+		}
+	}()
+	log.ZDebug(ctx, "login start... ")
 	t1 := time.Now()
 
 	u.info.UserID = userID
 	u.info.Token = token
 	u.token = token
 	u.loginUserID = userID
-	var err error
 	u.db, err = db.NewDataBase(ctx, userID, u.info.DataDir, int(u.info.LogLevel))
 	if err != nil {
 		return sdkerrs.ErrSdkInternal.WrapMsg("init database " + err.Error())
 	}
 	u.checkSendingMessage(ctx)
+	if err = ctx.Err(); err != nil {
+		return err
+	}
 	log.ZDebug(ctx, "NewDataBase ok", "userID", userID, "dataDir", u.info.DataDir, "login cost time", time.Since(t1))
 	u.user = user.NewUser(u.db, u.loginUserID, u.conversationCh)
 	u.file = file.NewFile(u.db, u.loginUserID)
@@ -357,8 +374,12 @@ func (u *LoginMgr) login(ctx context.Context, userID, token string) error {
 		u.relation, u.group, u.user, u.file)
 	u.setListener(ctx)
 
-	u.run(ctx)
-	u.setLoginStatus(Logged)
+	if err = u.loginAttempt.commit(ctx, func() {
+		u.run(ctx)
+		u.setLoginStatus(Logged)
+	}); err != nil {
+		return err
+	}
 	log.ZDebug(ctx, "login success...", "login cost time: ", time.Since(t1))
 	return nil
 }

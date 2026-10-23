@@ -76,7 +76,10 @@ void main() {
           ['searchAdd', 'createGroup', 'createChannel', 'scanQRCode']);
       expect(find.text('搜索添加'), findsOneWidget);
       expect(find.text('创建群聊'), findsOneWidget);
-      expect(find.text('创建频道'), findsOneWidget);
+      expect(
+          find.descendant(
+              of: _tile('createChannel'), matching: find.text('创建频道')),
+          findsNWidgets(2));
       expect(find.text('扫一扫'), findsOneWidget);
       final material = tester
           .widgetList<Material>(find.byType(Material))
@@ -148,9 +151,21 @@ void main() {
     ]) {
       statuses.add(status);
       await tester.pump();
-      expect(_line, findsOneWidget);
-      expect(_dot, findsOneWidget);
-      expect(find.byType(FadingArcSpinner), findsNothing);
+      expect(
+          _line,
+          status == IMSdkStatus.connectionSucceeded
+              ? findsOneWidget
+              : findsNothing);
+      expect(
+          _dot,
+          status == IMSdkStatus.connectionSucceeded
+              ? findsOneWidget
+              : findsNothing);
+      expect(
+          find.byType(FadingArcSpinner),
+          status == IMSdkStatus.connectionSucceeded
+              ? findsNothing
+              : findsOneWidget);
       expect(find.byIcon(Icons.error_outline_rounded), findsNothing);
     }
     await h.dismissMenu(tester);
@@ -434,7 +449,9 @@ class _HeaderHost {
 
   Future<void> dismissMenu(WidgetTester tester) async {
     await tester.tapAt(Offset(5, size.height - 10));
-    await tester.pumpAndSettle();
+    // Connection progress keeps animating; finish only the menu transition.
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     expect(find.byType(HomeQuickActionTile), findsNothing);
   }
 }

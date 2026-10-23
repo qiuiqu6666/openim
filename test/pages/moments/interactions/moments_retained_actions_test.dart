@@ -7,10 +7,26 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../support/moments_ui_fixture.dart';
 import '../support/moments_ui_host.dart';
 
-Future<void> _revealAction(WidgetTester tester, Finder action) async {
+Future<void> _revealAction(WidgetTester tester, Finder action,
+    {String? menuPost}) async {
+  if (menuPost != null && action.evaluate().isEmpty) {
+    final menu = find.descendant(
+        of: find.byKey(ValueKey('moments_post_$menuPost')),
+        matching: find.byType(PopupMenuButton<String>));
+    await tester.ensureVisible(menu);
+    await Scrollable.ensureVisible(tester.element(menu), alignment: .5);
+    await tester.pumpAndSettle();
+    await tester.tap(menu);
+    await tester.pumpAndSettle();
+  }
   if (action.evaluate().isEmpty) {
     await tester.scrollUntilVisible(action, 220,
-        scrollable: find.byType(Scrollable).first, maxScrolls: 15);
+        scrollable: find
+            .byWidgetPredicate((widget) =>
+                widget is Scrollable &&
+                widget.axisDirection == AxisDirection.down)
+            .first,
+        maxScrolls: 15);
   }
   expect(action, findsOneWidget);
   await tester.ensureVisible(action);
@@ -21,6 +37,11 @@ Future<void> _revealAction(WidgetTester tester, Finder action) async {
 }
 
 void _expectRetainedButton(WidgetTester tester, Finder action, IconData icon) {
+  if (tester.widget(action) is PopupMenuItem<String>) {
+    expect(tester.widget<PopupMenuItem<String>>(action).enabled, isTrue);
+    expect(tester.getSize(action).height, greaterThanOrEqualTo(48));
+    return;
+  }
   final button = tester.widget<TextButton>(action);
   expect(button.onPressed, isNotNull);
   expect(button.style?.minimumSize?.resolve(const <WidgetState>{}),
@@ -76,9 +97,16 @@ void main() {
           await tester.pumpAndSettle();
         });
 
-        final like = find.byKey(ValueKey('moments_like_$momentId'));
-        final comment = find.byKey(ValueKey('moments_comment_$momentId'));
-        await _revealAction(tester, like);
+        final menuPost = surface == MomentsUiSurface.feed ? momentId : null;
+        final like = menuPost == null
+            ? find.byKey(ValueKey('moments_like_$momentId'))
+            : find.byWidgetPredicate(
+                (w) => w is PopupMenuItem<String> && w.value == 'like');
+        final comment = menuPost == null
+            ? find.byKey(ValueKey('moments_comment_$momentId'))
+            : find.byWidgetPredicate(
+                (w) => w is PopupMenuItem<String> && w.value == 'comment');
+        await _revealAction(tester, like, menuPost: menuPost);
         final before = repository.postById(momentId)!;
         _expectRetainedButton(
             tester,
@@ -86,11 +114,11 @@ void main() {
             before.likedByMe
                 ? Icons.favorite_rounded
                 : Icons.favorite_border_rounded);
-        await _revealAction(tester, comment);
+        await _revealAction(tester, comment, menuPost: menuPost);
         _expectRetainedButton(
             tester, comment, Icons.chat_bubble_outline_rounded);
 
-        await _revealAction(tester, like);
+        await _revealAction(tester, like, menuPost: menuPost);
         await tester.tap(like);
         await tester.pumpAndSettle();
         final liked = !before.likedByMe;
@@ -109,11 +137,11 @@ void main() {
         expect(likeProjection.likedByMe, liked);
         expect(likeProjection.version, afterLike.version);
         expect(likeProjection.likeCount, afterLike.likeCount);
-        await _revealAction(tester, like);
+        await _revealAction(tester, like, menuPost: menuPost);
         _expectRetainedButton(tester, like,
             liked ? Icons.favorite_rounded : Icons.favorite_border_rounded);
 
-        await _revealAction(tester, comment);
+        await _revealAction(tester, comment, menuPost: menuPost);
         await tester.tap(comment);
         await tester.pumpAndSettle();
         expect(find.byType(BottomSheet), findsOneWidget);
@@ -160,13 +188,14 @@ void main() {
                 .where((item) => item.commentId == confirmed.commentId)
                 .map((item) => item.text),
             [body]);
-        await _revealAction(tester, comment);
+        await _revealAction(tester, comment, menuPost: menuPost);
         _expectRetainedButton(
             tester, comment, Icons.chat_bubble_outline_rounded);
         expect(
             find.descendant(
                 of: comment,
-                matching: find.text('${afterComment.commentCount}')),
+                matching: find.text(
+                    menuPost == null ? '${afterComment.commentCount}' : '评论')),
             findsOneWidget);
         if (surface == MomentsUiSurface.detail) {
           expect(find.textContaining(body, findRichText: true), findsOneWidget);

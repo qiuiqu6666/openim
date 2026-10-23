@@ -1,3 +1,4 @@
+import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:async';
 import 'dart:convert';
 
@@ -65,6 +66,10 @@ class _HistoryTransport {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
       calls.add(call);
+      if (call.method == 'getLocalHistorySnapshot') {
+        return jsonEncode(
+            AdvancedMessage(messageList: [], isEnd: true, errCode: 0).toJson());
+      }
       if (call.method == 'getGroupsInfo') {
         final args = Map<String, dynamic>.from(call.arguments as Map);
         final ids = List<String>.from(args['groupIDList'] as List);
@@ -203,7 +208,8 @@ class _FeedLogic extends GetxController
   @override
   void createGroup() {}
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {}
 
   @override
   Future<bool> updateOrganizer(ConversationInfo info,
@@ -350,6 +356,12 @@ Future<void> _dispose(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() {
+    final previous = VisibilityDetectorController.instance.updateInterval;
+    VisibilityDetectorController.instance.updateInterval = Duration.zero;
+    addTearDown(
+        () => VisibilityDetectorController.instance.updateInterval = previous);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() async {
     Get.testMode = true;
@@ -563,7 +575,11 @@ void main() {
       await tester.longPress(_row('chat'));
       await tester.pumpAndSettle();
       expect(_card, findsNothing);
-      expect(sdk.calls, isEmpty);
+      // Visible rows may warm the local SDK cache before editing begins.
+      // Editing must not open the preview or issue a remote history read/write.
+      expect(
+          sdk.calls.where((call) => call.method != 'getLocalHistorySnapshot'),
+          isEmpty);
       expect(logic.markedIDs, isEmpty);
       expect(logic.openedIDs, isEmpty);
       expect(info.unreadCount, 8);

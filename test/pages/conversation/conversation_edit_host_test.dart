@@ -1,4 +1,6 @@
+import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -39,6 +41,16 @@ class _Home extends GetxController implements HomeLogic {
 
 class _IM extends GetxController implements IMController {
   @override
+  final connectionVerified = ValueNotifier<bool>(true);
+  @override
+  final connectionChecking = ValueNotifier<bool>(false);
+  @override
+  final groupInfoUpdatedSubject = PublishSubject<GroupInfo>();
+  @override
+  final joinedGroupAddedSubject = PublishSubject<GroupInfo>();
+  @override
+  final joinedGroupDeletedSubject = PublishSubject<GroupInfo>();
+  @override
   IMSdkStatus get currentConnectionStatus => IMSdkStatus.connectionSucceeded;
   @override
   ApiConnectionHealth? get apiConnectionHealth => null;
@@ -50,6 +62,11 @@ class _IM extends GetxController implements IMController {
           maxSize: 1);
   @override
   void onClose() {
+    connectionVerified.dispose();
+    connectionChecking.dispose();
+    groupInfoUpdatedSubject.close();
+    joinedGroupAddedSubject.close();
+    joinedGroupDeletedSubject.close();
     imSdkStatusSubject.close();
     super.onClose();
   }
@@ -111,7 +128,8 @@ class _Conversations extends GetxController
   @override
   void createGroup() {}
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {}
   @override
   Future<void> markConversationRead(ConversationInfo info) async {
     markedIds.add(info.conversationID);
@@ -206,6 +224,32 @@ Future<void> _mountHome(WidgetTester tester, _Conversations conversations,
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    const channel = MethodChannel('flutter_openim_sdk');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'getLocalHistorySnapshot') {
+        return jsonEncode({
+          'messageList': [],
+          'localSnapshot': true,
+          'snapshotReady': true,
+          'isEnd': true,
+          'errCode': 0
+        });
+      }
+      return null;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+  });
+  setUp(() {
+    final previous = VisibilityDetectorController.instance.updateInterval;
+    VisibilityDetectorController.instance.updateInterval = Duration.zero;
+    addTearDown(
+        () => VisibilityDetectorController.instance.updateInterval = previous);
+  });
   testWidgets(
       'entire search field responds while the SDK session is recovering',
       (tester) async {
@@ -224,7 +268,7 @@ void main() {
       expect(input, findsOneWidget);
       expect(find.byTooltip('编辑'), findsNothing);
       expect(
-          tester.getTopLeft(input).dy, closeTo(rect.top - kToolbarHeight, 1));
+          tester.getTopLeft(entry).dy, closeTo(rect.top - kToolbarHeight, 1));
       expect(tester.widget<TextField>(input).focusNode!.hasFocus, isTrue);
       await tester.tap(cancel);
       await tester.pumpAndSettle();

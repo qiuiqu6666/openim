@@ -7,6 +7,30 @@ import 'package:uuid/uuid.dart';
 
 /// Public liveness only; never evidence of login, RPC, gateway or sync health.
 class PublicHealthCheck {
+  static Future<void> gateway(
+      Dio client, String address, CancelToken token) async {
+    final ws = Uri.parse(address);
+    if (!{'ws', 'wss'}.contains(ws.scheme) ||
+        ws.host.isEmpty ||
+        ws.userInfo.isNotEmpty ||
+        ws.hasQuery ||
+        ws.hasFragment) {
+      throw const FormatException('Invalid gateway endpoint');
+    }
+    final response = await client.get<dynamic>(
+        ws.replace(scheme: ws.scheme == 'wss' ? 'https' : 'http').toString(),
+        cancelToken: token,
+        options: Options(headers: await diagnosticHeaders()));
+    final body = response.data;
+    if (response.statusCode != 200 ||
+        body is! Map ||
+        body['errCode'] != 1602 ||
+        body['errMsg'] is! String ||
+        !(body['errMsg'] as String).contains('token')) {
+      throw StateError('WebSocket gateway unavailable');
+    }
+  }
+
   static final _random = Random();
 
   /// Bounded jitter, at most 250ms early; retain existing retry ceilings.

@@ -87,6 +87,8 @@ class ProfileFixture extends GetxController implements UserProfilePanelLogic {
   @override
   bool get isFriendship => friend || userInfo.value.isFriendship;
   @override
+  bool get showStrangerBlacklistAction => userInfo.value.isBlacklist;
+  @override
   bool get isGroupMemberPage => group;
   @override
   bool get hasActiveGroupMemberContext => true;
@@ -258,7 +260,7 @@ void main() {
       expect(find.text('profileRemarkName'), findsNothing);
       expect(find.text('profileGenderPrivate'), findsOneWidget);
       expect(find.text(StrRes.addFriend), findsOneWidget);
-      expect(find.text('profileAddBlacklist'), findsOneWidget);
+      expect(find.text('profileAddBlacklist'), findsNothing);
       final previewDir = Platform.environment['PROFILE_PREVIEW_DIR'];
       if (previewDir != null) {
         final boundary = tester.renderObject<RenderRepaintBoundary>(
@@ -277,7 +279,8 @@ void main() {
 
       await tester.tap(find.text(StrRes.addFriend));
       expect(fixture.action, 'add');
-      await tester.tap(find.text('profileAddBlacklist'));
+      // A pre-existing blacklist entry remains removable for a nonfriend.
+      fixture.userInfo.update((user) => user?.isBlacklist = true);
       await tester.pumpAndSettle();
       expect(fixture.userInfo.value.isBlacklist, isTrue);
       expect(find.text('profileRemoveBlacklist'), findsOneWidget);
@@ -302,7 +305,7 @@ void main() {
     ));
     await tester.pumpAndSettle();
     expect(find.text(StrRes.addFriend), findsNothing);
-    expect(find.text('profileAddBlacklist'), findsOneWidget);
+    expect(find.text('profileAddBlacklist'), findsNothing);
     fixture.userInfo.update((user) => user?.isFriendship = true);
     await tester.pumpAndSettle();
     expect(find.text(StrRes.addFriend), findsNothing);
@@ -324,6 +327,9 @@ void main() {
       builder: (_, __) => GetMaterialApp(
           home: UserProfilePanelPage(momentsRepository: fixture.moments)),
     ));
+    await tester.pumpAndSettle();
+    expect(find.text('Inviter'), findsNothing);
+    fixture.iHaveAdminOrOwnerPermission.value = true;
     await tester.pumpAndSettle();
     expect(find.text('Inviter'), findsOneWidget);
     await tester.tap(find.text('Inviter'));

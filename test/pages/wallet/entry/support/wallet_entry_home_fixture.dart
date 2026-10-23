@@ -31,7 +31,13 @@ class _Home extends GetxController implements HomeLogic {
 }
 
 class _Account extends GetxController implements IMController {
-  _Account(this.connecting);
+  @override
+  final connectionVerified = ValueNotifier<bool>(false);
+  @override
+  final connectionChecking = ValueNotifier<bool>(false);
+  _Account(this.connecting) {
+    connectionVerified.value = !connecting;
+  }
   final bool connecting;
   @override
   IMSdkStatus get currentConnectionStatus =>
@@ -75,7 +81,8 @@ class _Conversations extends GetxController
   @override
   String? folderID(ConversationInfo info) => null;
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {}
   @override
   void globalSearch() {}
   @override

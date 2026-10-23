@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/openimsdk/openim-sdk-core/v3/open_im_sdk_callback"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/ccontext"
@@ -89,6 +90,28 @@ func UnInitSDK(operationID string) {
 
 func Login(callback open_im_sdk_callback.Base, operationID string, userID, token string) {
 	call(callback, operationID, UserForSDK.Login, userID, token)
+}
+
+// CancelLogin acknowledges only after the targeted worker has cleaned up.
+// A timeout is not permission to start a successor login.
+func CancelLogin(callback open_im_sdk_callback.Base, operationID, targetOperationID string) {
+	u := UserForSDK
+	if callback == nil {
+		return
+	}
+	go func() {
+		if u == nil {
+			callback.OnSuccess("")
+			return
+		}
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := u.loginAttempt.cancelAndWait(ctx, targetOperationID); err != nil {
+			callback.OnError(10004, "login cancellation pending")
+			return
+		}
+		callback.OnSuccess("")
+	}()
 }
 
 func Logout(callback open_im_sdk_callback.Base, operationID string) {

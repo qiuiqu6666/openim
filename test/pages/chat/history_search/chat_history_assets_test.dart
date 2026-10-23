@@ -288,7 +288,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('picture thumbnail falls back past blank snapshot URLs',
+  testWidgets(
+      'picture grid does not download a full original for a blank thumbnail',
       (tester) async {
     const original = 'https://example.com/original.png';
     final picture = _message('fallback', MessageType.picture, '');
@@ -302,7 +303,7 @@ void main() {
     final thumbnail = tester.widget<ChatVideoThumbnail>(find.descendant(
         of: _result('fallback'), matching: find.byType(ChatVideoThumbnail)));
     expect(thumbnail.path, isNull);
-    expect(thumbnail.url, original);
+    expect(thumbnail.url, isNull);
     expect(tester.takeException(), isNull);
   });
 

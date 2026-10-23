@@ -17,6 +17,8 @@ import 'support/selection_test_messages.dart';
 
 class _SelectionTileLogic extends GetxController implements ChatLogic {
   @override
+  bool canStopMediaSend(Message message) => false;
+  @override
   Message resolveGroupNotice(Message message) => message;
   @override
   bool get isChannel => false;

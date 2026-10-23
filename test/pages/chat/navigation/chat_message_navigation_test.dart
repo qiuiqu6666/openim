@@ -243,7 +243,7 @@ void main() {
     expect(profiles.opened, isEmpty);
   });
 
-  testWidgets('chat verification opens an empty public-account search',
+  testWidgets('chat verification opens the selected peer application',
       (tester) async {
     final fixture = AiOpenimTestFixture();
     await fixture.initialize();
@@ -268,18 +268,22 @@ void main() {
         ),
         GetPage<dynamic>(
           name: AppRoutes.sendVerificationApplication,
-          page: () => const Scaffold(body: Text('Unproven verification')),
+          page: () {
+            arguments = Map<String, dynamic>.from(Get.arguments as Map);
+            return const Scaffold(body: Text('Peer verification'));
+          },
         ),
       ],
     ));
     final nativeCalls = fixture.nativeCalls.length;
     logic.sendFriendVerification();
     await tester.pumpAndSettle();
-    expect(Get.currentRoute, AppRoutes.addContactsBySearch);
-    expect(arguments, {'searchType': SearchType.user});
-    expect(search!.searchKey, isEmpty);
-    expect(fixture.nativeCalls, hasLength(nativeCalls));
-    expect(find.text('Unproven verification'), findsNothing);
+    expect(Get.currentRoute, AppRoutes.sendVerificationApplication);
+    expect(arguments!['userID'], 'assistant');
+    expect(search, isNull);
+    expect(fixture.nativeCalls.skip(nativeCalls).map((call) => call.method),
+        everyElement('getBlacklist'));
+    expect(find.text('Peer verification'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.pumpWidget(const SizedBox());
   });

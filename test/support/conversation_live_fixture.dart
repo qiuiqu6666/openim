@@ -4,6 +4,7 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim/pages/conversation/conversation_organizer.dart';
 import 'package:openim/pages/conversation/editing/conversation_read_batch.dart';
 import 'package:openim/pages/conversation/summary/conversation_feed_snapshot.dart';
+import 'package:openim/pages/conversation/unread/friend_approval_notice.dart';
 import 'package:openim/pages/group_features/data/group_feature_api.dart';
 import 'package:openim/pages/group_features/data/group_feature_store.dart';
 
@@ -14,11 +15,20 @@ mixin ConversationLiveFixture on GetxController {
   void setFeedViewActive(Object owner, bool active) {
     active ? activeFeedViews.add(owner) : activeFeedViews.remove(owner);
   }
+
   void removeFeedView(Object owner) => activeFeedViews.remove(owner);
   final imStatus = IMSdkStatus.connectionSucceeded.obs;
   RxList<ConversationInfo> get list;
   bool isArchived(ConversationInfo info);
   String? folderID(ConversationInfo info);
+  int getUnreadCount(ConversationInfo info);
+  final _noticeReads = <String, Map<String, dynamic>>{};
+  late final _notices = FriendApprovalNotice(
+      read: (id) => _noticeReads[id],
+      write: (id, value) => _noticeReads[id] = value);
+  bool hasFriendApprovalNotice(ConversationInfo info) => _notices.pending(info);
+  bool existUnreadMsg(ConversationInfo info) =>
+      getUnreadCount(info) > 0 || hasFriendApprovalNotice(info);
 
   // Match the production feed projection, while keeping each fixture's own
   // archive/folder state as the source used by its interaction assertions.

@@ -59,7 +59,8 @@ Future<void> _mount(WidgetTester tester, Widget page,
 
 void main() {
   for (final dark in [false, true]) {
-    testWidgets('group empty state keeps tabs and pull-to-refresh ($dark)',
+    testWidgets(
+        'merged group empty state keeps search and pull-to-refresh ($dark)',
         (tester) async {
       final requests = <Completer<List<GroupInfo>>>[];
       final logic = _Groups((_, __) {
@@ -69,25 +70,26 @@ void main() {
       });
       Get.put<GroupListLogic>(logic);
       await _mount(tester, GroupListPage(), dark: dark);
-      expect(find.text('暂无创建的群聊'), findsNothing);
+      expect(find.text('暂无群聊'), findsNothing);
       requests[0].complete([]);
       requests[1].complete([]);
       await tester.pumpAndSettle();
-      expect(find.text('暂无创建的群聊'), findsOneWidget);
-      await tester.tap(find.text(StrRes.iJoinedGroup));
-      await tester.pumpAndSettle();
-      expect(find.text('暂无加入的群聊'), findsOneWidget);
+      expect(find.text('暂无群聊'), findsOneWidget);
+      expect(find.byKey(const ValueKey('my-groups-search')), findsOneWidget);
+      expect(find.text(StrRes.iJoinedGroup), findsNothing);
+      expect(find.text('暂无群聊'), findsOneWidget);
       await tester.drag(
           find.byType(CustomScrollView).first, const Offset(0, 300));
       for (var i = 0; i < 10 && requests.length == 2; i++) {
         await tester.pump(const Duration(milliseconds: 200));
       }
-      expect(requests, hasLength(3));
+      expect(requests, hasLength(4));
+      requests[2].complete([]);
       requests.last.complete([
         GroupInfo(groupID: 'joined', groupName: '新加入的群聊', ownerUserID: 'other'),
       ]);
       await tester.pumpAndSettle();
-      expect(find.text('暂无加入的群聊'), findsNothing);
+      expect(find.text('暂无群聊'), findsNothing);
       expect(find.text('新加入的群聊'), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
@@ -103,12 +105,12 @@ void main() {
     Get.put<GroupListLogic>(logic);
     await _mount(tester, GroupListPage());
     await tester.pumpAndSettle();
-    expect(find.text('暂无创建的群聊'), findsNothing);
+    expect(find.text('暂无群聊'), findsNothing);
     expect(find.text('加载失败，请重试'), findsOneWidget);
     fail = false;
     await tester.tap(find.text('重试'));
     await tester.pumpAndSettle();
-    expect(find.text('暂无创建的群聊'), findsOneWidget);
+    expect(find.text('暂无群聊'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 

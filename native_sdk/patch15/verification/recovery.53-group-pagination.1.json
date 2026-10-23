@@ -1,0 +1,90 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.53-group-pagination.1",
+  "date": "2026-10-24",
+  "source_sha256": "4ba784cdf2c1f7d68f8c180ad211b12646103c9cab7b4d55a94d178a0b5c3f81",
+  "patch_sha256": "716fa11a555bcfdae552ba6e272c81afb264f07825770592fb601bc1462ab21a",
+  "source_files": 729,
+  "migration_files": [
+    "internal/group/incremental_sync.go",
+    "internal/interaction/msg_sync_scheduler.go",
+    "pkg/common/metadata_progress.go",
+    "pkg/common/metadata_state.go",
+    "pkg/common/metadata_state_test.go",
+    "internal/group/joined_group_snapshot.go",
+    "internal/group/joined_group_resume_test.go",
+    "internal/group/joined_group_commit_test.go",
+    "internal/group/joined_group_snapshot_validation_test.go",
+    "internal/group/joined_group_busy_test.go",
+    "internal/interaction/joined_group_budget_test.go",
+    "internal/interaction/joined_group_priority_test.go"
+  ],
+  "baseline": {
+    "result": "expected failure",
+    "test": "TestJoinedGroupPagesResumeWithoutPublishingPartialDirectory",
+    "detail": "completed prefix fetched again: [1 2 1 2 3]"
+  },
+  "checks": {
+    "core_packages_cgo_disabled": {
+      "result": "passed",
+      "packages": [
+        "internal/group",
+        "internal/interaction",
+        "internal/conversation_msg",
+        "internal/relation",
+        "pkg/common",
+        "pkg/syncer",
+        "open_im_sdk",
+        "internal/user",
+        "pkg/network",
+        "pkg/cache",
+        "pkg/logpolicy"
+      ]
+    },
+    "sqlite_cgo_enabled": {
+      "result": "passed",
+      "packages": [
+        "pkg/db",
+        "internal/group",
+        "internal/interaction",
+        "internal/conversation_msg"
+      ],
+      "scope": "complete package tests, not only filtered SQLite tests"
+    },
+    "race": {
+      "result": "passed",
+      "packages": [
+        "internal/group",
+        "internal/interaction",
+        "pkg/common"
+      ],
+      "filter": "TestJoinedGroup|TestProtectedGroup|TestMetadataState"
+    },
+    "build_tools": {
+      "result": "passed",
+      "tests": 15
+    },
+    "cumulative_patch": {
+      "result": "passed",
+      "base": "d6e0b549db904d0327d76ef7c9c283203879a095",
+      "scope": "apply original patch to normalized clean base, apply migration, generate cumulative diff; reverse application check and all 729 normalized inputs match"
+    },
+    "staging": {
+      "result": "passed",
+      "scope": "prepare_source.py --output; 729 inputs verified"
+    }
+  },
+  "native_binaries": "not rebuilt; run build-ios.sh on macOS",
+  "device_runtime": "not tested",
+  "retained_fixes": "recovery.52-login-cancel.2 plus all existing mobile build source changes",
+  "tools": {
+    "go": "1.24.0",
+    "cgo_compiler": "llvm-mingw-20261006 clang"
+  },
+  "logs": [
+    "core-regression.log",
+    "cgo-regression.log",
+    "race-regression.log",
+    "source-tools-regression.log",
+    "baseline-regression.log"
+  ]
+}

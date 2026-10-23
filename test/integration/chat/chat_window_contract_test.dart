@@ -198,7 +198,7 @@ void main() {
     await tester.pumpWidget(buildChatEntryList(logic, commonList: true));
     await tester.pump();
     calls.first.complete(local!.messageList!, window: window(40));
-    await tester.pump();
+    await tester.pumpAndSettle();
     logic.scrollController.jumpTo(160);
     await tester.pump();
     final anchor = tester.getTopLeft(find.text('peer-35'));

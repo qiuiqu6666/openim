@@ -1,3 +1,5 @@
+import '../../wallet/data/wallet_fund_test_transport.dart';
+import 'package:openim/pages/wallet/data/wallet_fund_api.dart';
 import 'dart:io';
 import 'dart:async';
 import 'dart:convert';
@@ -122,7 +124,8 @@ List<MethodCall> _mockAnchorProfile(Future<String> Function() reply) {
 Future<void> _openTipConfirmation(WidgetTester tester,
     {bool dark = false, bool Function()? current}) async {
   SharedPreferences.setMockInitialValues({});
-  final transport = LiveTransport((_) => throw StateError('Unexpected payment'));
+  final transport =
+      LiveTransport((_) => throw StateError('Unexpected payment'));
   final fixture = liveContext(transport.api(), current: current);
   await _mount(
       tester,
@@ -177,6 +180,26 @@ Widget _playingHost(LiveWatchState state) => Scaffold(
             : AspectRatio(
                 aspectRatio: 16 / 9,
                 child: LivePlayerView(controller: state.playback!))));
+
+WalletFundApi _tipWallet() {
+  final transport = WalletFundTestTransport()
+    ..securityCheck = ((request) => {
+          'smsRequired': false,
+          'reasons': <String>[],
+          'blockedUntil': 0,
+          'phoneMasked': '',
+          'currency': (request['tip'] as Map)['currency'],
+          'smsThreshold': '5',
+          'cooldownHours': 2,
+        });
+  transport.respond({
+    'balances': [
+      {'currency': 'USDT', 'available': '12.345678', 'frozen': '0'}
+    ]
+  });
+  addTearDown(transport.close);
+  return transport.wallet;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -504,12 +527,16 @@ void main() {
                         featureContext: fixture,
                         session: liveSession(status: LiveStatus.live),
                         security: _PaymentSecurity(),
-                        pendingStore: store),
+                        pendingStore: store,
+                        walletApi: _tipWallet()),
                     child: const Text('打开打赏')))));
     await tester.tap(find.text('打开打赏'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('USDT'));
+    await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '1.000001');
     await tester.enterText(find.byType(TextField).last, '谢谢');
+    await tester.pump();
     await tester.tap(find.text('确认打赏'));
     await _paymentFrames(tester);
     expect(find.text('打赏给 秋🍂'), findsOneWidget);

@@ -10,6 +10,7 @@ import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
 import 'package:openim/pages/chat/fund/fund_message_card.dart';
+import 'package:openim/pages/chat/fund/fund_card_palette.dart';
 import 'package:openim/pages/chat/fund/fund_card_recipient.dart';
 import 'package:openim/pages/chat/fund/fund_packet_summary.dart';
 import 'package:openim_common/openim_common.dart';
@@ -76,8 +77,7 @@ void main() {
       expect(data.copyWith(status: 'done').status, 'done');
       expect(data.status, 'open');
     }
-    expect(
-        parse(payload(currency: 'BI99', amount: '0.01')).currencyLabel, '元');
+    expect(parse(payload(currency: 'BI99', amount: '0.01')).currencyLabel, '元');
   });
 
   test('rejects incomplete, unrelated, and unsafe financial payloads', () {
@@ -251,7 +251,7 @@ void main() {
           .widget<DecoratedBox>(find.byKey(const Key('fund-card-surface')))
           .decoration as BoxDecoration;
       expect((surface.gradient! as LinearGradient).colors,
-          [const Color(0xFFFA6A4E), const Color(0xFFF55E44)]);
+          [FundCardPalette.packet.bodyHighlight, FundCardPalette.packet.body]);
       expect(surface.boxShadow, isNotEmpty);
       final node =
           tester.getSemantics(find.bySemanticsLabel(RegExp('^红包, 恭喜发财，大吉大利,')));
@@ -417,10 +417,10 @@ void main() {
               rgba.getUint8(offset + 1),
               rgba.getUint8(offset + 2));
           expect(
-              tailColor,
+              tailColor.toARGB32(),
               biz == 'transfer'
-                  ? const Color(0xFFD47166)
-                  : const Color(0xFFF55E44),
+                  ? FundCardPalette.transfer.body.toARGB32()
+                  : FundCardPalette.packet.body.toARGB32(),
               reason: 'The curved tail must remain inside the row.');
           expect(tester.takeException(), isNull);
         }
@@ -580,7 +580,7 @@ void main() {
         '[转账] 12 USDT');
   });
 
-  testWidgets('cards retain the 99chat palettes and honor high contrast',
+  testWidgets('cards use business palettes and honor high contrast',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
@@ -622,7 +622,7 @@ void main() {
             .widget<Container>(find.byKey(const Key('fund-card-footer')))
             .decoration as BoxDecoration;
         final headline = tester.widget<Text>(find.text('恭喜发财，大吉大利'));
-        final footer = tester.widget<Text>(find.text('99Chat红包'));
+        final footer = tester.widget<Text>(find.text('普通红包'));
         final active = state.status == 'open' && !state.claimed;
         if (mode.highContrast) {
           expect(contrast(headline.style!.color!, bodyColors.first),
@@ -632,11 +632,14 @@ void main() {
                   Color.alphaBlend(footerBox.color!, bodyColors.last)),
               greaterThanOrEqualTo(4.5));
         } else if (active) {
-          expect(
-              bodyColors, [const Color(0xFFFA6A4E), const Color(0xFFF55E44)]);
-          expect(headline.style!.color, const Color(0xFFFFFBF5));
-          expect(footer.style!.color, const Color(0xFFFFD4B0));
-          expect(footerBox.color!.toARGB32(), 0xEBE8553C);
+          expect(bodyColors, [
+            FundCardPalette.packet.bodyHighlight,
+            FundCardPalette.packet.body
+          ]);
+          expect(headline.style!.color, FundCardPalette.packet.title);
+          expect(footer.style!.color, FundCardPalette.packet.footerText);
+          expect(footerBox.color!.toARGB32(),
+              FundCardPalette.packet.footer.withValues(alpha: .92).toARGB32());
           expect(surface.boxShadow, isNotEmpty);
           activeBody = bodyColors.last;
         } else {
@@ -644,7 +647,7 @@ void main() {
           expect(surface.boxShadow, isNull);
         }
       }
-      // The reference transfer palette has no fake "received" fade.
+      // Upstream transfer cards keep coral colors across settlement states.
       for (final status in ['open', 'done']) {
         await tester.pumpWidget(host(
             FundMessageCard(
@@ -658,9 +661,10 @@ void main() {
             .widget<Container>(find.byKey(const Key('fund-card-footer')))
             .decoration as BoxDecoration;
         if (!mode.highContrast) {
-          expect(surface.color, const Color(0xFFD47166));
+          const palette = FundCardPalette.transfer;
+          expect(surface.color, palette.body);
           expect(surface.gradient, isNull);
-          expect(footer.color, const Color(0xFFC06258));
+          expect(footer.color, palette.footer);
         }
       }
     }
@@ -716,8 +720,8 @@ void main() {
                     matching: find.text(biz == 'packet_exclusive'
                         ? StrRes.fundExclusivePacket
                         : packet
-                            ? '99Chat红包'
-                            : '99Chat')))
+                            ? '拼手气红包'
+                            : '群转账')))
                 .style!
                 .fontSize,
             packet ? 10 : 9);
@@ -775,7 +779,12 @@ void main() {
     ]) {
       tester.view.physicalSize = size;
       for (final dark in [false, true]) {
-        for (final biz in ['packet_normal', 'group_transfer']) {
+        for (final biz in [
+          'packet_normal',
+          'packet_exclusive',
+          'transfer',
+          'group_transfer'
+        ]) {
           final data = parse(payload(
               biz: biz,
               amount: '12345.123456',
@@ -804,6 +813,11 @@ void main() {
                   customTypeBuilder: (_, __) => CustomTypeInfo(
                       FundMessageCard(
                           message: data,
+                          recipient: biz == 'packet_exclusive' ||
+                                  biz == 'group_transfer'
+                              ? const FundCardRecipient(
+                                  name: '京222222群转账可转我的超长专属红包接收人')
+                              : const FundCardRecipient(),
                           isGroupChat: true,
                           timeText: '22:13',
                           packetCount: biz == 'packet_normal' ? 5 : null),
@@ -816,11 +830,26 @@ void main() {
           expect(tester.takeException(), isNull,
               reason: '$size dark=$dark $biz textScale=2');
           expect(find.textContaining('12345.123456 USDT'), findsOneWidget);
-          expect(find.text(data.remark),
-              biz == 'group_transfer' ? findsNothing : findsOneWidget);
-          if (biz != 'group_transfer') {
-            expect(
-                tester.widget<Text>(find.text(data.remark)).maxLines, isNull);
+          expect(
+              find.text(data.remark),
+              biz == 'packet_normal' || biz == 'transfer'
+                  ? findsOneWidget
+                  : findsNothing);
+          {
+            final titleFinder = find.text(switch (biz) {
+              'packet_exclusive' => '京222222群转账可转我的超长专属红包接收人的专属红包',
+              'group_transfer' => '转账给京222222群转账可转我的超长专属红包接收人',
+              'transfer' => '转账 12345.123456 USDT',
+              _ => data.remark,
+            });
+            final title = tester.widget<Text>(titleFinder);
+            expect(title.maxLines, 1);
+            expect(title.softWrap, isFalse);
+            expect(title.overflow, TextOverflow.ellipsis);
+            final paragraph = tester.renderObject<RenderParagraph>(titleFinder);
+            expect(paragraph.didExceedMaxLines, isTrue);
+            expect(paragraph.size.height,
+                lessThan(paragraph.preferredLineHeight * 1.1));
           }
           await tester.ensureVisible(find.byKey(const Key('fund-card-footer')));
           await tester.pumpAndSettle();
@@ -834,6 +863,107 @@ void main() {
           expect(tester.takeException(), isNull);
         }
       }
+    }
+  });
+
+  testWidgets(
+      'business types match reference gradients and white text in every state',
+      (tester) async {
+    for (final dark in [false, true]) {
+      final activeColors = <Color>{};
+      final completedColors = <Color>{};
+      for (final biz in [
+        'packet_normal',
+        'packet_lucky',
+        'packet_exclusive',
+        'transfer',
+        'group_transfer',
+      ]) {
+        for (final state in [
+          (status: 'open', claimed: false),
+          (status: 'open', claimed: true),
+          (status: 'done', claimed: false),
+          (status: 'refunded', claimed: false),
+        ]) {
+          await tester.pumpWidget(host(
+              FundMessageCard(
+                  message: parse(payload(biz: biz, status: state.status)),
+                  claimedByMe: state.claimed),
+              dark: dark));
+          final surface = tester
+              .widget<DecoratedBox>(find.byKey(const Key('fund-card-surface')))
+              .decoration as BoxDecoration;
+          final body = surface.color ??
+              (surface.gradient! as LinearGradient).colors.last;
+          final active = state.status == 'open' && !state.claimed;
+          final base = switch (biz) {
+            'packet_lucky' => FundCardPalette.luckyPacket,
+            'packet_exclusive' => FundCardPalette.exclusivePacket,
+            'transfer' => FundCardPalette.transfer,
+            'group_transfer' => FundCardPalette.groupTransfer,
+            _ => FundCardPalette.packet,
+          };
+          expect(
+              base.body.toARGB32(),
+              switch (biz) {
+                'packet_lucky' => 0xFFE07A2E,
+                'packet_exclusive' => 0xFFBE5963,
+                'transfer' => 0xFFD47166,
+                'group_transfer' => 0xFF2FAE8F,
+                _ => 0xFFF55E44,
+              });
+          final expected =
+              !active && biz.startsWith('packet_') && biz != 'packet_exclusive'
+                  ? base.opened(referencePacket: true)
+                  : base;
+          if (biz.startsWith('packet_')) {
+            expect(
+                base.footer.toARGB32(),
+                switch (biz) {
+                  'packet_lucky' => 0xFFD67127,
+                  'packet_exclusive' => 0xFFB5535D,
+                  _ => 0xFFE8553C,
+                });
+          }
+          expect(
+              base.bodyHighlight.toARGB32(),
+              switch (biz) {
+                'packet_lucky' => 0xFFF2994A,
+                'packet_exclusive' => 0xFFCD6870,
+                'transfer' => 0xFFD47166,
+                'group_transfer' => 0xFF2FAE8F,
+                _ => 0xFFFA6A4E,
+              });
+          for (final foreground in [
+            expected.title,
+            expected.subtitle,
+            expected.meta,
+            expected.footerText
+          ]) {
+            expect(foreground.toARGB32(), 0xFFFFFFFF);
+          }
+          if (!active &&
+              biz.startsWith('packet_') &&
+              biz != 'packet_exclusive') {
+            expect(expected.body.computeLuminance(),
+                greaterThan(base.body.computeLuminance()));
+          }
+          expect(body.toARGB32(), expected.body.toARGB32(),
+              reason:
+                  '$biz ${state.status} claimed=${state.claimed} dark=$dark');
+          if (biz == 'packet_exclusive') {
+            expect(surface.boxShadow, isNotEmpty);
+            final avatarOpacity = tester.widget<Opacity>(find.ancestor(
+                of: find.byType(AvatarView), matching: find.byType(Opacity)));
+            expect(avatarOpacity.opacity, 1);
+          }
+          if (active) activeColors.add(body);
+          if (state.status == 'done') completedColors.add(body);
+          expect(tester.takeException(), isNull);
+        }
+      }
+      expect(activeColors, hasLength(5));
+      expect(completedColors, hasLength(5));
     }
   });
 

@@ -1,4 +1,3 @@
-import 'package:openim_common/localization.dart';
 import 'dart:async';
 
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -6,7 +5,7 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../core/controller/im_controller.dart';
-import '../../core/session/sdk_session_queue.dart';
+import '../../core/server_nodes/startup/startup_network_preparation.dart';
 import '../../core/user_activity/activity_runtime.dart';
 import '../../routes/app_navigator.dart';
 
@@ -48,17 +47,21 @@ class SplashLogic extends GetxController {
     if (userID != null && token != null) {
       await _login();
     } else {
+      _handoff('login');
       AppNavigator.startLogin();
     }
   }
 
-  _login() async {
+  Future<void> _login() async {
     if (_closed || _loggingIn) return;
     _loggingIn = true;
     final account = userID;
     final credential = token;
     try {
       Logger.print('Restoring login session');
+      if (Get.isRegistered<StartupNetworkPreparation>()) {
+        Get.find<StartupNetworkPreparation>().trace.event('login_start');
+      }
       await imLogic.login(account!, credential!);
       if (_closed || account != userID || credential != token) return;
       ActivityRuntime.instance.sessionRestored(account, credential);
@@ -67,7 +70,9 @@ class SplashLogic extends GetxController {
         account,
         onTokenRefresh: (token) {
           if (OpenIM.iMManager.userID != account ||
-              DataSp.imToken != credential) return;
+              DataSp.imToken != credential) {
+            return;
+          }
           OpenIM.iMManager.updateFcmToken(
               fcmToken: token,
               expireTime: DateTime.now()
@@ -76,16 +81,24 @@ class SplashLogic extends GetxController {
         },
       );
       Logger.print('---------push login success----');
+      _handoff('home');
       AppNavigator.startSplashToMain(isAutoLogin: true);
-    } catch (e, s) {
+    } catch (e) {
+      if (!_closed && userID == null && token == null) {
+        _handoff('login');
+        AppNavigator.startLogin();
+        return;
+      }
       if (_closed || account != userID || credential != token) return;
-      IMViews.showToast(e is SdkSessionBusy
-          ? (Get.locale?.languageCode == 'zh'
-              ? AppCopy.text('上一登录会话仍在清理，请稍后重试')
-              : 'The previous session is still closing. Please try again shortly.')
-          : '$e $s');
-      await DataSp.removeLoginCertificate();
-      AppNavigator.startLogin();
+      // Authentication rejection is handled by the SDK session owner. A
+      // transport failure must never destroy the persisted session.
+      if (Get.isRegistered<StartupNetworkPreparation>()) {
+        Get.find<StartupNetworkPreparation>().loginFailed(() async {
+          if (!_closed && account == userID && credential == token) {
+            await _login();
+          }
+        });
+      }
     } finally {
       _loggingIn = false;
     }
@@ -96,5 +109,11 @@ class SplashLogic extends GetxController {
     _closed = true;
     initializedSub.cancel();
     super.onClose();
+  }
+
+  void _handoff(String destination) {
+    if (Get.isRegistered<StartupNetworkPreparation>()) {
+      Get.find<StartupNetworkPreparation>().finishHandoff(destination);
+    }
   }
 }

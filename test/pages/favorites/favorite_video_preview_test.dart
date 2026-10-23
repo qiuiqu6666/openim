@@ -1,3 +1,5 @@
+import 'package:openim_common/src/media/media_coordinator.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'dart:io';
 
@@ -16,6 +18,8 @@ class _Video extends VideoPlayerPlatform {
   DataSource? source;
   @override
   Future<void> init() async {}
+  @override
+  Future<void> setMixWithOthers(bool value) async {}
   @override
   Future<int?> createWithOptions(VideoCreationOptions options) async {
     source = options.dataSource;
@@ -62,6 +66,11 @@ class _Loader extends FavoritePreviewLoader {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
   testWidgets(
       'video preview uses verified local source with explicit playback and releases',
       (tester) async {
@@ -96,12 +105,16 @@ void main() {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     });
     await tester.pumpAndSettle();
+    expect(platform.source, isNull);
+    expect(platform.plays, 0);
+    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
+    await tester
+        .runAsync(() => Future<void>.delayed(const Duration(milliseconds: 30)));
+    await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('preview-video-frame')), findsOneWidget);
     expect(platform.source!.sourceType, DataSourceType.file);
-    expect(platform.plays, 0);
+    expect(platform.plays, 1);
     expect(find.byType(Slider), findsOneWidget);
-    await tester.tap(find.byIcon(Icons.play_arrow_rounded));
-    await tester.pump();
     expect(platform.plays, 1);
     repo.active = false;
     repo.notifyListeners();

@@ -1,3 +1,4 @@
+import 'package:flutter_easyloading/flutter_easyloading.dart';
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
@@ -114,6 +115,7 @@ Widget _host(Widget child, {String language = 'en'}) => ScreenUtilInit(
             GlobalWidgetsLocalizations.delegate,
             GlobalCupertinoLocalizations.delegate
           ],
+          builder: EasyLoading.init(),
           home: child);
     });
 
@@ -147,6 +149,7 @@ Future<void> _pumpFrames(WidgetTester tester) async {
 }
 
 void main() {
+  tearDown(() => EasyLoading.dismiss(animation: false));
   setUp(() {
     PaintingBinding.instance.imageCache.clear();
     PaintingBinding.instance.imageCache.clearLiveImages();
@@ -163,16 +166,18 @@ void main() {
     addTearDown(session.repository.dispose);
     await session.repository.ensureCapabilities();
     await tester.pumpWidget(_actionHost(session.repository));
-    await tester.tap(find.text('Open delete'));
-    await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Delete'));
-    await tester.pumpAndSettle();
-    expect(api.deleted, ['m1']);
     await tester.tap(find.text('Open report'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Spam'));
     await tester.pumpAndSettle();
     expect(api.reported, ['m1:SPAM']);
+    await EasyLoading.dismiss(animation: false);
+    await tester.pump();
+    await tester.tap(find.text('Open delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(CupertinoDialogAction, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(api.deleted, ['m1']);
   });
 
   testWidgets(
@@ -439,7 +444,7 @@ void main() {
     // A denied retry must neither restore the old bytes nor start a request loop.
     api.mediaWork = (_, __) async =>
         throw const MomentsException('denied', permissionDenied: true);
-    await tester.tap(find.byTooltip('Retry image'));
+    await tester.tap(find.widgetWithText(TextButton, 'Retry image'));
     await _pumpFrames(tester);
     expect(api.thumbnails, [true, true]);
     expect(find.byType(Image), findsNothing);

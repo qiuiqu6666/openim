@@ -81,7 +81,7 @@ void main() {
 
     for (final label in ['AI助手', '生活缴费', '数字资产', '社区广场']) {
       expect(find.bySemanticsLabel(label), findsOneWidget);
-      expect(find.text(label), findsNothing);
+      expect(find.text(label), findsOneWidget);
     }
 
     expect(find.text('账号设置'), findsNothing);

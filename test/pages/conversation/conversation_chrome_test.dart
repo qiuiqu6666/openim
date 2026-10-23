@@ -1,3 +1,4 @@
+import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
@@ -46,7 +47,8 @@ class _ConversationLogic extends GetxController
   @override
   void createGroup() {}
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {}
   @override
   bool isArchived(ConversationInfo info) => false;
   @override
@@ -129,6 +131,12 @@ Future<ui.Image> _snapshot(WidgetTester tester, GlobalKey key) async {
 }
 
 void main() {
+  setUp(() {
+    final previous = VisibilityDetectorController.instance.updateInterval;
+    VisibilityDetectorController.instance.updateInterval = Duration.zero;
+    addTearDown(
+        () => VisibilityDetectorController.instance.updateInterval = previous);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
     Get.testMode = true;
@@ -139,11 +147,12 @@ void main() {
     Get.reset();
   });
 
-  testWidgets('feed activity follows route coverage, tab visibility and dispose',
+  testWidgets(
+      'feed activity follows route coverage, tab visibility and dispose',
       (tester) async {
     _configureView(tester);
-    final logic = Get.put<ConversationLogic>(_ConversationLogic())
-        as _ConversationLogic;
+    final logic =
+        Get.put<ConversationLogic>(_ConversationLogic()) as _ConversationLogic;
     await tester.pumpWidget(_host(dark: false));
     await tester.pumpAndSettle();
     expect(logic.activeFeedViews.length, 1);
@@ -243,10 +252,11 @@ void main() {
       ]) {
         logic.imStatus.value = status;
         await tester.pump();
-        expect(find.text('消息'), findsOneWidget);
-        expect(find.byType(FadingArcSpinner), findsNothing);
+        // A sync event alone is not a verified transport connection.
+        expect(find.text('正在连接'), findsOneWidget);
+        expect(find.byType(FadingArcSpinner), findsOneWidget);
         expect(find.byIcon(Icons.error_outline_rounded), findsNothing);
-        expect(line, findsOneWidget);
+        expect(line, findsNothing);
       }
 
       logic.connection.value = 'failed';

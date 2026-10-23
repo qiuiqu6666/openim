@@ -18,6 +18,12 @@ Message _row(int n) => Message(
     status: MessageStatus.succeeded,
     textElem: TextElem(content: 'row-$n'));
 
+Future<void> _readOlder(WidgetTester tester) async {
+  // Initial snapshots follow the latest page until the user explicitly reads history.
+  await tester.drag(find.byType(ChatListView), const Offset(0, 160));
+  await tester.pumpAndSettle();
+}
+
 void registerDeferredHistoryCases(
     {required ChatLogic Function() open,
     required List<EntryHistoryCall> Function() calls,
@@ -29,6 +35,7 @@ void registerDeferredHistoryCases(
     await tester.pumpWidget(
         buildChatEntryList(logic, commonList: true, newerPaging: true));
     await tester.pump();
+    await _readOlder(tester);
     calls().single.complete([_row(100)], isEnd: false);
     await tester.pump();
     await tester.pump();
@@ -70,7 +77,7 @@ void registerDeferredHistoryCases(
   for (final gap in [false, true]) {
     for (final readingOlder in [false, true]) {
       testWidgets(
-          'painted cold history stays anchored; gap=$gap older=$readingOlder',
+          'explicit history reading stays anchored; gap=$gap older=$readingOlder',
           (tester) async {
         seed(List.generate(40, (i) => _row(i + 1)));
         final logic = open();
@@ -78,6 +85,7 @@ void registerDeferredHistoryCases(
         await tester.pumpWidget(buildChatEntryList(logic,
             commonList: true, observeViewport: (ids, _) => visible = ids));
         await tester.pump();
+        await _readOlder(tester);
         if (readingOlder) {
           logic.scrollController.jumpTo(160);
           await tester.pump();
@@ -101,13 +109,12 @@ void registerDeferredHistoryCases(
             reason: 'Layout cannot auto-fetch or join the newer range');
         logic.scrollBottom(smooth: true);
         await tester.pump();
-        expect(logic.latestWindowFading, isFalse,
+        expect(find.text(anchor), findsOneWidget,
             reason: 'Keep old rows readable while waiting for network');
         expect(calls(), hasLength(2));
         calls().last.complete(page, isEnd: false);
         await tester.pump();
-        expect(logic.latestWindowFading, isTrue);
-        expect(logic.messageList.last.clientMsgID, 'row-40');
+        expect(logic.messageList.last.clientMsgID, gap ? 'row-120' : 'row-60');
         await tester.pump();
         await tester.pump(const Duration(milliseconds: 150));
         await tester.pump();
@@ -115,7 +122,8 @@ void registerDeferredHistoryCases(
         expect(logic.messageList.last.clientMsgID, gap ? 'row-120' : 'row-60');
         expect(logic.messageList.first.clientMsgID, gap ? 'row-101' : 'row-21');
         expect(logic.hasDeferredLatest, isFalse);
-        expect(logic.latestWindowFading, isFalse);
+        expect(logic.viewingHistory.value, isFalse);
+        await tester.pumpAndSettle();
         expectMessageInsideChatList(tester, gap ? 'row-120' : 'row-60');
         logic.onDelete();
         await tester.pumpWidget(const SizedBox.shrink());
@@ -123,28 +131,30 @@ void registerDeferredHistoryCases(
     }
   }
 
-  for (final cancelDuringFade in [false, true]) {
-    testWidgets('drag cancels deferred latest return; fading=$cancelDuringFade',
+  for (final afterCommit in [false, true]) {
+    testWidgets(
+        'drag cancels pending return without rolling back committed latest; committed=$afterCommit',
         (tester) async {
       seed(List.generate(40, (i) => _row(i + 1)));
       final logic = open();
       await tester.pumpWidget(buildChatEntryList(logic, commonList: true));
       await tester.pump();
+      await _readOlder(tester);
       calls().single.complete([_row(100)], isEnd: false);
       await tester.pump();
       logic.scrollBottom(smooth: true);
       await tester.pump();
-      if (cancelDuringFade) {
+      if (afterCommit) {
         calls().last.complete([_row(100)], isEnd: false);
         await tester.pump();
-        expect(logic.latestWindowFading, isTrue);
+        expect(logic.messageList.last.clientMsgID, 'row-100');
       }
       await tester.drag(find.byType(ChatListView), const Offset(0, 80));
-      if (!cancelDuringFade) calls().last.complete([_row(100)], isEnd: false);
+      if (!afterCommit) calls().last.complete([_row(100)], isEnd: false);
       await tester.pump(const Duration(milliseconds: 300));
-      expect(logic.messageList.last.clientMsgID, 'row-40');
-      expect(logic.hasDeferredLatest, isTrue);
-      expect(logic.latestWindowFading, isFalse);
+      expect(logic.messageList.last.clientMsgID,
+          afterCommit ? 'row-100' : 'row-40');
+      expect(logic.hasDeferredLatest, !afterCommit);
       logic.onDelete();
       await tester.pumpWidget(const SizedBox.shrink());
     });
@@ -157,6 +167,7 @@ void registerDeferredHistoryCases(
     final logic = open();
     await tester.pumpWidget(buildChatEntryList(logic, commonList: true));
     await tester.pump();
+    await _readOlder(tester);
     calls().single.complete([_row(100)], isEnd: false);
     await tester.pump();
     logic.scrollBottom(smooth: true);
@@ -164,7 +175,7 @@ void registerDeferredHistoryCases(
     calls().last.result.completeError(StateError('offline'));
     await tester.pump();
     expect(logic.hasDeferredLatest, isTrue);
-    expect(logic.latestWindowFading, isFalse);
+    expect(find.byType(ChatListView), findsOneWidget);
     expect(logic.messageList.last.clientMsgID, 'row-40');
     logic.scrollBottom(smooth: true);
     await tester.pump();
@@ -189,6 +200,7 @@ void registerDeferredHistoryCases(
     final logic = open();
     await tester.pumpWidget(buildChatEntryList(logic, commonList: true));
     await tester.pump();
+    await _readOlder(tester);
     calls().single.complete([_row(100)], isEnd: false);
     await tester.pump();
     expect(logic.messageList.last.clientMsgID, 'row-40');
@@ -198,7 +210,7 @@ void registerDeferredHistoryCases(
     await tester.pump();
     await tester.pump();
     expect(logic.messageList.single.clientMsgID, 'row-100');
-    expect(logic.latestWindowFading, isFalse);
+    expect(find.byType(ChatListView), findsOneWidget);
     logic.onDelete();
     await tester.pumpWidget(const SizedBox.shrink());
   });

@@ -331,7 +331,7 @@ void main() {
       _openToolbox(tester, fixture, '三公代理');
       await _flushRoute(tester);
       expect(find.byType(SangongAgentDashboardPage), findsOneWidget);
-      expect(find.text('团队概览'), findsOneWidget);
+      expect(find.text('团队概览'), findsNWidgets(2));
       expect(find.text('重试'), findsNothing);
       expect(fixture.api.calls.where((c) => c.path.contains('/api/v2/groups/')),
           isEmpty);

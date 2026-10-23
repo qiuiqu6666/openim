@@ -94,7 +94,7 @@ void main() {
         .setMockMethodCallHandler(sdk, null);
   });
 
-  testWidgets('ChatPage back button accelerates and reaches the painted latest',
+  testWidgets('ChatPage back button decelerates and reaches the painted latest',
       (tester) async {
     tester.view.physicalSize = const Size(375, 812);
     tester.view.devicePixelRatio = 1;
@@ -166,8 +166,9 @@ void main() {
       final firstMovement = start - early;
       final secondMovement = early - later;
       expect(firstMovement, greaterThan(0));
-      expect(secondMovement, greaterThan(firstMovement + 1),
-          reason: 'Equal early time windows must show increasing movement.');
+      expect(secondMovement, lessThan(firstMovement),
+          reason:
+              'The ease-out return slows down as it approaches the latest row.');
       expect(later - logic.scrollController.position.minScrollExtent,
           greaterThan(1));
       expect(find.byType(NewMessageIndicator), findsOneWidget);

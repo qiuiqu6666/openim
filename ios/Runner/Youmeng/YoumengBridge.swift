@@ -17,7 +17,17 @@ final class YoumengBridge {
         let channel = FlutterMethodChannel(name: "openim/youmeng", binaryMessenger: messenger)
         self.channel = channel
         channel.setMethodCallHandler { [weak self] call, result in
-            guard let self else { return }
+            guard let self else {
+                result(FlutterError(code: "DISPOSED", message: "Network protection unavailable", details: nil)); return
+            }
+            if call.method == "cancel" {
+                youmengQueue.async {
+                    // A fully prepared standby listener is retained.
+                    if self.pending != nil { self.fail() }
+                    DispatchQueue.main.async { result(nil) }
+                }
+                return
+            }
             guard call.method == "start" else { result(FlutterMethodNotImplemented); return }
             guard let args = call.arguments as? [String: String],
                   let cp = args["cp"], let url = URL(string: cp), url.scheme == "https", url.host != nil,
@@ -78,7 +88,7 @@ final class YoumengBridge {
                 }
             } catch { self.fail() }
         }
-        youmengQueue.asyncAfter(deadline: .now() + 40) { [weak self] in
+        youmengQueue.asyncAfter(deadline: .now() + 18) { [weak self] in
             guard let self, self.generation == attempt, self.pending != nil else { return }
             self.fail()
         }

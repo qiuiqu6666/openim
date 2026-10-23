@@ -1,0 +1,47 @@
+{
+  "date": "2026-10-24",
+  "baseline_head": "2ed67e8c9a0af8d6223b6c0de19bc1fe3e09d56f",
+  "original_failures": 243,
+  "original_failure_files": 67,
+  "classification": {
+    "历史缺陷或测试契约漂移（源码审计）": 235,
+    "并发改动测试适配": 8
+  },
+  "attribution_limit": "Source/contract audit, not a clean-checkout full baseline replay.",
+  "full_flutter": {
+    "command": "flutter test --reporter expanded",
+    "passed": 11063,
+    "failed": 0,
+    "preexisting_skipped": 231,
+    "new_skips": 0,
+    "duration_seconds": 317,
+    "exit_code": 0,
+    "log": "E:\\openim\\outputs\\login-cancel-core\\full-flutter-remediation-accepted.log",
+    "log_sha256": "59b8588b9237bd91df656a708028946c61b6008244e8eca19ed8507da1ba1325"
+  },
+  "isolation": {
+    "directory": "E:\\openim\\outputs\\login-cancel-core\\frozen-suite-20261024",
+    "dart_file_count": 3373,
+    "snapshot_sha256": "daf51b361241cda25b1c079e894eed41107b8a51e74a2c314c2714412e8b3376",
+    "post_run_differences": {
+      "frozen": [],
+      "workspace": []
+    }
+  },
+  "core": {
+    "version": "v3.8.3-patch.15+recovery.53-group-pagination.1",
+    "source_files": 729,
+    "source_sha256": "4ba784cdf2c1f7d68f8c180ad211b12646103c9cab7b4d55a94d178a0b5c3f81",
+    "android_artifact_lock_check": "passed",
+    "source_lock_tests_passed": 15,
+    "cgo_packages_passed": [
+      "open_im_sdk",
+      "internal/group",
+      "internal/interaction",
+      "pkg/common"
+    ]
+  },
+  "static_analysis": "Changed test files and three product fixes passed; sticker fixture separately passed.",
+  "device_validation": "No new iOS/macOS build or physical-device startup P95 measurement in this remediation.",
+  "ledger": "E:\\openim\\outputs\\login-cancel-core\\failure-ledger.csv"
+}

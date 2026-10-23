@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 
@@ -480,24 +481,61 @@ class IMManager {
     int? status;
     if (checkLoginStatus) {
       // 1: logout 2: logging  3: logged
-      status = await getLoginStatus();
+      status = await getLoginStatus().timeout(const Duration(seconds: 5));
+      // A pending native session (e.g. after engine reattachment) is not a
+      // successful login and must not trigger a second native login call.
+      while (status == LoginStatus.logging) {
+        await Future<void>.delayed(const Duration(seconds: 5));
+        status = await getLoginStatus().timeout(const Duration(seconds: 5));
+      }
     }
     if (Platform.isAndroid ||
         (status != LoginStatus.logging && status != LoginStatus.logged)) {
-      await _channel.invokeMethod(
+      final loginOperationID = Utils.checkOperationID(operationID);
+      final nativeLogin = _channel.invokeMethod(
         'login',
         _buildParam({
           'userID': userID,
           'token': token,
-          'operationID': Utils.checkOperationID(operationID),
+          'operationID': loginOperationID,
         }),
       );
+      // Poll only one status request at a time. Native bridges use logged-in
+      // status to reconcile a missing login reply, without another login.
+      var checking = false;
+      var checks = 0;
+      final watchdog = Timer.periodic(const Duration(seconds: 5), (_) async {
+        if (checking) return;
+        checking = true;
+        try {
+          final status = await getLoginStatus();
+          checks++;
+          if (status != LoginStatus.logged && checks >= 4) {
+            // A cancellation timeout leaves the original login slot occupied.
+            // Only the native bridge's cleanup acknowledgement ends that call.
+            await _channel.invokeMethod('cancelLogin', _buildParam({
+              'operationID': Utils.checkOperationID(null),
+              'targetOperationID': loginOperationID,
+            }));
+          }
+        } catch (_) {
+          // A failed status read does not prove authentication failure.
+        } finally {
+          checking = false;
+        }
+      });
+      try {
+        await nativeLogin;
+      } finally {
+        watchdog.cancel();
+      }
     }
     this.isLogined = true;
     this.userID = userID;
     this.token = token;
     try {
-      return this.userInfo = await userManager.getSelfUserInfo();
+      return this.userInfo = await userManager.getSelfUserInfo()
+          .timeout(const Duration(seconds: 5));
     } catch (error, stackTrace) {
       log('login e: $error  s: $stackTrace');
       if (null != defaultValue) {

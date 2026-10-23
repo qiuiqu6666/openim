@@ -16,6 +16,7 @@ abstract final class WalletHomeTokens {
   static const double totalAmount = 28;
   static const double icon = 20;
   static const double coinLogo = 36;
+  static const double addressLogo = 36;
   static const double assetRowHeight = 72;
   static const double minTap = 48;
   static const double primaryActionHeight = 48;

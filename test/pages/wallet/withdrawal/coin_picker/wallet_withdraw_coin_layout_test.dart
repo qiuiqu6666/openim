@@ -9,11 +9,12 @@ void main() {
       (tester) async {
     await pumpWalletWithdrawCoins(tester, size: const Size(390, 350));
     expect(find.text('热门币种'), findsOneWidget);
-    for (final code in ['USDT', 'TRX', '99']) {
+    for (final code in ['USDT', '99']) {
       expect(withdrawCoinRow(code), findsOneWidget);
       expect(find.text(code), findsOneWidget);
       expect(withdrawCoinKey('all-$code'), findsNothing);
     }
+    expect(withdrawCoinRow('TRX'), findsNothing);
     for (final letter in ['9', 'T', 'U']) {
       expect(withdrawCoinKey('group-$letter'), findsNothing);
       expect(withdrawCoinKey('index-$letter'), findsNothing);
@@ -59,13 +60,13 @@ void main() {
         expect(withdrawCoinRow('USDT').hitTestable(), findsOneWidget);
         expect(tester.getSize(withdrawCoinRow('USDT')).height,
             greaterThanOrEqualTo(48));
-        await searchWithdrawCoins(tester, 'trx');
+        await searchWithdrawCoins(tester, 'usdt');
         tester.view.viewInsets = const FakeViewPadding(bottom: 360);
         await tester.pumpAndSettle();
         for (final item in [
           withdrawCoinKey('search'),
           withdrawCoinKey('cancel'),
-          withdrawCoinRow('TRX', section: 'search'),
+          withdrawCoinRow('USDT', section: 'search'),
         ]) {
           final rect = tester.getRect(item);
           expect(rect.left, greaterThanOrEqualTo(0));

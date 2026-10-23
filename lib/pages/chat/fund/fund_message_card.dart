@@ -47,6 +47,8 @@ class FundMessageCard extends StatelessWidget {
   bool get _settled =>
       claimedByMe || message.status == 'done' || message.status == 'refunded';
 
+  bool get _showOpenedTone => message.isPacket && !_exclusive && _settled;
+
   String? get _statusLabel {
     if (!statusResolved) return StrRes.fundOpenDetails;
     if (message.status == 'refunded') return StrRes.fundRefunded;
@@ -65,7 +67,7 @@ class FundMessageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final palette = FundCardPalette.forCard(
-      isPacket: message.isPacket,
+      biz: message.biz,
       settled: _settled,
       dark: Theme.of(context).brightness == Brightness.dark,
       highContrast: MediaQuery.highContrastOf(context),
@@ -173,7 +175,7 @@ class FundMessageCard extends StatelessWidget {
                                 colors: [palette.bodyHighlight, palette.body])
                             : null,
                         borderRadius: radius,
-                        boxShadow: message.isPacket && !_settled
+                        boxShadow: message.isPacket && !_showOpenedTone
                             ? [
                                 BoxShadow(
                                   color: palette.body.withValues(
@@ -216,7 +218,7 @@ class FundMessageCard extends StatelessWidget {
                                             ? recipient
                                             : null,
                                         isPacket: message.isPacket,
-                                        dimmed: message.isPacket && _settled,
+                                        dimmed: _showOpenedTone,
                                         palette: palette,
                                       ),
                                     ),
@@ -230,16 +232,9 @@ class FundMessageCard extends StatelessWidget {
                                         children: [
                                           Text(
                                             title,
-                                            maxLines: largeText ||
-                                                    _usesRecipientAvatar
-                                                ? null
-                                                : message.isPacket
-                                                    ? 1
-                                                    : 2,
-                                            overflow: largeText ||
-                                                    _usesRecipientAvatar
-                                                ? null
-                                                : TextOverflow.ellipsis,
+                                            maxLines: 1,
+                                            softWrap: false,
+                                            overflow: TextOverflow.ellipsis,
                                             style: TextStyle(
                                                 color: palette.title,
                                                 fontSize: titleSize,
@@ -333,8 +328,12 @@ class FundMessageCard extends StatelessWidget {
                                   _exclusive
                                       ? StrRes.fundExclusivePacket
                                       : message.isPacket
-                                          ? AppCopy.text('99Chat红包')
-                                          : '99Chat',
+                                          ? message.biz == 'packet_lucky'
+                                              ? StrRes.fundLuckyPacket
+                                              : AppCopy.text('普通红包')
+                                          : _groupTransfer
+                                              ? StrRes.fundGroupTransfer
+                                              : '99Chat',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: _footerStyle(palette),

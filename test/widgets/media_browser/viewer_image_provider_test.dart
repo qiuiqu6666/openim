@@ -98,6 +98,30 @@ void main() {
     expect(PaintingBinding.instance.imageCache.containsKey(image), isFalse);
     await server.close(force: true);
   });
+  test('detached cancelled request finishes without a global image error',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() => server.close(force: true));
+    final received = Completer<void>();
+    server.listen((request) => received.complete());
+    final image = ViewerImageProvider(
+        'http://127.0.0.1:${server.port}/detached',
+        cache: ViewerTestCache(),
+        createClient: () => _RealHttp().createHttpClient(null));
+    final stream = image.resolve(ImageConfiguration.empty);
+    final listener = ImageStreamListener((info, _) {
+      info.dispose();
+      fail('cancelled request decoded');
+    });
+    stream.addListener(listener);
+    await received.future.timeout(const Duration(seconds: 5));
+    stream.removeListener(listener);
+    image.cancel();
+    // Give the aborted socket and codec futures time to deliver their errors.
+    await Future<void>.delayed(const Duration(milliseconds: 50));
+    expect(PaintingBinding.instance.imageCache.containsKey(image), isFalse);
+  });
+
   test('decode budget preserves aspect ratio without upscaling', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     server.listen((request) async {

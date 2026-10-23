@@ -67,6 +67,9 @@ public class GameShieldClient {
     private final java.util.List<String> ranked = java.util.Collections.synchronizedList(new java.util.ArrayList<String>());
     private final ExecutorService pool = Executors.newCachedThreadPool();
     private volatile boolean running;
+    private final java.util.concurrent.atomic.AtomicBoolean stopped = new java.util.concurrent.atomic.AtomicBoolean();
+    private final Object lifecycleLock = new Object();
+    private final java.util.Set<HttpURLConnection> pendingHttp = java.util.concurrent.ConcurrentHashMap.newKeySet();
     private final java.util.List<ServerSocket> tcpListeners = new java.util.concurrent.CopyOnWriteArrayList<>();
     private final java.util.List<Session> tcpSessions = new java.util.concurrent.CopyOnWriteArrayList<>();
     // ---- 事件/上报/轻量化 ----
@@ -194,20 +197,28 @@ public class GameShieldClient {
         } catch (java.util.concurrent.ExecutionException e) {
             throw new IOException("nodes unavailable", e.getCause());
         }
+        synchronized (lifecycleLock) {
+        if (stopped.get()) throw new IOException("startup cancelled");
         running = true;
         for (int lp : ports.keySet()) {
             if ("udp".equals(protocol) || protocol.equals("all")) openUdpListener(lp);
             if (!"udp".equals(protocol)) openTcpListener(lp);
         }
         pool.execute(this::scheduleLoop);
+        }
         evt("start", "项目#" + projectId + " 端口" + ports.keySet(), "");
         } finally { initialNodes.cancel(true); }
     }
 
     public void stop() {
+        if (!stopped.compareAndSet(false, true)) return;
+        for (HttpURLConnection request : pendingHttp) request.disconnect();
+        pendingHttp.clear();
+        synchronized (lifecycleLock) {
         running = false;
         for (ServerSocket socket : tcpListeners) { try { socket.close(); } catch (IOException ignored) {} }
         tcpListeners.clear();
+        }
         for (Session session : tcpSessions) {
             session.dead = true;
             try { session.game.close(); } catch (IOException ignored) {}
@@ -901,8 +912,11 @@ public class GameShieldClient {
 
     // ================= HTTP =================
     JSONObject api(String path) throws IOException {
+        if (stopped.get()) throw new IOException("SDK stopped");
         URL u = new URL(cpBase + path);
         HttpURLConnection c = (HttpURLConnection) u.openConnection();
+        pendingHttp.add(c);
+        if (stopped.get()) { pendingHttp.remove(c); c.disconnect(); throw new IOException("SDK stopped"); }
         c.setConnectTimeout(8000); c.setReadTimeout(8000);
         try (InputStream in = c.getInputStream()) {
             ByteArrayOutputStream bo = new ByteArrayOutputStream();
@@ -910,6 +924,7 @@ public class GameShieldClient {
             while ((n = in.read(b)) > 0) bo.write(b, 0, n);
             return new JSONObject(bo.toString("UTF-8"));
         } catch (JSONException e) { throw new IOException("api-json: " + e); }
+        finally { pendingHttp.remove(c); c.disconnect(); }
     }
 
     /** JSON POST(事件批量上报用) */

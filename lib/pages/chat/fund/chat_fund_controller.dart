@@ -108,9 +108,17 @@ class ChatFundController {
         _certificateID() != _currentUserID()) {
       return const FundCardRecipient();
     }
+    final embedded =
+        _messageRecipient(message, expectedID: state?.recipient.userID);
     if (state != null && state.recipient.name.isNotEmpty) {
-      return state.recipient;
+      return FundCardRecipient(
+          userID: state.recipient.userID,
+          name: state.recipient.name,
+          faceURL: state.recipient.faceURL.isNotEmpty
+              ? state.recipient.faceURL
+              : embedded?.faceURL ?? '');
     }
+    if (embedded != null) return embedded;
     FundCardRecipient? saved;
     try {
       final currency = FundCurrency.parse(message.currency);
@@ -133,6 +141,23 @@ class ChatFundController {
 
   int? packetCount(FundMessageData message) =>
       message.isPacket ? _verifiedState(message)?.packetCount : null;
+
+  FundCardRecipient? _messageRecipient(FundMessageData message,
+      {String? expectedID}) {
+    if (message.biz != 'packet_exclusive' && message.biz != 'group_transfer') {
+      return null;
+    }
+    final snapshot = message.recipient;
+    if (snapshot == null ||
+        (expectedID != null && snapshot.userID != expectedID) ||
+        (snapshot.nickname.isEmpty && snapshot.faceURL.isEmpty)) {
+      return null;
+    }
+    return FundCardRecipient(
+        userID: snapshot.userID,
+        name: snapshot.nickname,
+        faceURL: snapshot.faceURL);
+  }
 
   final FundCardStateCache _stateCache;
   late final int _stateEpoch;
@@ -273,6 +298,23 @@ class ChatFundController {
         confirmedAt: _now());
     _confirmedHere[cacheKey] = _stateCache.read(cacheKey)!.revision;
     _refreshTimes[cacheKey] = _now();
+    final embedded = _messageRecipient(message, expectedID: order.recvID);
+    final currentRecipient = _stateCache.read(cacheKey)!.recipient;
+    if (embedded != null &&
+        (currentRecipient.name.isEmpty ||
+            (currentRecipient.faceURL.isEmpty &&
+                embedded.faceURL.isNotEmpty))) {
+      _stateCache.enrichRecipient(
+          cacheKey,
+          FundCardRecipient(
+              userID: embedded.userID,
+              name: currentRecipient.name.isNotEmpty
+                  ? currentRecipient.name
+                  : embedded.name,
+              faceURL: currentRecipient.faceURL.isNotEmpty
+                  ? currentRecipient.faceURL
+                  : embedded.faceURL));
+    }
     if ((order.biz == 'packet_exclusive' || order.biz == 'group_transfer') &&
         order.recvID.isNotEmpty &&
         _stateCache.read(cacheKey)!.recipient.name.isEmpty &&
@@ -302,7 +344,17 @@ class ChatFundController {
           ownerID == _certificateID() &&
           serverURL == _serverURL() &&
           recipient.userID == order.recvID) {
-        _stateCache.enrichRecipient(key, recipient);
+        final current = _stateCache.read(key)?.recipient;
+        _stateCache.enrichRecipient(
+            key,
+            FundCardRecipient(
+                userID: recipient.userID,
+                name: recipient.name.isNotEmpty
+                    ? recipient.name
+                    : current?.name ?? '',
+                faceURL: recipient.faceURL.isNotEmpty
+                    ? recipient.faceURL
+                    : current?.faceURL ?? ''));
       }
     } catch (_) {
       // Missing profiles leave a neutral recipient label, never a fake person.

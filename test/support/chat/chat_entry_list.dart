@@ -34,6 +34,7 @@ Widget buildChatEntryList(ChatLogic logic,
               };
               return ChatListView(
                 controller: logic.scrollController,
+                positionController: logic.messagePositionController,
                 loadOnInit: false,
                 hasMore: false,
                 enabledScrollTopLoad:
@@ -78,6 +79,7 @@ Widget buildChatEntryList(ChatLogic logic,
               TextField(
                 controller: logic.inputCtrl,
                 focusNode: logic.focusNode,
+                onTap: () => logic.scrollBottom(smooth: true),
               ),
             ]),
           ),

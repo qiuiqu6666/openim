@@ -12,7 +12,7 @@ import 'package:openim/pages/wallet/record/journals/wallet_journal_record_mapper
 import 'package:openim/pages/wallet/record/journals/widgets/wallet_journal_detail_body.dart';
 import 'package:openim/pages/wallet/record/wallet_record_detail_screen.dart';
 import 'package:openim/pages/wallet/widgets/wallet_99chat_tokens.dart';
-import 'package:openim_common/openim_common.dart' show Styles;
+import 'package:openim_common/openim_common.dart' show Styles, InAppBrowserPage;
 
 import '../../../../support/media/deferred_thumbnail_http.dart';
 import 'support/wallet_journal_detail_expectations.dart';
@@ -25,22 +25,24 @@ void main() {
   for (final brightness in Brightness.values) {
     testWidgets('received lucky packet displays sender nickname in $brightness',
         (tester) async {
-      final entry = WalletJournalEntry.fromJson(journalTestJson()..addAll({
-        'currency': 'BI99',
-        'bizType': 'packet_lucky',
-        'type': 'packet_received',
-        'direction': 'income',
-        'amount': '3000',
-        'availableDelta': '3000',
-        'frozenDelta': '0',
-        'assetDelta': '3000',
-        'counterpartyID': 'internal-packet-sender',
-      }));
+      final entry = WalletJournalEntry.fromJson(journalTestJson()
+        ..addAll({
+          'currency': 'BI99',
+          'bizType': 'packet_lucky',
+          'type': 'packet_received',
+          'direction': 'income',
+          'amount': '3000',
+          'availableDelta': '3000',
+          'frozenDelta': '0',
+          'assetDelta': '3000',
+          'counterpartyID': 'internal-packet-sender',
+        }));
       await _pump(tester,
           brightness: brightness,
           child: WalletRecordDetailScreen(
               item: entry.toWalletRecord(counterpartyNickname: '红包发送人昵称')));
-      expect(_text(tester, 'wallet-journal-detail-counterparty-user'), '红包发送人昵称');
+      expect(
+          _text(tester, 'wallet-journal-detail-counterparty-user'), '红包发送人昵称');
       expect(find.text('收到拼手气红包'), findsOneWidget);
       expect(find.text('internal-packet-sender'), findsNothing);
       expect(tester.takeException(), isNull);
@@ -49,21 +51,23 @@ void main() {
     testWidgets('exclusive packet shows full peer nickname in $brightness',
         (tester) async {
       const nickname = '对方用户的很长昵称用于检查大字号显示';
-      final entry = WalletJournalEntry.fromJson(journalTestJson()..addAll({
-        'bizType': 'packet_exclusive',
-        'type': 'packet_sent',
-        'direction': 'expense',
-        'availableDelta': '-8',
-        'frozenDelta': '0',
-        'assetDelta': '-8',
-        'counterpartyID': 'internal-packet-peer',
-      }));
+      final entry = WalletJournalEntry.fromJson(journalTestJson()
+        ..addAll({
+          'bizType': 'packet_exclusive',
+          'type': 'packet_sent',
+          'direction': 'expense',
+          'availableDelta': '-8',
+          'frozenDelta': '0',
+          'assetDelta': '-8',
+          'counterpartyID': 'internal-packet-peer',
+        }));
       await _pump(tester,
           brightness: brightness,
           textScale: 2,
           child: WalletRecordDetailScreen(
               item: entry.toWalletRecord(counterpartyNickname: nickname)));
-      expect(_text(tester, 'wallet-journal-detail-counterparty-user'), nickname);
+      expect(
+          _text(tester, 'wallet-journal-detail-counterparty-user'), nickname);
       expect(find.text('internal-packet-peer'), findsNothing);
       expect(tester.takeException(), isNull);
     });
@@ -154,14 +158,15 @@ void main() {
         await tester.ensureVisible(link);
         await tester.pumpAndSettle();
         await tester.tap(link);
-        await tester.pump();
-        expect(launches, hasLength(1));
-        expect(launches.single.method, 'launch');
-        final arguments = launches.single.arguments as Map;
-        expect(arguments['url'],
+        await tester.pumpAndSettle();
+        expect(launches, isEmpty);
+        expect(find.byType(InAppBrowserPage), findsOneWidget);
+        expect(
+            tester
+                .widget<InAppBrowserPage>(find.byType(InAppBrowserPage))
+                .uri
+                .toString(),
             'https://tronscan.org/transaction/$hash/overview');
-        expect(arguments['useWebView'], isFalse);
-        expect(arguments['useSafariVC'], isFalse);
         expect(tester.takeException(), isNull);
       });
     }

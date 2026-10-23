@@ -165,13 +165,15 @@ class ChatHistoryResultTile extends StatelessWidget {
         ? ChatExpiringContent(
             message: message,
             child: tile,
-            builder: (context, content, notice) => notice == null
+            builder: (context, content, notice) => message.hasExpired
                 ? _resultNotice(context, 'sdkExpired'.tr)
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [content, _resultNotice(context, notice)],
-                  ),
+                : notice == null
+                    ? content
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [content, _resultNotice(context, notice)],
+                      ),
           )
         : tile;
   }
@@ -239,13 +241,15 @@ class ChatHistoryResultTile extends StatelessWidget {
         ? ChatExpiringContent(
             message: message,
             child: tile,
-            builder: (context, content, notice) => notice == null
+            builder: (context, content, notice) => message.hasExpired
                 ? _voiceNotice(context, 'sdkExpired'.tr)
-                : Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [content, _voiceNotice(context, notice)],
-                  ),
+                : notice == null
+                    ? content
+                    : Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [content, _voiceNotice(context, notice)],
+                      ),
           )
         : tile;
   }

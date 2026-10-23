@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 import 'package:flutter/widgets.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -74,6 +75,11 @@ Future<VoicePlaybackSource> remoteSource(Message message) async =>
     VoicePlaybackSource.remote(message.soundElem!.sourceUrl!);
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUpAll(() async {
+    SharedPreferences.setMockInitialValues({});
+    await MediaCoordinator.instance.initialize();
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   test('completion plays next chronological audio across other messages',
       () async {

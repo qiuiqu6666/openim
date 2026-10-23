@@ -1,4 +1,6 @@
+import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:io';
+import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -82,7 +84,8 @@ class _Conversations extends GetxController
   }
 
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {
     organizerRefreshes++;
   }
 
@@ -154,6 +157,25 @@ Future<void> _mount(
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() {
+    const channel = MethodChannel('flutter_openim_sdk');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'getLocalHistorySnapshot');
+      return jsonEncode(
+          AdvancedMessage(messageList: [], isEnd: true, errCode: 0).toJson());
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+  });
+  setUp(() {
+    final previous = VisibilityDetectorController.instance.updateInterval;
+    VisibilityDetectorController.instance.updateInterval = Duration.zero;
+    addTearDown(
+        () => VisibilityDetectorController.instance.updateInterval = previous);
+  });
   TestWidgetsFlutterBinding.ensureInitialized();
   setUp(() {
     Get.testMode = true;

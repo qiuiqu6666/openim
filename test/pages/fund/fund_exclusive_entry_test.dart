@@ -15,6 +15,26 @@ class _Settings extends StubSettingsService {
 }
 
 class _Api extends FundApi {
+  @override
+  Future<Map<String, dynamic>> requestData(String path,
+      {String method = 'POST',
+      Map<String, dynamic>? data,
+      Map<String, dynamic>? queryParameters,
+      bool mutation = false}) async {
+    if (path != '/chat/fund/withdrawal-security/check') {
+      throw StateError('Unexpected $path');
+    }
+    return {
+      'smsRequired': false,
+      'reasons': <String>[],
+      'blockedUntil': 0,
+      'phoneMasked': '',
+      'currency': (data!['packet'] as Map)['currency'],
+      'smsThreshold': '5',
+      'cooldownHours': 2
+    };
+  }
+
   final packets = <Map<String, Object?>>[];
 
   @override
@@ -40,6 +60,8 @@ class _Api extends FundApi {
     String? groupID,
     String? remark,
     required String payPassword,
+    String? verifyChallengeID,
+    String? verifyCode,
   }) async {
     packets.add({
       'clientOrderID': clientOrderID,

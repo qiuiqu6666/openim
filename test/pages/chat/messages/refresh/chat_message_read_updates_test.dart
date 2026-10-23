@@ -29,6 +29,8 @@ Message _message(String id) => Message.fromJson({
 
 class _TileLogic extends GetxController implements ChatLogic {
   @override
+  bool canStopMediaSend(Message message) => false;
+  @override
   Message resolveGroupNotice(Message message) => message;
   @override
   bool get isChannel => false;

@@ -1,3 +1,4 @@
+import 'package:visibility_detector/visibility_detector.dart';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:ui' as ui;
@@ -105,7 +106,8 @@ class _Conversations extends GetxController
   @override
   void createGroup() {}
   @override
-  Future<void> refreshOrganizer({bool userInitiated = true, String source = 'manual'}) async {}
+  Future<void> refreshOrganizer(
+      {bool userInitiated = true, String source = 'manual'}) async {}
 
   @override
   Future<bool> createFolder(String name) async {
@@ -279,7 +281,8 @@ Future<void> _enablePeekHistory() async {
   const channel = MethodChannel('flutter_openim_sdk');
   TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
       .setMockMethodCallHandler(channel, (call) async {
-    expect(call.method, 'getAdvancedHistoryMessageList');
+    expect(call.method,
+        anyOf('getAdvancedHistoryMessageList', 'getLocalHistorySnapshot'));
     return jsonEncode(AdvancedMessage(
       messageList: [
         Message.fromJson({
@@ -309,6 +312,28 @@ Future<void> _enablePeekHistory() async {
 }
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  setUp(() async {
+    SharedPreferences.setMockInitialValues({});
+    await DataSp.init();
+    ChatHistoryCache.clear();
+    const channel = MethodChannel('flutter_openim_sdk');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'getLocalHistorySnapshot');
+      return jsonEncode(
+          AdvancedMessage(messageList: [], isEnd: true, errCode: 0).toJson());
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding
+        .instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, null));
+  });
+  setUp(() {
+    final previous = VisibilityDetectorController.instance.updateInterval;
+    VisibilityDetectorController.instance.updateInterval = Duration.zero;
+    addTearDown(
+        () => VisibilityDetectorController.instance.updateInterval = previous);
+  });
   for (final groupChats in [false, true]) {
     testWidgets(
         'All follows its tab while folders include both chat types ($groupChats)',

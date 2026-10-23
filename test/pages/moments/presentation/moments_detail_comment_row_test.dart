@@ -55,7 +55,7 @@ void main() {
     final name = tester.widget<Text>(find.text('Remark Name'));
     expect(name.style!.fontSize, 14);
     expect(name.style!.fontWeight, FontWeight.w600);
-    expect(name.style!.color, const Color(0xFF374151));
+    expect(name.style!.color, const Color(0xFF576B95));
     final body = tester.widget<Text>(_body());
     expect(body.textSpan!.toPlainText(), 'A comment');
     expect(body.maxLines, 3);

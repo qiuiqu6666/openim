@@ -14,6 +14,7 @@ import 'node_availability_probe.dart';
 import 'node_endpoint.dart';
 import 'startup_node_selection.dart';
 import 'route_history.dart';
+import 'startup/startup_network_preparation.dart';
 
 /// One coordinator for all node pages, reusing the existing SDK session owner.
 class ManualNodeSwitchRuntime {
@@ -38,7 +39,11 @@ class ManualNodeSwitchRuntime {
       return (user, token, DataSp.chatToken);
     },
     canSwitch: () =>
-        Get.isRegistered<IMController>() && !Get.find<IMController>().isBusy,
+        (!Get.isRegistered<StartupNetworkPreparation>() ||
+            Get.find<StartupNetworkPreparation>().handoffComplete) &&
+        Get.isRegistered<IMController>() &&
+        !Get.find<IMController>().sessionTransitionBusy &&
+        !Get.find<IMController>().isBusy,
     connect: reconnect,
   );
 

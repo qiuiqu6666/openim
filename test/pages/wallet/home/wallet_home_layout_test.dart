@@ -36,7 +36,7 @@ void main() {
             final rect = tester.getRect(walletHomeKey(key));
             expect(rect.left, greaterThanOrEqualTo(0));
             expect(rect.right, lessThanOrEqualTo(width));
-            expect(rect.height, greaterThanOrEqualTo(48), reason: key);
+            expect(rect.height, greaterThanOrEqualTo(48 - 1e-6), reason: key);
           }
           _expectCompleteTotal(tester, width);
           await tester
@@ -203,7 +203,23 @@ void _expectCompleteTotal(WidgetTester tester, double width,
   final paragraph = tester.renderObject<RenderParagraph>(target);
   expect(paragraph.didExceedMaxLines, isFalse,
       reason: 'The total estimate must show every digit at large text sizes.');
-  final rect = tester.getRect(target);
+  // The total intentionally scrolls horizontally so every digit stays readable.
+  final viewport = find
+      .ancestor(
+          of: target,
+          matching: find.byWidgetPredicate((widget) =>
+              widget is SingleChildScrollView &&
+              widget.scrollDirection == Axis.horizontal))
+      .first;
+  final rect = tester.getRect(viewport);
   expect(rect.left, greaterThanOrEqualTo(0));
   expect(rect.right, lessThanOrEqualTo(width));
+  final scrollable =
+      find.descendant(of: viewport, matching: find.byType(Scrollable)).first;
+  final position = tester.state<ScrollableState>(scrollable).position;
+  expect(
+      position.maxScrollExtent,
+      closeTo(
+          (tester.getSize(target).width - rect.width).clamp(0, double.infinity),
+          .01));
 }

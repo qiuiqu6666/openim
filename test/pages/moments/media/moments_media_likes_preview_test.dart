@@ -51,6 +51,7 @@ void main() {
         addTearDown(fixture.dispose);
         addTearDown(Get.reset);
         final post = fixture.api.posts[momentsUiFriendPostId]!;
+        await fixture.repository.loadFriends();
         fixture.repository.applyPost(post);
         final pending = Completer<Uint8List>();
         fixture.api.mediaWork = (_, __) async {

@@ -7,6 +7,7 @@ import 'package:get/get.dart';
 import 'package:openim/pages/chat/fund/chat_fund_controller.dart';
 import 'package:openim/pages/chat/fund/fund_card_recipient.dart';
 import 'package:openim/pages/chat/fund/fund_card_state_cache.dart';
+import 'package:openim/services/fund_models.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -60,6 +61,125 @@ void main() {
   });
 
   for (final biz in ['group_transfer', 'packet_exclusive']) {
+    Message snapshotMessage({Object? recipient}) => Message.fromJson({
+          'clientMsgID': 'snapshot-$biz',
+          'contentType': MessageType.custom,
+          'customElem': {
+            'data': jsonEncode({
+              'orderID': 'order',
+              'biz': biz,
+              'currency': 'USDT',
+              'amount': '1.000001',
+              'status': 'open',
+              'recipient': recipient ??
+                  {
+                    'userID': 'friend',
+                    'nickname': '公开昵称',
+                    'faceURL': 'https://example.com/avatar.png',
+                  },
+            }),
+          },
+        });
+
+    test('$biz displays embedded profile immediately and skips SDK lookup',
+        () async {
+      final pending = Completer<FundOrder>();
+      var lookups = 0;
+      final h = fixtures.Harness(
+        getOrder: (_) => pending.future,
+        resolveRecipient: (_, __) async {
+          lookups++;
+          return const FundCardRecipient(userID: 'friend', name: 'Fallback');
+        },
+      );
+      addTearDown(h.controller.close);
+      final message = snapshotMessage();
+      final data = FundMessageData.tryParse(message.customElem!.data)!;
+      expect(h.controller.cardRecipient(data).name, '公开昵称');
+      expect(h.controller.cardRecipient(data).faceURL,
+          'https://example.com/avatar.png');
+      h.controller.setVisible(message, true);
+      expect(h.controller.cardRecipient(data).name, '公开昵称');
+      expect(lookups, 0);
+      pending.complete(fixtures.order(biz: biz, recvID: 'friend'));
+      await fixtures.settle();
+      expect(lookups, 0);
+      expect(
+          h.controller.cardRecipient(h.controller.messageData(message)!).name,
+          '公开昵称');
+      expect(data.copyWith(status: 'done').recipient?.nickname, '公开昵称');
+      h.owner = h.certificate = 'other-account';
+      h.controller.close();
+      expect(h.controller.cardRecipient(data).name, isEmpty);
+    });
+
+    test('$biz rejects snapshot identity after authoritative order mismatch',
+        () async {
+      var lookups = 0;
+      final h = fixtures.Harness(
+        getOrder: (_) async => fixtures.order(biz: biz, recvID: 'actual'),
+        resolveRecipient: (_, __) async {
+          lookups++;
+          return const FundCardRecipient(userID: 'actual', name: '真实收款人');
+        },
+      );
+      addTearDown(h.controller.close);
+      final message = snapshotMessage();
+      final data = FundMessageData.tryParse(message.customElem!.data)!;
+      h.controller.setVisible(message, true);
+      await fixtures.settle();
+      expect(lookups, 1);
+      expect(h.controller.cardRecipient(data).name, '真实收款人');
+      expect(h.controller.cardRecipient(data).userID, 'actual');
+    });
+
+    test('$biz keeps embedded avatar when fallback resolves only a name',
+        () async {
+      var lookups = 0;
+      final h = fixtures.Harness(
+        getOrder: (_) async => fixtures.order(biz: biz, recvID: 'friend'),
+        resolveRecipient: (_, __) async {
+          lookups++;
+          return const FundCardRecipient(userID: 'friend', name: '补齐的昵称');
+        },
+      );
+      addTearDown(h.controller.close);
+      final message = snapshotMessage(recipient: {
+        'userID': 'friend',
+        'faceURL': 'https://example.com/avatar.png',
+      });
+      final data = FundMessageData.tryParse(message.customElem!.data)!;
+      expect(h.controller.cardRecipient(data).faceURL,
+          'https://example.com/avatar.png');
+      h.controller.setVisible(message, true);
+      await fixtures.settle();
+      expect(lookups, 1);
+      expect(h.controller.cardRecipient(data).name, '补齐的昵称');
+      expect(h.controller.cardRecipient(data).faceURL,
+          'https://example.com/avatar.png');
+    });
+
+    test('$biz malformed optional metadata preserves legacy money parsing', () {
+      for (final value in [
+        'wrong',
+        {'userID': 123},
+        {'userID': ''},
+      ]) {
+        final message = snapshotMessage(recipient: value);
+        final data = FundMessageData.tryParse(message.customElem!.data)!;
+        expect(data.amount, '1.000001');
+        expect(data.recipient, isNull);
+      }
+      final data = FundMessageData.tryParse(snapshotMessage(recipient: {
+        'userID': 'friend',
+        'nickname': 123,
+        'faceURL': 'file:///private/avatar.png',
+      }).customElem!.data)!;
+      expect(data.recipient?.userID, 'friend');
+      expect(data.recipient?.nickname, isEmpty);
+      expect(data.recipient?.faceURL, isEmpty);
+    });
+
     test('$biz restores recipient before any order request after restart',
         () async {
       final first = fixtures.Harness(

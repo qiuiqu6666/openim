@@ -36,7 +36,8 @@ Message _message(String id, int sequence, {String? text}) => Message.fromJson({
       'recvID': 'self',
       'senderNickname': 'Peer',
       'sendTime': 1700000000000 + sequence * 1000,
-      'seq': sequence,
+      // Older pages still carry positive server sequence numbers.
+      'seq': 1000 + sequence,
       'status': MessageStatus.succeeded,
       'isRead': false,
       'textElem': {'content': text ?? id},
@@ -356,12 +357,15 @@ void main() {
     ]);
     await initial;
     await tester.pumpAndSettle();
-    final latestRect = tester.getRect(_row('latest-29'));
+    final controller = tester.widget<ListView>(_historyView).controller!;
+    controller.jumpTo(controller.position.maxScrollExtent - 100);
+    await tester.pump();
+    final (retryAnchor, latestRect) = _visibleAnchor(tester);
     final older = loader.loadOlder();
     history.reads.last.response.completeError(StateError('older unavailable'));
     expect(await older, isFalse);
     await tester.pumpAndSettle();
-    expect(tester.getRect(_row('latest-29')), latestRect);
+    expect(tester.getRect(_row(retryAnchor)), latestRect);
     await tester
         .tap(find.byKey(const ValueKey('conversation-peek-older-retry')));
     await tester.pump();
@@ -373,14 +377,16 @@ void main() {
     await tester.pumpAndSettle();
     expect(history.reads.map((read) => read.cursor),
         [null, 'latest-0', 'latest-0']);
-    expect(tester.getRect(_row('latest-29')), latestRect);
+    expect(tester.getRect(_row(retryAnchor)), latestRect);
 
-    final controller = tester.widget<ListView>(_historyView).controller!;
     controller.jumpTo(controller.position.maxScrollExtent - 100);
     await tester.drag(_historyView, const Offset(0, 200));
     await tester.pump();
     expect(history.reads, hasLength(4));
     expect(history.reads.last.cursor, 'older--10');
+    controller.jumpTo(controller.position.maxScrollExtent - 80);
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
     final (anchorID, anchorRect) = _visibleAnchor(tester);
     final pagination = loader.loadOlder();
     history.reads.last.complete([
@@ -512,12 +518,15 @@ void main() {
         tester.widget<ChatVoiceMessageView>(find.byType(ChatVoiceMessageView));
     expect(voiceView.readOnly, isTrue);
     expect(voiceView.onPlayed, isNull);
-    expect(voiceView.playback, isNull);
+    expect(voiceView.playback?.playing, isFalse);
+    expect(voiceView.playback?.current, isNull);
     expect(find.byType(ChatVideoThumbnail), findsOneWidget);
     expect(find.byType(VideoPlayer), findsNothing);
     await tester.tap(find.byType(ChatVoiceMessageView), warnIfMissed: false);
     await tester.tap(find.byType(ChatVideoThumbnail), warnIfMissed: false);
     await tester.pumpAndSettle();
+    expect(voiceView.playback?.playing, isFalse);
+    expect(voiceView.playback?.current, isNull);
     expect(voice.isRead, isFalse);
     expect(video.isRead, isFalse);
     expect(find.byType(VideoPlayer), findsNothing);

@@ -80,7 +80,7 @@ void main() {
       expect(find.text(StrRes.rejected), findsOneWidget);
       expect(find.text('审核'), findsOneWidget);
       final label = tester.widget<Text>(find.text('处理管理员：阿秋的新昵称'));
-      expect(label.style!.color, AppTokens.textSecondary(dark: Styles.isDark));
+      expect(label.style!.color, AppTokens.accent);
       expect(tester.takeException(), isNull);
     });
   }

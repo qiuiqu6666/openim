@@ -283,6 +283,7 @@ Future<void> _choosePickerKind(WidgetTester tester, FavoriteKind kind) async {
 }
 
 void main() {
+  tearDown(() => EasyLoading.dismiss(animation: false));
   setUpAll(() async {
     if (_exportPreview) await _loadPreviewFonts();
   });
@@ -301,6 +302,9 @@ void main() {
     await tester.tap(find.text('打开收藏'));
     await tester.pumpAndSettle();
     expect(find.text('收藏'), findsOneWidget);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pump();
     expect(
@@ -308,12 +312,17 @@ void main() {
             .progressIndicatorTheme
             .color,
         AppTokens.accent);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     expect(calls, 1);
     result
         .complete(const FavoriteSendResult(status: FavoriteSendStatus.success));
     await tester.pumpAndSettle();
     expect(find.byType(FavoritePickerSheet), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets('open picker keeps its sender when the widget target changes',
@@ -339,6 +348,9 @@ void main() {
     target.value = const FavoriteTarget(
         conversationID: 'c_b', userID: 'b', displayName: '李四');
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(destinations, ['c_a']);
@@ -708,6 +720,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byKey(const ValueKey('favorite-preview-favorite_1')),
         findsNothing);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pumpAndSettle();
     expect(find.byType(FavoriteDetailPage), findsOneWidget);
@@ -719,10 +734,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(FavoritePickerSheet), findsOneWidget);
     expect(calls, 0);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(calls, 1);
     expect(find.byType(FavoritePickerSheet), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(
@@ -752,9 +772,15 @@ void main() {
                 find.byKey(const ValueKey('favorite-send-favorite_1')))
             .onPressed,
         isNull);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(calls, 0);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pumpAndSettle();
     expect(find.byType(FavoriteDetailPage), findsOneWidget);
@@ -780,10 +806,16 @@ void main() {
     })));
     await tester.tap(find.text('打开收藏'));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(find.text('暂时无法发送'), findsOneWidget);
     expect(find.byType(FavoritePickerSheet), findsOneWidget);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(calls, 2);
@@ -801,8 +833,14 @@ void main() {
     })));
     await tester.tap(find.text('打开收藏'));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(calls, 1);
@@ -822,6 +860,9 @@ void main() {
               status: FavoriteSendStatus.failed, errorCode: 'CANCELLED');
         })));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pumpAndSettle();
     expect(find.byType(FavoriteDetailPage), findsOneWidget);
@@ -963,17 +1004,28 @@ void main() {
     })));
     await tester.tap(find.text('打开收藏'));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-reconcile')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-reconcile')));
     await tester.pumpAndSettle();
     expect(attempts, ['attempt-1']);
     expect(sends, 1);
     expect(find.textContaining('继续发送剩余内容'), findsOneWidget);
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-send-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-send-favorite_1')));
     await tester.pumpAndSettle();
     expect(sends, 2);
     expect(find.byType(FavoritePickerSheet), findsNothing);
+    await tester.pump(const Duration(seconds: 3));
+    await tester.pumpAndSettle();
   });
 
   testWidgets(
@@ -1009,6 +1061,9 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('favorites-edit')));
     await tester.pumpAndSettle();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_2')));
     await tester.pumpAndSettle();
@@ -1174,6 +1229,9 @@ void main() {
     final initial = repository.requests.length;
     await tester.tap(find.byKey(const ValueKey('favorites-edit')));
     await tester.pump();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
+    await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorites-send-selected')));
@@ -1182,6 +1240,9 @@ void main() {
     expect(find.byKey(const ValueKey('favorites-send-selected')), findsNothing);
     expect(find.text('内容已更新，请重新选择发送目标'), findsOneWidget);
     await tester.tap(find.byKey(const ValueKey('favorites-edit')));
+    await tester.pump();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pump();
@@ -1214,6 +1275,9 @@ void main() {
         })));
     await tester.pumpAndSettle();
     await tester.tap(find.byKey(const ValueKey('favorites-edit')));
+    await tester.pump();
+    await tester
+        .ensureVisible(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pump();
     await tester.tap(find.byKey(const ValueKey('favorite-favorite_1')));
     await tester.pump();

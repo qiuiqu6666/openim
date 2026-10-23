@@ -16,7 +16,6 @@ import 'package:openim/pages/contacts/select_contacts/friend_list/group_contact_
 import 'package:openim/pages/contacts/select_contacts/select_contacts_logic.dart';
 import 'package:openim/pages/global_search/global_search_logic.dart';
 import 'package:openim/pages/global_search/global_search_view.dart';
-import 'package:openim/pages/global_search/loading/global_search_skeleton.dart';
 import 'package:openim/services/common_group_count_service.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -216,7 +215,7 @@ void main() {
   });
 
   testWidgets(
-      'search loading reserves a stable surface until sections are ready',
+      'search shows completed sections progressively and retains its header',
       (tester) async {
     final source = _StaggeredSearch();
     final logic = Get.put(GlobalSearchLogic(source: source));
@@ -235,15 +234,15 @@ void main() {
     final header = find.byKey(const ValueKey('global-search-header'));
     final conversation = find.byKey(const ValueKey('global-search-section-3'));
     final initialHeader = tester.getRect(header);
-    expect(conversation, findsNothing);
-    expect(find.byType(GlobalSearchSkeleton), findsOneWidget);
+    expect(conversation, findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
 
     source.friendReply.complete([
       FriendInfo(userID: 'audit-friend', nickname: 'Late friend result'),
     ]);
     await tester.pump();
-    expect(conversation, findsNothing);
-    expect(find.byType(GlobalSearchSkeleton), findsOneWidget);
+    expect(conversation, findsOneWidget);
+    expect(find.byType(LinearProgressIndicator), findsOneWidget);
     expect(tester.getRect(header), initialHeader);
     source.groupReply.complete([
       GroupInfo(groupID: 'audit-group', groupName: 'Late group result'),
@@ -252,7 +251,7 @@ void main() {
     await tester.pump();
     final withGroup = tester.getRect(conversation);
     expect(withGroup.top, greaterThanOrEqualTo(initialHeader.bottom));
-    expect(find.byType(GlobalSearchSkeleton), findsNothing);
+    expect(find.byType(LinearProgressIndicator), findsNothing);
     expect(tester.getRect(header), initialHeader);
     expect(logic.query.value, 'audit');
     expect(logic.index.value, 1);

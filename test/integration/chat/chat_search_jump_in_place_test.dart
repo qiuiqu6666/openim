@@ -233,7 +233,7 @@ class _Harness {
     unawaited(Get.to<void>(() => ChatHistoryResultsPage(
         conversationID: 'chat',
         category: ChatHistoryCategory.date,
-        date: _day,
+        // Unscoped results reuse the chat; dated/member scopes retain their route.
         source: _ResultSource(target))));
     await tester.pumpAndSettle();
     expect(routes.active, hasLength(3));
@@ -296,7 +296,7 @@ void main() {
     harness = _Harness();
     await harness.initialize();
   });
-  void _chatTest(
+  void chatTest(
       String description, Future<void> Function(WidgetTester tester) body) {
     testWidgets(description, (tester) async {
       try {
@@ -313,7 +313,7 @@ void main() {
   }
 
   for (final brightness in Brightness.values) {
-    _chatTest(
+    chatTest(
         'loaded search result reuses the real chat, draft and route / ${brightness.name}',
         (tester) async {
       final target = _message('loaded-search-target');
@@ -343,7 +343,7 @@ void main() {
     });
   }
 
-  _chatTest(
+  chatTest(
       'unloaded result opens an SDK window and dragging its edges loads both directions',
       (tester) async {
     await harness.mount(tester, _latest());
@@ -401,7 +401,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _chatTest('chat entry searchMessage supersedes a late initial latest page',
+  chatTest('chat entry searchMessage supersedes a late initial latest page',
       (tester) async {
     final target = _message('entry-search-target');
     await harness.mount(tester, _latest(),
@@ -422,7 +422,7 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  _chatTest(
+  chatTest(
       'cached entry search target still supersedes the pending initial latest page',
       (tester) async {
     final target = _message('cached-entry-target');
@@ -445,7 +445,7 @@ void main() {
   });
 
   for (final interruption in ['clear', 'close', 'account']) {
-    _chatTest('$interruption rejects late search-target history and highlight',
+    chatTest('$interruption rejects late search-target history and highlight',
         (tester) async {
       await harness.mount(tester, _latest());
       final target = _message('late-search-target');
@@ -473,7 +473,7 @@ void main() {
     });
   }
 
-  _chatTest(
+  chatTest(
       'expired, deleted and other-chat search targets cannot replace the chat',
       (tester) async {
     await harness.mount(tester, _latest());

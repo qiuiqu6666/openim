@@ -49,11 +49,15 @@ class _ImageRequest extends Fake implements HttpClientRequest {
   final headers = _ImageHeaders();
   @override
   Future<HttpClientResponse> close() async => _ImageResponse();
+  @override
+  void abort([Object? exception, StackTrace? stackTrace]) {}
 }
 
 class _ImageClient extends Fake implements HttpClient {
   @override
   set autoUncompress(bool value) {}
+  @override
+  set connectionTimeout(Duration? value) {}
   @override
   Future<HttpClientRequest> getUrl(Uri url) async => _ImageRequest();
   @override

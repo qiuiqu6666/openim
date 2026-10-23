@@ -10,9 +10,9 @@ void main() {
         api: WalletTestFundApi(), size: const Size(390, 350));
     expect(find.text('热门币种'), findsOneWidget);
     expect(coinRow('USDT'), findsOneWidget);
-    expect(coinRow('TRX'), findsOneWidget);
+    expect(coinRow('TRX'), findsNothing);
     expect(find.text('USDT'), findsOneWidget);
-    expect(find.text('TRX'), findsOneWidget);
+    expect(find.text('TRX'), findsNothing);
     for (final code in ['USDT', 'TRX']) {
       expect(coinKey('wallet-deposit-coin-all-$code'), findsNothing);
     }
@@ -62,18 +62,18 @@ void main() {
         expect(coinRow('USDT').hitTestable(), findsOneWidget);
         expect(
             tester.getSize(coinRow('USDT')).height, greaterThanOrEqualTo(48));
-        await searchCoins(tester, 'trx');
+        await searchCoins(tester, 'usdt');
         tester.view.viewInsets = const FakeViewPadding(bottom: 360);
         await tester.pumpAndSettle();
         final search = tester.getRect(coinKey('wallet-deposit-coin-search'));
         final cancel = tester.getRect(coinKey('wallet-deposit-coin-cancel'));
-        final row = tester.getRect(coinRow('TRX', searching: true));
+        final row = tester.getRect(coinRow('USDT', searching: true));
         for (final rect in [search, cancel, row]) {
           expect(rect.left, greaterThanOrEqualTo(0));
           expect(rect.right, lessThanOrEqualTo(320));
           expect(rect.bottom, lessThanOrEqualTo(844 - 360));
         }
-        expect(coinRow('TRX', searching: true).hitTestable(), findsOneWidget);
+        expect(coinRow('USDT', searching: true).hitTestable(), findsOneWidget);
         expect(coinKey('wallet-deposit-coin-cancel').hitTestable(),
             findsOneWidget);
         await tester.tap(coinKey('wallet-deposit-coin-cancel'));

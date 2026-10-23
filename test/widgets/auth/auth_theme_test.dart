@@ -1,3 +1,4 @@
+import 'package:openim/widgets/auth/auth_agreement.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -146,7 +147,7 @@ void main() {
               bytes: null, enabled: true, picking: false, onPick: () {}),
           const RegistrationStepHeading(label: 'Profile', step: 2),
           const RegisterPasswordChecklist(password: 'Password1'),
-          const RegisterAgreement(),
+          const AuthAgreement(accepted: true, onChanged: null),
         ])),
       ));
       expect(

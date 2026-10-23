@@ -12,6 +12,7 @@ interface CoreLifecycle {
     void unInitSDK(String operation);
     long getLoginStatus(String operation);
     void login(Base callback, String operation, String user, String token);
+    void cancelLogin(Base callback, String operation, String target);
     void logout(Base callback, String operation);
     void getOneConversation(Base callback, String operation, int type, String source);
     void getSelfUserInfo(Base callback, String operation);

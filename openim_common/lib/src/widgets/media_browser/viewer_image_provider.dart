@@ -70,7 +70,8 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
   ImageStreamCompleter loadImage(
       ViewerImageProvider key, ImageDecoderCallback decode) {
     final chunks = StreamController<ImageChunkEvent>();
-    return MultiFrameImageStreamCompleter(
+    return _ViewerImageStreamCompleter(
+      cancelled: () => _cancelled,
       codec: _load(decode, chunks).whenComplete(chunks.close),
       chunkEvents: chunks.stream,
       scale: 1,
@@ -169,5 +170,36 @@ class ViewerImageProvider extends ImageProvider<ViewerImageProvider> {
     }
     _check();
     return bytes;
+  }
+}
+
+/// Cancellation after the owning view detaches is expected. Keep delivering
+/// failures to active consumers, and keep reporting all non-cancellation errors.
+class _ViewerImageStreamCompleter extends MultiFrameImageStreamCompleter {
+  _ViewerImageStreamCompleter({
+    required this.cancelled,
+    required super.codec,
+    required super.chunkEvents,
+    required super.scale,
+  });
+
+  final bool Function() cancelled;
+
+  @override
+  void reportError({
+    DiagnosticsNode? context,
+    required Object exception,
+    StackTrace? stack,
+    InformationCollector? informationCollector,
+    bool silent = false,
+  }) {
+    if (cancelled() && !hasListeners) return;
+    super.reportError(
+      context: context,
+      exception: exception,
+      stack: stack,
+      informationCollector: informationCollector,
+      silent: silent,
+    );
   }
 }

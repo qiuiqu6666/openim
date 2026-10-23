@@ -223,7 +223,7 @@ void main() {
       expect(sources, [FriendAddSource.qrcode, FriendAddSource.link]);
       expect(copied.single, startsWith('你好，我是$_account\n'));
       final uri = Uri.parse(copied.single.split('我的好友邀请：').last);
-      expect(uri.scheme, 'openim');
+      expect(uri.scheme, 'chat99');
       expect(uri.host, 'user');
       expect(uri.pathSegments, [_internalId]);
       expect(uri.queryParameters,

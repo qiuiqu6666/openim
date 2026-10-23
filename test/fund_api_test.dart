@@ -471,7 +471,8 @@ void main() {
       expect(requests.single.data.containsKey('shareCount'), false);
     });
 
-    test('balances use GET and enforce all three server balances', () async {
+    test('balances use GET and preserve only balances supplied by the server',
+        () async {
       response = {
         'errCode': 0,
         'data': {
@@ -490,7 +491,7 @@ void main() {
       expect(requests.single.method, 'GET');
       expect(requests.single.data, isNull);
       response['data'] = {'balances': []};
-      await expectLater(api.fetchBalances(), throwsFormatException);
+      expect(await api.fetchBalances(), isEmpty);
     });
 
     test(

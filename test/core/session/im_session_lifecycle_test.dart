@@ -134,6 +134,8 @@ void main() {
   late String nativeAccount;
   late bool nativeLogged;
   Future<void> Function()? cleanup;
+  Completer<void>? loginGate;
+  Completer<bool>? initGate;
   String? rejectedLoginCode;
   var statusQueries = 0;
   setUp(() async {
@@ -153,15 +155,21 @@ void main() {
     nativeAccount = 'none';
     nativeLogged = false;
     cleanup = null;
+    loginGate = null;
+    initGate = null;
     rejectedLoginCode = null;
     statusQueries = 0;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(sdk, (call) async {
       switch (call.method) {
+        case 'initSDK':
+          nativeCalls.add('initSDK');
+          return initGate?.future ?? Future.value(false);
         case 'getLoginStatus':
           statusQueries++;
           return nativeLogged ? LoginStatus.logged : LoginStatus.logout;
         case 'login':
+          await loginGate?.future;
           nativeAccount = (call.arguments as Map)['userID'] as String;
           nativeLogged = true;
           nativeCalls.add('login:$nativeAccount');
@@ -194,6 +202,43 @@ void main() {
     expect(await logic.refreshMyFullInfo(), isFalse);
     expect(profiles.replies, isEmpty);
     logic.onClose();
+  });
+
+  testWidgets('parallel initializers share one native Core initialization',
+      (tester) async {
+    await tester.runAsync(() async {
+      Config.cachePath = 'test-cache/';
+      final logic = IMController();
+      initGate = Completer<bool>();
+      final first = logic.initOpenIM();
+      expect(logic.initOpenIM(), same(first));
+      expect(logic.sessionTransitionBusy, isTrue);
+      await _flush();
+      expect(nativeCalls.where((c) => c == 'initSDK').length, 1);
+      initGate!.complete(false);
+      expect(await first, isFalse);
+      expect(logic.sessionTransitionBusy, isFalse);
+      logic.onClose();
+    });
+  });
+
+  testWidgets('login keeps route transition locked until native login settles',
+      (tester) async {
+    await tester.pumpWidget(GetMaterialApp(home: const Scaffold()));
+    await tester.runAsync(() async {
+      await _credentials('first');
+      final logic = IMController();
+      loginGate = Completer<void>();
+      final login = logic.login('first', 'first-im');
+      expect(logic.sessionTransitionBusy, isTrue);
+      await _flush();
+      expect(logic.sessionTransitionBusy, isTrue);
+      loginGate!.complete();
+      await login;
+      expect(logic.sessionTransitionBusy, isFalse);
+      expect(nativeCalls.where((c) => c == 'login:first').length, 1);
+      logic.onClose();
+    });
   });
 
   testWidgets('route login skips duplicate cleanup and retains profile state',

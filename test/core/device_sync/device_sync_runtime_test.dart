@@ -482,7 +482,7 @@ void main() {
         apis.single.requests.length == 2 && store.pendingLocations.isEmpty);
     expect(sources.single.locates, 2);
     expect(sources.single.locationIDs.toSet(), hasLength(2));
-    expect(task.status.value, DeviceSyncStatus.idle);
+    await _until(() => task.status.value == DeviceSyncStatus.idle);
     session = (
       accountID: 'owner',
       token: 'new-login-token',

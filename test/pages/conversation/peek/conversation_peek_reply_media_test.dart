@@ -176,7 +176,7 @@ void main() {
       expect(image.fit, BoxFit.fitWidth);
       final provider = image.image as ExtendedResizeImage;
       expect((provider.imageProvider as ExtendedNetworkImageProvider).url,
-          'https://media.test/original');
+          'https://media.test/tiny');
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox.shrink());
     });

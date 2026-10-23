@@ -498,12 +498,14 @@ void main() {
 
   for (final currency in FundCurrency.values) {
     testWidgets(
-        '${currency.code} keeps the selected currency and exact all amount',
+        '${currency.code} uses an available currency and exact all amount',
         (tester) async {
       final api = _Api();
       final search = _Search();
       final session = _Session();
-      final display = currency == FundCurrency.bi99 ? '元' : currency.code;
+      final selected =
+          currency == FundCurrency.trx ? FundCurrency.usdt : currency;
+      final display = selected == FundCurrency.bi99 ? '元' : selected.code;
       await FundPaymentPreferences(
               accountID: 'me', serverURL: Config.appAuthUrl)
           .save(currency == FundCurrency.trx
@@ -519,8 +521,8 @@ void main() {
       await tester.tap(_key('internal-transfer-all'));
       await tester.pump();
       expect(tester.widget<TextFormField>(_amount).controller!.text,
-          api.available[currency]);
-      final available = FundAmount.parse(api.available[currency]!, currency);
+          api.available[selected]);
+      final available = FundAmount.parse(api.available[selected]!, selected);
       expect(
           find.text('可用：${available.displayDecimal} $display'), findsOneWidget);
       expect(find.text('0.00 $display'), findsOneWidget);

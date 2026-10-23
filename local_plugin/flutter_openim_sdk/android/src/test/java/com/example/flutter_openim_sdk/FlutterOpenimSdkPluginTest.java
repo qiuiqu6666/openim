@@ -72,11 +72,16 @@ public class FlutterOpenimSdkPluginTest {
   }
 
   @Test public void unsupportedDispatchReturnsStructuredError() {
+    // JVM tests have no Android Log implementation; keep the actual dispatch
+    // and structured-error behavior under test.
+    try (org.mockito.MockedStatic<android.util.Log> logs =
+        org.mockito.Mockito.mockStatic(android.util.Log.class)) {
     FlutterOpenimSdkPlugin plugin = new FlutterOpenimSdkPlugin();
     MethodChannel.Result result = mock(MethodChannel.Result.class);
     plugin.parse(new MethodCall("missingMethod",
         Collections.singletonMap("ManagerName", "missingManager")), result);
     verify(result).error("native_dispatch_error",
         "Chat native method dispatch failed: missingMethod", null);
+    }
   }
 }
