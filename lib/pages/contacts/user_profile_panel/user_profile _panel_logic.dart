@@ -26,21 +26,26 @@ import '../../chat/group/permissions/group_mute.dart';
 import '../../chat/group_setup/group_manage/group_friend_protection_store.dart';
 import 'adding/profile_friend_add_account_resolver.dart';
 import 'identity/group_profile_account_state.dart';
+import 'identity/profile_extension_source.dart';
 
 class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   UserProfilePanelLogic({
     GroupProfileMembersLoader? groupMembersLoader,
+    ProfileExtensionLoader? profileExtensionLoader,
     GroupFriendProtectionStore Function(String groupID)?
         friendProtectionFactory,
     ProfileFriendAddAccountResolver? friendAddAccountResolver,
     void Function(String)? friendAddNotify,
-  })  : _groupMembersLoader = groupMembersLoader,
+  })  : _profileExtensionLoader =
+            profileExtensionLoader ?? ProfileExtensionSource.load,
+        _groupMembersLoader = groupMembersLoader,
         _friendProtectionFactory = friendProtectionFactory,
         _friendAddAccountResolver =
             friendAddAccountResolver ?? ProfileFriendAddAccountResolver(),
         _friendAddNotify =
             friendAddNotify ?? ((message) => IMViews.showToast(message));
 
+  final ProfileExtensionLoader _profileExtensionLoader;
   final GroupProfileMembersLoader? _groupMembersLoader;
   final GroupFriendProtectionStore Function(String groupID)?
       _friendProtectionFactory;
@@ -111,6 +116,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   final notAllowAddGroupMemberFriend = false.obs;
   final iHaveAdminOrOwnerPermission = false.obs;
   int _profileRequest = 0;
+  int _extensionRequest = 0;
   int _userInfoRequest = 0;
   int _friendIdentityRevision = 0;
   int _avatarRevision = 0;
@@ -173,8 +179,8 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
           ..faceURL = Get.arguments['faceURL'])
         .obs;
     groupID = Get.arguments['groupID'];
+    WidgetsBinding.instance.addObserver(this);
     if (isGroupMemberPage) {
-      WidgetsBinding.instance.addObserver(this);
       _groupAccountState = GroupProfileAccountState(
         groupID: groupID!,
         userID: userInfo.value.userID!,
@@ -226,6 +232,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         });
         profileLayoutReady.value = true;
         _loadProfileGender(user.userID!);
+        unawaited(_refreshProfileExtension());
       }
     });
 
@@ -252,6 +259,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         });
 
         UserCacheManager().addOrUpdateUserInfo(user.userID!, userInfo.value);
+        unawaited(_refreshProfileExtension());
       }
     });
 
@@ -293,6 +301,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         }
       }
       if (value.userID == userInfo.value.userID) {
+        unawaited(_refreshProfileExtension());
         _memberIdentityRevision++;
         groupMembersInfo = value;
         if (value.faceURL != null) {
@@ -357,6 +366,9 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      unawaited(_refreshProfileExtension());
+    }
     if (state == AppLifecycleState.resumed &&
         isGroupMemberPage &&
         !_groupContextClosed.value) {
@@ -408,7 +420,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
   }
 
   Future<void> loadCommonGroupCount() async {
-    if (isClosed || isMyself) return;
+    if (isClosed || isMyself || !hasActiveGroupMemberContext) return;
     final request = ++_commonGroupRequest;
     final owner = DataSp.userID;
     _commonGroupCancel?.cancel();
@@ -520,6 +532,7 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
         value?.isBlacklist = isBlack;
       });
 
+      unawaited(_refreshProfileExtension());
       if (friendInfo == null) {
         final user = (await OpenIM.iMManager.userManager.getUsersInfoWithCache(
           [userID],
@@ -531,7 +544,6 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
             if (identityRevision != _friendIdentityRevision) return;
             val?.nickname = user.nickname;
             if (avatarRevision == _avatarRevision) val?.faceURL = user.faceURL;
-            val?.ex = user.ex;
             val?.remark = friendInfo?.remark;
             val?.isBlacklist = isBlack;
             val?.isFriendship = isFriendship;
@@ -552,19 +564,6 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
           val?.isFriendship = isFriendship;
         });
         profileLayoutReady.value = true;
-        // FriendInfo.ex belongs to the friend relationship. The signature is in
-        // the user's SDK profile extension, so read UserInfo for this field.
-        try {
-          final profiles = await OpenIM.iMManager.userManager
-              .getUsersInfo(userIDList: [userID]);
-          if (stale()) return;
-          final profile = profiles.firstOrNull;
-          if (profile != null) {
-            userInfo.update((value) => value?.ex = profile.ex);
-          }
-        } catch (_) {
-          // Keep cached profile data if this optional refresh fails.
-        }
       }
       if (stale()) return;
       UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
@@ -574,6 +573,39 @@ class UserProfilePanelLogic extends GetxController with WidgetsBindingObserver {
       if (!stale() && !profileLayoutReady.value) {
         initialProfileFailed.value = true;
       }
+    }
+  }
+
+  Future<void> _refreshProfileExtension() async {
+    if (isClosed || isMyself || !hasActiveGroupMemberContext) return;
+    final userID = userInfo.value.userID;
+    final owner = DataSp.userID;
+    final token = DataSp.imToken;
+    final server = Config.imApiUrl;
+    if (userID == null ||
+        owner == null ||
+        token == null ||
+        token.isEmpty ||
+        OpenIM.iMManager.userID != owner) {
+      return;
+    }
+    final request = ++_extensionRequest;
+    try {
+      final ex = await _profileExtensionLoader(userID, server, token);
+      if (isClosed ||
+          request != _extensionRequest ||
+          !hasActiveGroupMemberContext ||
+          DataSp.userID != owner ||
+          OpenIM.iMManager.userID != owner ||
+          DataSp.imToken != token ||
+          Config.imApiUrl != server ||
+          userInfo.value.userID != userID) {
+        return;
+      }
+      userInfo.update((value) => value?.ex = ex);
+      UserCacheManager().addOrUpdateUserInfo(userID, userInfo.value);
+    } catch (_) {
+      // Optional refresh: keep the last confirmed value on network failure.
     }
   }
 

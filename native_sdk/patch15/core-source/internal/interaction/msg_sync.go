@@ -47,26 +47,28 @@ const (
 // MsgSyncer is a central hub for message relay, responsible for sequential message gap pulling,
 // handling network events, and managing app foreground and background events.
 type MsgSyncer struct {
-	loginUserID          string                // login user ID
-	longConnMgr          *LongConnMgr          // long connection manager
-	recvCh               chan common.Cmd2Value // channel for receiving push messages and the maximum SEQ number
-	conversationCh       chan common.Cmd2Value // storage and session triggering
-	syncedMaxSeqs        map[string]int64      // map of the maximum synced SEQ numbers for all group IDs
-	syncedMaxSeqsLock    sync.RWMutex          // syncedMaxSeqs map lock
-	checkpoints          map[string]messageCheckpoint
-	checkpointIDs        map[string]bool
-	recoveryReadSeqReady bool
-	pendingReadReconcile bool
-	initialMetadataReady bool
-	auxMetadataPending   bool
-	auxMetadataProgress  *common.MetadataProgress
-	auxProfilesOnly      bool
-	db                   db_interface.DataBase // data store
-	syncTimes            int                   // times of sync
-	ctx                  context.Context       // context
-	reinstalled          bool                  //true if the app was uninstalled and reinstalled
-	isSyncing            bool                  // indicates whether data is being synced
-	isSyncingLock        sync.Mutex            // lock for syncing state
+	loginUserID           string                // login user ID
+	longConnMgr           *LongConnMgr          // long connection manager
+	recvCh                chan common.Cmd2Value // channel for receiving push messages and the maximum SEQ number
+	conversationCh        chan common.Cmd2Value // storage and session triggering
+	syncedMaxSeqs         map[string]int64      // map of the maximum synced SEQ numbers for all group IDs
+	syncedMaxSeqsLock     sync.RWMutex          // syncedMaxSeqs map lock
+	checkpoints           map[string]messageCheckpoint
+	checkpointIDs         map[string]bool
+	recoveryReadSeqReady  bool
+	pendingReadReconcile  bool
+	initialMetadataReady  bool
+	auxMetadataGeneration int64
+	auxMetadataFollowup   bool
+	auxMetadataPending    bool
+	auxMetadataProgress   *common.MetadataProgress
+	auxProfilesOnly       bool
+	db                    db_interface.DataBase // data store
+	syncTimes             int                   // times of sync
+	ctx                   context.Context       // context
+	reinstalled           bool                  //true if the app was uninstalled and reinstalled
+	isSyncing             bool                  // indicates whether data is being synced
+	isSyncingLock         sync.Mutex            // lock for syncing state
 
 }
 
@@ -530,6 +532,7 @@ func (m *MsgSyncer) pushTriggerAndSync(ctx context.Context, pushMessages map[str
 
 // Called after successful reconnection to synchronize the latest message
 func (m *MsgSyncer) doConnected(ctx context.Context) {
+	m.observeMetadataConnection()
 	defer m.finishSync()
 	reinstalled := m.reinstalled
 	if reinstalled {

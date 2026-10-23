@@ -1,0 +1,19 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.50-profile-recovery.1",
+  "source_sha256": "109aff8296b4d4405450066f28ac573544875a6710e6b92d1d1a384a2c55a216",
+  "patch_sha256": "6e2af422db73eb74435d0255d0c4f82c40cbf3797f7e4943e01aec4075f9369e",
+  "aar_sha256": "cdaba469ca459a188b4590b0c79a36ecf39df309c714626e297abac514c641b3",
+  "apk_sha256": "907f8bd17b2fc9f4068f4689de0695516516e9ef8b23555dfc85cb1f98468ee4",
+  "apk_libraries": {
+    "arm64-v8a": {
+      "aar_to_merged": true,
+      "stripped_to_apk": true,
+      "library_sha256": "e34cfe6378bab88327c0ae2236d9fa8bcc3b08096ac8fd1149e4eb5e5a318bff"
+    }
+  },
+  "core_regression": "14 package/test invocations passed in native build; canonical group/relation/interaction passed",
+  "flutter_regression": "38 relevant tests passed across executions; scoped analysis clean",
+  "source_reconstruction": "716 files match after line ending/BOM normalization",
+  "device_runtime": "not executed",
+  "ios": "macOS Framework and application rebuild required"
+}

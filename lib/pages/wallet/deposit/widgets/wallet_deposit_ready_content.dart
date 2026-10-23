@@ -18,6 +18,7 @@ class WalletDepositReadyContent extends StatelessWidget {
     required this.onCopy,
     required this.onShare,
     this.onNetworkInfo,
+    this.qr,
   });
 
   final WalletDepositAddress address;
@@ -25,6 +26,7 @@ class WalletDepositReadyContent extends StatelessWidget {
   final VoidCallback onCopy;
   final VoidCallback onShare;
   final VoidCallback? onNetworkInfo;
+  final Widget? qr;
 
   @override
   Widget build(BuildContext context) {
@@ -53,10 +55,11 @@ class WalletDepositReadyContent extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     Center(
-                      child: WalletDepositQr(
-                        address: address,
-                        currency: currency,
-                      ),
+                      child: qr ??
+                          WalletDepositQr(
+                            address: address,
+                            currency: currency,
+                          ),
                     ),
                     const SizedBox(height: AppTokens.s7),
                     WalletDepositAddressCard(

@@ -12,6 +12,7 @@ class SangongGameSettings {
   final int minBet;
   final int maxBet;
   final int rakePercent;
+  static const selectableDrawCounts = [2, 3, 4, 5, 6, 7, 8, 9];
   static const int maxMaxBet = 99999999;
   bool get maxBetUnlimited => maxBet == 0;
 
@@ -43,6 +44,10 @@ class SangongGameSettings {
       (maxBet == 0 || maxBet >= minBet) &&
       rakePercent >= 0 &&
       rakePercent <= 100;
+
+  // Ten-door rules remain readable for existing rounds and historical results.
+  bool get isValidForUpdate =>
+      isValid && selectableDrawCounts.contains(doorCount);
 
   Map<String, dynamic> toJson() => {
         'doorCount': doorCount,

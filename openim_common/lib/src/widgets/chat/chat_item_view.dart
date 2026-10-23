@@ -85,6 +85,7 @@ class ChatItemView extends StatefulWidget {
     this.sendStatusSubject,
     this.transferStatus,
     this.onCheckDelivery,
+    this.onControlMediaSend,
     this.visibilityChange,
     this.timelineStr,
     this.onTapTimeline,
@@ -135,6 +136,7 @@ class ChatItemView extends StatefulWidget {
   final Subject<MsgStreamEv<bool>>? sendStatusSubject;
   final ValueListenable<ChatTransferStatus?>? transferStatus;
   final VoidCallback? onCheckDelivery;
+  final VoidCallback? onControlMediaSend;
 
   final ItemVisibilityChange? visibilityChange;
   final String? timelineStr;
@@ -501,6 +503,8 @@ class _ChatItemViewState extends State<ChatItemView> {
       hasRead: _message.isRead ?? false,
       showReadStatus: !isFund && _message.isSingleChat,
       showStatus: !isFund &&
+          !((_message.isVoiceType || _message.isFileType) &&
+              _message.status == MessageStatus.sending) &&
           _message.contentType !=
               MessageType.groupInfoSetAnnouncementNotification,
       isSending: _message.status == MessageStatus.sending,
@@ -564,6 +568,7 @@ class _ChatItemViewState extends State<ChatItemView> {
       sendStatusStream: widget.sendStatusSubject,
       transferStatus: widget.transferStatus,
       onCheckDelivery: widget.onCheckDelivery,
+      onControlMediaSend: widget.onControlMediaSend,
       onFailedToResend: widget.onFailedToResend,
       onLongPressRightAvatar: widget.onLongPressRightAvatar,
       onTapLeftAvatar: widget.onTapLeftAvatar,

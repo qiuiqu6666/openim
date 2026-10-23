@@ -60,6 +60,10 @@ class ChatFundController {
     _stateEpoch = _stateCache.epoch;
     confirmedCards =
         ConfirmedFundCards(messages: messages, currentUserID: _currentUserID);
+    if (messages != null) {
+      _messageWorker = ever(messages, (_) => _warmRecipients(messages));
+      scheduleMicrotask(() => _warmRecipients(messages));
+    }
   }
 
   final bool Function() isClosed;
@@ -82,9 +86,51 @@ class ChatFundController {
   final DateTime Function() _now;
   final Future<FundCardRecipient> Function(String, String) _resolveRecipient;
   final _profileRequests = <String>{};
+  final _recipientLookups = <String, Future<FundCardRecipient>>{};
+  Worker? _messageWorker;
 
-  FundCardRecipient cardRecipient(FundMessageData message) =>
-      _verifiedState(message)?.recipient ?? const FundCardRecipient();
+  void _warmRecipients(List<Message> messages) {
+    if (_closed) return;
+    // Bound entry work to the newest screenful, not the entire chat history.
+    for (final message in messages.take(20)) {
+      final data = FundMessageData.tryParse(message.customElem?.data);
+      if (data?.biz == 'packet_exclusive' || data?.biz == 'group_transfer') {
+        unawaited(_refresh(message));
+      }
+    }
+  }
+
+  FundCardRecipient cardRecipient(FundMessageData message) {
+    final state = _verifiedState(message);
+    if (_closed ||
+        _stateEpoch != _stateCache.epoch ||
+        _currentUserID().isEmpty ||
+        _certificateID() != _currentUserID()) {
+      return const FundCardRecipient();
+    }
+    if (state != null && state.recipient.name.isNotEmpty) {
+      return state.recipient;
+    }
+    FundCardRecipient? saved;
+    try {
+      final currency = FundCurrency.parse(message.currency);
+      saved = _stateCache.savedRecipient(_cacheKey(message.orderID), (
+        orderID: message.orderID,
+        biz: message.biz,
+        currency: currency,
+        amount: FundAmount.parse(message.amount, currency),
+        remark: message.remark,
+      ));
+    } on FormatException {
+      return const FundCardRecipient();
+    }
+    if (saved != null &&
+        (state == null || saved.userID == state.recipient.userID)) {
+      return saved;
+    }
+    return state?.recipient ?? const FundCardRecipient();
+  }
+
   int? packetCount(FundMessageData message) =>
       message.isPacket ? _verifiedState(message)?.packetCount : null;
 
@@ -238,7 +284,18 @@ class ChatFundController {
   Future<void> _enrichRecipient(
       String key, FundOrder order, String ownerID, String serverURL) async {
     try {
-      final recipient = await _resolveRecipient(order.recvID, order.groupID);
+      final lookupKey =
+          jsonEncode([serverURL, ownerID, order.groupID, order.recvID]);
+      final lookup = _recipientLookups.putIfAbsent(
+          lookupKey, () => _resolveRecipient(order.recvID, order.groupID));
+      FundCardRecipient recipient;
+      try {
+        recipient = await lookup;
+      } catch (_) {
+        _recipientLookups.remove(lookupKey);
+        rethrow;
+      }
+      if (recipient.name.isEmpty) _recipientLookups.remove(lookupKey);
       if (!_closed &&
           _stateEpoch == _stateCache.epoch &&
           ownerID == _currentUserID() &&
@@ -484,6 +541,8 @@ class ChatFundController {
 
   void close() {
     _disposed = true;
+    _messageWorker?.dispose();
+    _recipientLookups.clear();
     confirmedCards.close();
     _visibleMessages.clear();
     _refreshTimes.clear();

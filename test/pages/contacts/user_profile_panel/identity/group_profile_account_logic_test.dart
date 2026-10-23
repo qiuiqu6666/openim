@@ -60,6 +60,7 @@ class _Profile extends UserProfilePanelLogic {
     required void Function(String) friendAddNotify,
   }) : super(
           groupMembersLoader: load,
+          profileExtensionLoader: (_, __, ___) async => '',
           friendProtectionFactory: (_) => protection,
           friendAddAccountResolver: friendAddAccountResolver,
           friendAddNotify: friendAddNotify,

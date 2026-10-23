@@ -23,6 +23,10 @@ class AuthMinimalLayout extends StatelessWidget {
     final dark = AuthReferenceTokens.isDark(context);
     final surface =
         AuthReferenceTokens.color(context, AuthReferenceTokens.surface);
+    // Keyboard resizing must not switch the form to the short-screen layout.
+    // Measure before SafeArea removes padding; scroll only obscured fields.
+    final media = MediaQuery.of(context);
+    final compact = media.size.height - media.viewPadding.vertical < 600;
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark)
           .copyWith(
@@ -31,7 +35,6 @@ class AuthMinimalLayout extends StatelessWidget {
       child: Scaffold(
         backgroundColor: surface,
         body: SafeArea(child: LayoutBuilder(builder: (context, constraints) {
-          final compact = constraints.maxHeight < 600;
           return GestureDetector(
               onTap: () => FocusScope.of(context).unfocus(),
               child: SingleChildScrollView(

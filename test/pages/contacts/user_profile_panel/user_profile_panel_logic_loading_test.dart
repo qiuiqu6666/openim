@@ -68,6 +68,25 @@ class _Contacts extends GetxController implements ContactsLogic {
 class _Http implements HttpClientAdapter {
   final profileReplies = <Completer<ResponseBody>>[];
   bool gateProfiles = false;
+  bool gateExtensions = false;
+  String extension = '{"signature":"A stable signature"}';
+  final extensionReplies = <Completer<ResponseBody>>[];
+  final extensionRequests = <RequestOptions>[];
+
+  ResponseBody extensionResponse(String ex) => ResponseBody.fromString(
+        jsonEncode({
+          'errCode': 0,
+          'data': {
+            'usersInfo': [
+              {'userID': _peer, 'ex': ex}
+            ]
+          }
+        }),
+        200,
+        headers: {
+          Headers.contentTypeHeader: [Headers.jsonContentType]
+        },
+      );
 
   ResponseBody profile(String id) => ResponseBody.fromString(
         jsonEncode({
@@ -87,6 +106,15 @@ class _Http implements HttpClientAdapter {
   @override
   Future<ResponseBody> fetch(RequestOptions options,
       Stream<Uint8List>? requestStream, Future<void>? cancelFuture) async {
+    if (options.path.endsWith('/user/get_users_info')) {
+      extensionRequests.add(options);
+      if (gateExtensions) {
+        final reply = Completer<ResponseBody>();
+        extensionReplies.add(reply);
+        return reply.future;
+      }
+      return extensionResponse(extension);
+    }
     if (options.method == 'GET') {
       return ResponseBody.fromString(
         jsonEncode({
@@ -225,6 +253,9 @@ void main() {
     for (final reply in friendReplies) {
       if (!reply.isCompleted) reply.complete('[]');
     }
+    for (final reply in adapter.extensionReplies) {
+      if (!reply.isCompleted) reply.complete(adapter.extensionResponse(''));
+    }
     for (final reply in adapter.profileReplies) {
       if (!reply.isCompleted) reply.complete(adapter.profile(_peer));
     }
@@ -298,7 +329,115 @@ void main() {
     return directory;
   }
 
-  testWidgets('group card opens a personal profile with the returned public account',
+  testWidgets('opening profile replaces cached signature with server extension',
+      (tester) async {
+    contacts();
+    UserCacheManager().addOrUpdateUserInfo(
+        _peer,
+        UserFullInfo()
+          ..userID = _peer
+          ..ex = '{"signature":"old"}');
+    adapter.extension = '{"signature":"new"}';
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.ex, adapter.extension);
+    expect(UserCacheManager().getUserInfo(_peer)!.ex, adapter.extension);
+    expect(adapter.extensionRequests.single.headers['token'], 'me-im');
+    expect(adapter.extensionRequests.single.data, {
+      'userIDs': [_peer]
+    });
+  });
+
+  testWidgets('friend update refreshes signature and supports clearing',
+      (tester) async {
+    contacts();
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    for (final ex in ['{"signature":"changed"}', '']) {
+      adapter.extension = ex;
+      im.friendInfoChanged(FriendInfo(userID: _peer, ex: 'relationship-only'));
+      await tester.pumpAndSettle();
+      expect(logic!.userInfo.value.ex, ex);
+      expect(logic!.profileLayoutReady.value, isTrue);
+      expect(UserCacheManager().getUserInfo(_peer)!.ex, ex);
+    }
+  });
+
+  testWidgets('newer signature response wins over delayed opening request',
+      (tester) async {
+    contacts();
+    adapter.gateExtensions = true;
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    im.friendInfoChanged(FriendInfo(userID: _peer));
+    await tester.pumpAndSettle();
+    expect(adapter.extensionReplies, hasLength(2));
+    adapter.extensionReplies.last.complete(adapter.extensionResponse('new'));
+    await tester.pumpAndSettle();
+    adapter.extensionReplies.first.complete(adapter.extensionResponse('old'));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.ex, 'new');
+  });
+
+  testWidgets('foreground refreshes personal profile without restarting app',
+      (tester) async {
+    contacts();
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    adapter.extension = '{"signature":"foreground"}';
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.paused);
+    tester.binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.ex, adapter.extension);
+  });
+
+  testWidgets('failed refresh retains confirmed signature', (tester) async {
+    contacts();
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    final confirmed = logic!.userInfo.value.ex;
+    adapter.gateExtensions = true;
+    im.friendInfoChanged(FriendInfo(userID: _peer));
+    await tester.pumpAndSettle();
+    adapter.extensionReplies.single.completeError(StateError('offline'));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.ex, confirmed);
+    expect(logic!.initialProfileFailed.value, isFalse);
+  });
+
+  testWidgets('closed profile ignores pending extension', (tester) async {
+    contacts();
+    adapter.gateExtensions = true;
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    final previous = logic!.userInfo.value.ex;
+    logic!.onDelete();
+    adapter.extensionReplies.single.complete(adapter.extensionResponse('late'));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.ex, previous);
+  });
+
+  testWidgets('changed account ignores pending extension', (tester) async {
+    contacts();
+    adapter.gateExtensions = true;
+    await open(tester);
+    friendReplies.single.complete(_friend());
+    await tester.pumpAndSettle();
+    await _login('other', 'other-chat');
+    OpenIM.iMManager.userID = 'other';
+    adapter.extensionReplies.single.complete(adapter.extensionResponse('late'));
+    await tester.pumpAndSettle();
+    expect(logic!.userInfo.value.ex, isNot('late'));
+  });
+
+  testWidgets(
+      'group card opens a personal profile with the returned public account',
       (tester) async {
     contacts();
     await open(tester, fromGroupCard: true);
@@ -443,7 +582,10 @@ void main() {
     expect(UserCacheManager().getUserInfo(_peer)!.faceURL, 'new-avatar');
 
     im.friendInfoChanged(FriendInfo(
-      userID: _peer, nickname: 'New nickname', faceURL: '', remark: '',
+      userID: _peer,
+      nickname: 'New nickname',
+      faceURL: '',
+      remark: '',
     ));
     await tester.pumpAndSettle();
     expect(logic!.userInfo.value.faceURL, '');

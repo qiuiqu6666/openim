@@ -2,11 +2,61 @@ import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'package:openim_common/src/widgets/progress/sector_progress_painter.dart';
 
 void main() {
+  for (final type in [MessageType.voice, MessageType.file]) {
+    testWidgets('voice and file hide upload status but retain receipts $type',
+        (tester) async {
+      OpenIM.iMManager.userID = 'self';
+      OpenIM.iMManager.userInfo = UserInfo(userID: 'self', nickname: 'Me');
+      addTearDown(Get.reset);
+      final transfer = ValueNotifier<ChatTransferStatus?>(
+          const ChatTransferStatus(ChatTransferStage.uploading, 51));
+      addTearDown(transfer.dispose);
+      for (final status in [
+        MessageStatus.sending,
+        MessageStatus.failed,
+        MessageStatus.succeeded,
+      ]) {
+        await tester.pumpWidget(ScreenUtilInit(
+          designSize: const Size(375, 812),
+          builder: (_, __) => GetMaterialApp(
+            home: Scaffold(
+              body: ChatItemView(
+                key: ValueKey(status),
+                message: Message.fromJson({
+                  'clientMsgID': 'attachment',
+                  'sendID': 'self',
+                  'recvID': 'peer',
+                  'contentType': type,
+                  'sessionType': ConversationType.single,
+                  'sendTime': 1000000,
+                  'status': status,
+                }),
+                transferStatus: transfer,
+                showAvatar: false,
+                ignorePointer: true,
+                onTapUserProfile: (_) {},
+              ),
+            ),
+          ),
+        ));
+        await tester.pump(const Duration(seconds: 2));
+        expect(find.byType(ChatTransferStatusView), findsNothing);
+        expect(find.byType(CupertinoActivityIndicator), findsNothing);
+        expect(find.byType(ChatSendFailedView),
+            status == MessageStatus.failed ? findsOneWidget : findsNothing);
+        expect(find.byType(ChatReadReceiptIcon),
+            status == MessageStatus.succeeded ? findsOneWidget : findsNothing);
+        expect(tester.takeException(), isNull);
+      }
+      await tester.pumpWidget(const SizedBox.shrink());
+    });
+  }
   for (final dark in [false, true]) {
     testWidgets('transfer states stay readable and queryable dark=$dark',
         (tester) async {

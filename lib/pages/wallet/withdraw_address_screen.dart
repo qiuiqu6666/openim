@@ -210,13 +210,16 @@ class _WithdrawAddressScreenState extends State<WithdrawAddressScreen> {
   }
 
   Future<void> _openScanner() async {
+    _addrFocus.unfocus();
     final scanned = await openWalletPage<String>(
       context,
       const WalletQrScannerPage(),
     );
     if (!mounted || scanned == null || scanned.trim().isEmpty) return;
     _fillAddress(scanned);
-    FocusScope.of(context).requestFocus(_addrFocus);
+    if (ModalRoute.of(context)?.isCurrent != false) {
+      FocusScope.of(context).requestFocus(_addrFocus);
+    }
   }
 
   Future<void> _paste() async {

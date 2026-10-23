@@ -100,7 +100,8 @@ class WalletShareService {
         quality: 100,
         name: name,
       );
-      if (!active()) return WalletSaveImgResult.unknown;
+      // A completed gallery write remains successful even if its route closed.
+      // Callers guard UI feedback separately and may persist a save receipt.
 
       return _isSaved(ret)
           ? WalletSaveImgResult.success

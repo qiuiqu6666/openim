@@ -233,7 +233,13 @@ class ChatComposerController {
       if (!_closed) showError(error.toString());
     } finally {
       _choosingMention = false;
-      if (!_closed) focusNode.requestFocus();
+      final context = focusNode.context;
+      if (!isClosed &&
+          context != null &&
+          context.mounted &&
+          ModalRoute.of(context)?.isCurrent != false) {
+        focusNode.requestFocus();
+      }
     }
   }
 

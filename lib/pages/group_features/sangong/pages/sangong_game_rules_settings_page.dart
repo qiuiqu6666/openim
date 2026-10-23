@@ -5,7 +5,8 @@ import 'package:openim/pages/group_features/sangong/sangong_scope.dart';
 import 'dart:async' show unawaited;
 
 import 'package:flutter/material.dart';
-import 'package:openim_common/openim_common.dart' show AppSwitch;
+import 'package:openim_common/openim_common.dart'
+    show AppSwitch, AppAction, showAppActionSheet;
 import 'sangong_my_config_page.dart';
 import 'sangong_members_page.dart';
 import 'sangong_all_users_page.dart';
@@ -58,7 +59,7 @@ class _SangongGameRulesSettingsPageState
   SangongAdminSession _session = const SangongAdminSession();
   late bool _floatVisible;
 
-  late TextEditingController _doorCountController;
+  int _doorCount = 6;
   late TextEditingController _minBetController;
   late TextEditingController _maxBetController;
   late TextEditingController _rakePercentController;
@@ -67,7 +68,6 @@ class _SangongGameRulesSettingsPageState
   void initState() {
     super.initState();
     _floatVisible = widget.floatVisible ?? true;
-    _doorCountController = TextEditingController();
     _minBetController = TextEditingController();
     _maxBetController = TextEditingController();
     _rakePercentController = TextEditingController();
@@ -76,7 +76,6 @@ class _SangongGameRulesSettingsPageState
 
   @override
   void dispose() {
-    _doorCountController.dispose();
     _minBetController.dispose();
     _maxBetController.dispose();
     _rakePercentController.dispose();
@@ -115,7 +114,7 @@ class _SangongGameRulesSettingsPageState
   }
 
   void _applySettings(SangongGameSettings settings) {
-    _doorCountController.text = '${settings.doorCount}';
+    _doorCount = settings.doorCount;
     _minBetController.text = '${settings.minBet}';
     _maxBetController.text = '${settings.maxBet}';
     _rakePercentController.text = '${settings.rakePercent}';
@@ -123,15 +122,15 @@ class _SangongGameRulesSettingsPageState
 
   SangongGameSettings? _readForm() {
     final i18n = AppI18n.of(context);
-    final doorCount = int.tryParse(_doorCountController.text.trim());
-    if (doorCount == null || doorCount < 2 || doorCount > 10) {
+    final doorCount = _doorCount;
+    if (!SangongGameSettings.selectableDrawCounts.contains(doorCount)) {
       ToastUtils.toast(
         i18n.t(
-          zhHans: '门数需在 2～10 之间',
-          zhHant: '門數需在 2～10 之間',
-          en: 'Door count must be between 2 and 10',
-          ja: '門数は2〜10の範囲で入力してください',
-          ko: '문 수는 2~10 사이여야 합니다',
+          zhHans: '请选择 2–9 包',
+          zhHant: '請選擇 2–9 包',
+          en: 'Select 2–9 draw packets',
+          ja: '抽選数を2〜9個から選択してください',
+          ko: '추첨 개수를 2~9개 중 선택하세요',
         ),
       );
       return null;
@@ -217,6 +216,47 @@ class _SangongGameRulesSettingsPageState
         setState(() => _saving = false);
       }
     }
+  }
+
+  bool get _canSelectDrawCount =>
+      _canEdit &&
+      !_loading &&
+      !_saving &&
+      !_sessionBusy &&
+      _errorMessage == null &&
+      (_session.round == null || _session.round!.status == 'await_banker');
+
+  String _drawCountLabel(AppI18n i18n, int count) => i18n.t(
+        zhHans: '$count 包',
+        zhHant: '$count 包',
+        en: '$count packets',
+        ja: '$count 個',
+        ko: '$count개',
+      );
+
+  Future<void> _selectDrawCount() async {
+    if (!_canSelectDrawCount) return;
+    final runtime = SangongScope.read(context);
+    final i18n = AppI18n.of(context);
+    FocusScope.of(context).unfocus();
+    final count = await showAppActionSheet<int>(
+      context,
+      title: i18n.t(
+          zhHans: '开奖包数（2–9 包）',
+          zhHant: '開獎包數（2–9 包）',
+          en: 'Draw packets (2–9)',
+          ja: '抽選数（2〜9個）',
+          ko: '추첨 개수 (2~9개)'),
+      actions: [
+        for (final count in SangongGameSettings.selectableDrawCounts)
+          AppAction(_drawCountLabel(i18n, count), count,
+              selected: count == _doorCount)
+      ],
+    );
+    if (!mounted || !runtime.isCurrent || !_canSelectDrawCount || count == null) {
+      return;
+    }
+    setState(() => _doorCount = count);
   }
 
   String _sessionStatusLabel(AppI18n i18n) {
@@ -632,16 +672,18 @@ class _SangongGameRulesSettingsPageState
           ),
           SettingsGroup(
             children: [
-              _numberField(
-                label: i18n.t(
-                  zhHans: '门数',
-                  zhHant: '門數',
-                  en: 'Doors',
-                  ja: '門数',
-                  ko: '문 수',
+              SettingsCell(
+                key: const ValueKey('sangong-draw-count'),
+                title: i18n.t(
+                  zhHans: '开奖包数',
+                  zhHant: '開獎包數',
+                  en: 'Draw packets',
+                  ja: '抽選数',
+                  ko: '추첨 개수',
                 ),
-                controller: _doorCountController,
-                readOnly: readOnly,
+                value: _drawCountLabel(i18n, _doorCount),
+                showArrow: _canSelectDrawCount,
+                onTap: _canSelectDrawCount ? _selectDrawCount : null,
               ),
               _numberField(
                 label: i18n.t(

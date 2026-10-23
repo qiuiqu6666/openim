@@ -280,14 +280,14 @@ class ConversationLogic extends GetxController with WidgetsBindingObserver {
         if (reInstall && !appReInstall) EasyLoading.dismiss();
         reInstall = appReInstall;
         if (reInstall) {
-          EasyLoading.showProgress(0, status: StrRes.synchronizing);
+          EasyLoading.showProgress(0, status: StrRes.synchronizingDoNotExit);
         }
       }
       if (status == IMSdkStatus.syncProgress && appReInstall) reInstall = true;
       if (status == IMSdkStatus.syncProgress && reInstall && progress != null) {
         final percent = progress.clamp(0, 100);
         EasyLoading.showProgress(percent / 100.0,
-            status: '${StrRes.synchronizing}($percent%)');
+            status: '${StrRes.synchronizingDoNotExit}($percent%)');
       }
 
       Logger.print(

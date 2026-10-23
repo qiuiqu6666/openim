@@ -6,8 +6,15 @@ import 'group_notice_identity.dart';
 /// Current group identity per sender, independent of message snapshots.
 class GroupSenderAvatars {
   GroupSenderAvatars(
-      {required this.isCurrent, required this.lookup, this.lookupProfiles});
+      {required this.isCurrent,
+      required this.lookup,
+      this.lookupProfiles,
+      this.retryDelay = const Duration(seconds: 2)});
   final bool Function() isCurrent;
+  final Duration retryDelay;
+  Timer? _retryTimer;
+  final _retryPending = <String>{};
+  final _retryCounts = <String, int>{};
   final Future<List<GroupMembersInfo>> Function(List<String>)? lookup;
   final Future<List<GroupMembersInfo>> Function(List<String>)? lookupProfiles;
   final _faces = <String, String>{}.obs;
@@ -51,6 +58,8 @@ class GroupSenderAvatars {
   // A global profile name must not overwrite a distinct group nickname.
   void refreshMember(String? id) {
     if (_closed || !isCurrent() || id == null || id.isEmpty) return;
+    _retryCounts.remove(id);
+    _retryPending.remove(id);
     _nameVersions[id] = (_nameVersions[id] ?? 0) + 1;
     _versions[id] = (_versions[id] ?? 0) + 1;
     _pending.add(id);
@@ -161,12 +170,14 @@ class GroupSenderAvatars {
               members.addAll((await lookupProfiles!(missing))
                   .where((member) => missing.contains(member.userID)));
             } catch (_) {
-              // Keep the newest snapshot while the profile is unavailable.
+              _retry(missing);
             }
           }
           if (_closed || !isCurrent()) return;
           for (final member in members) {
             final id = member.userID;
+            _retryPending.remove(id);
+            _retryCounts.remove(id);
             if (id != null &&
                 nameVersions.containsKey(id) &&
                 nameVersions[id] == (_nameVersions[id] ?? 0)) {
@@ -180,7 +191,7 @@ class GroupSenderAvatars {
             }
           }
         } catch (_) {
-          // Retain known message/profile data; a later event can refresh it.
+          _retry(ids);
         }
       }
     } finally {
@@ -188,8 +199,34 @@ class GroupSenderAvatars {
     }
   }
 
+  // Bound retries while retaining the last usable value. Recovery events can
+  // start another attempt; closing the page cancels all outstanding retries.
+  void _retry(List<String> ids) {
+    if (_closed || !isCurrent()) return;
+    for (final id in ids) {
+      final attempts = _retryCounts[id] ?? 0;
+      if (attempts >= 3) {
+        _requested.remove(id);
+        continue;
+      }
+      _retryCounts[id] = attempts + 1;
+      _retryPending.add(id);
+    }
+    if (_retryPending.isEmpty || _retryTimer != null) return;
+    _retryTimer = Timer(retryDelay, () {
+      _retryTimer = null;
+      if (_closed || !isCurrent()) return;
+      _pending.addAll(_retryPending);
+      _retryPending.clear();
+      _scheduleLoad();
+    });
+  }
+
   void close() {
     _closed = true;
+    _retryTimer?.cancel();
+    _retryPending.clear();
+    _retryCounts.clear();
     _pending.clear();
   }
 }

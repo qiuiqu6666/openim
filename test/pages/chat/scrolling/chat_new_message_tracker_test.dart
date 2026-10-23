@@ -24,6 +24,32 @@ void main() {
 
   tearDown(() => tracker.close());
 
+  test('automatic return keeps button stable until the confirmed latest edge',
+      () {
+    var returning = false;
+    final arrivals = ChatNewMessageTracker(
+      currentUserID: () => 'me',
+      isClosed: () => false,
+      isReturning: () => returning,
+      viewportDimension: () => 600,
+    );
+    addTearDown(arrivals.close);
+    arrivals.updateScrollOffset(3000);
+    arrivals.recordIncoming(_message('new'));
+    returning = true;
+    for (final offset in [180.0, 20.0, 400.0, 2.0]) {
+      arrivals.updateScrollOffset(offset);
+      expect(arrivals.showBackToBottom.value, isTrue);
+      expect(arrivals.unseenCount.value, 1);
+    }
+    arrivals.updateScrollOffset(0);
+    expect(arrivals.showBackToBottom.value, isFalse);
+    expect(arrivals.unseenCount.value, 0);
+    returning = false;
+    arrivals.updateScrollOffset(500);
+    expect(arrivals.showBackToBottom.value, isTrue);
+  });
+
   test('near-bottom jitter follows latest with a stable rejoin boundary', () {
     for (final pixels in [2.0, 16.0, 40.0, 48.0]) {
       tracker.updateScrollOffset(pixels);
@@ -56,7 +82,8 @@ void main() {
     expect(tracker.showBackToBottom.value, isFalse);
   });
 
-  test('button scales with viewport and stays stable near its show boundary', () {
+  test('button scales with viewport and stays stable near its show boundary',
+      () {
     var viewport = 800.0;
     final responsive = ChatNewMessageTracker(
       currentUserID: () => currentUserID,

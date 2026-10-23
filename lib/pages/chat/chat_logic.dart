@@ -56,6 +56,7 @@ import 'history/date_jump/chat_date_window_controller.dart';
 import 'history/date_jump/widgets/chat_date_picker_dialog.dart';
 import 'media/chat_media_controller.dart';
 import 'media/chat_media_preview_session.dart';
+import 'composer/typing/chat_typing_sender.dart';
 import 'media/upload/chat_media_outbox.dart';
 import 'media/upload/chat_media_outbox_binding.dart';
 import 'messages/chat_delivery_controller.dart';
@@ -147,12 +148,15 @@ class ChatLogic extends SuperController {
         ? scrollController.position.viewportDimension
         : 0,
     hasMissingNewer: () => _dateWindow.buffering,
+    isReturning: () => _dateWindow.returning.value || _latestScroll.returning,
   );
   late final _latestScroll = ChatLatestScrollController(
     controller: scrollController,
     isClosed: () => _sessionInactive,
     shouldFollow: () => !newMessages.awayFromLatest.value,
     onReachedLatest: () => newMessages.updateScrollOffset(0),
+    positionLatest: messagePositionController.returnToLatest,
+    cancelPositioning: messagePositionController.cancel,
   );
   late final _composer = ChatComposerController(
     conversationID: () => conversationInfo.conversationID,
@@ -585,9 +589,7 @@ class ChatLogic extends SuperController {
   late final ChatTimelineController _timeline = ChatTimelineController(
     beforeLatestReplace: () => _dateWindow.prepareLatestTransition(),
     onLatestDeferred: () => newMessages.updateScrollOffset(0),
-    fetchLocalSnapshot: () => OpenIM.iMManager.messageManager
-        .getLocalHistorySnapshot(
-            conversationID: conversationInfo.conversationID),
+    fetchLocalSnapshot: () => readChatLocalDisplay(conversationInfo),
     fetchDisplaySnapshot: () => readChatLocalDisplay(conversationInfo),
     fetchWindow: () =>
         OpenIM.iMManager.messageManager.peekLocalMessageWindow(
@@ -779,6 +781,11 @@ class ChatLogic extends SuperController {
   }
 
   late final _quoteNavigation = ChatQuoteNavigation(
+    onStart: () {
+      _latestScroll.cancel();
+      _dateWindow.invalidate();
+      _messageFocus.cancel();
+    },
     findMessage: (id) => ChatMediaMessageLocator.findStoredMessage(
         conversationID: conversationInfo.conversationID, clientMsgID: id),
     focusMessage: focusSearchMessage,
@@ -896,6 +903,8 @@ class ChatLogic extends SuperController {
   void scrollBottom({bool force = true, bool smooth = false}) {
     if (_sessionInactive) return;
     if (force) {
+      _quoteNavigation.cancel();
+      _messageFocus.cancel();
       _dateJump.invalidate();
       unawaited(_dateWindow.returnToLatest(smooth: smooth));
     } else if (!_dateWindow.buffering) {
@@ -904,13 +913,13 @@ class ChatLogic extends SuperController {
   }
 
   bool get hasDeferredLatest => _timeline.latestDeferred.value;
-  bool get latestWindowFading => _dateWindow.fading.value;
 
   bool onChatScrollNotification(ScrollNotification notification) {
     if (_sessionInactive) return false;
     if (notification.depth == 0 &&
         notification is ScrollStartNotification &&
         notification.dragDetails != null) {
+      _quoteNavigation.cancel();
       messageArrivals.cancel();
       _latestScroll.endEntry();
       messagePositionController.cancel();
@@ -1420,12 +1429,15 @@ class ChatLogic extends SuperController {
           {String? userId, String? groupId}) =>
       _forwarding.sendForwardMsg(message, userId: userId, groupId: groupId);
 
-  void sendTypingMsg({bool focus = false}) async {
-    if (_sameAccount && isSingleChat && !isOfficialNotificationChat) {
-      OpenIM.iMManager.conversationManager.changeInputStates(
-          conversationID: conversationInfo.conversationID, focus: focus);
-    }
-  }
+  late final _typingSender = ChatTypingSender(
+      owner: _chatAccountID,
+      isCurrent: () => !_sessionInactive && isSingleChat && !isOfficialNotificationChat,
+      send: (focus) async {
+        await OpenIM.iMManager.conversationManager.changeInputStates(
+            conversationID: conversationInfo.conversationID, focus: focus);
+      });
+
+  void sendTypingMsg({bool focus = false}) => _typingSender.report(focus);
 
   Future<void> onTapFormattedText() => _composer.onTapFormattedText();
   Future<void> onTapLocation() => _media.onTapLocation();
@@ -1533,6 +1545,10 @@ class ChatLogic extends SuperController {
       _funds.openDetail(data);
 
   void parseClickEvent(Message msg) async {
+    if (canStopMediaSend(msg)) {
+      await controlMediaSend(msg);
+      return;
+    }
     Logger.print(
         'parseClickEvent type:${msg.contentType} id:${msg.clientMsgID}',
         onlyConsole: true);
@@ -1650,6 +1666,7 @@ class ChatLogic extends SuperController {
     _appearance.close();
     _typingExpiry?.cancel();
     _memberActions.close();
+    _typingSender.dispose();
     _group.close();
     for (final subscription in _messageSubscriptions) {
       subscription.cancel();
@@ -1692,6 +1709,35 @@ class ChatLogic extends SuperController {
   }
 
   bool _confirmingMessageDeletion = false;
+  bool canStopMediaSend(Message message) =>
+      !_sessionInactive &&
+      (message.isPictureType || message.isVideoType) &&
+      ChatMediaOutbox.instance.canCancel(message.clientMsgID);
+
+  Future<void> controlMediaSend(Message message) async {
+    final context = Get.context;
+    if (context == null || !canStopMediaSend(message)) return;
+    final action = await showAppActionSheet<bool>(context,
+        title: '发送中的附件', actions: [
+          if (ChatMediaOutbox.instance.canStop(message.clientMsgID))
+            const AppAction('暂停发送', false, subtitle: '保留消息，点击感叹号重试'),
+          const AppAction('取消发送', true,
+              subtitle: '已提交的消息将核对结果并尝试撤回', destructive: true),
+        ]);
+    if (action == null || !canStopMediaSend(message)) return;
+    final cancelled = action
+        ? await ChatMediaOutbox.instance.cancel(message.clientMsgID)
+        : ChatMediaOutbox.instance.stop(message.clientMsgID);
+    if (_sessionInactive) return;
+    if (!cancelled) {
+      IMViews.showToast('暂未能取消，请核对发送状态后重试');
+      return;
+    }
+    if (action) {
+      _removeMessageByID(message.clientMsgID);
+    }
+  }
+
   Future<void> deleteMessage(Message message) async {
     final context = Get.context;
     if (_confirmingMessageDeletion ||
@@ -1715,6 +1761,11 @@ class ChatLogic extends SuperController {
   String get otherId => isSingleChat ? userID! : groupID!;
 
   void failedResend(Message message) {
+    if (!_sessionInactive && !isOfficialNotificationChat &&
+        !sendingMuted && !isInvalidGroup &&
+        ChatMediaOutbox.instance.retryStopped(message)) {
+      return;
+    }
     if (!isOfficialNotificationChat) _favorites.failedResend(message);
   }
 

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -12,6 +13,8 @@ class _Logic extends GetxController implements GroupSetupLogic {
   final groupInfo = GroupInfo(groupID: 'g', groupName: '示例群聊').obs;
   @override
   bool get isOwner => true;
+  @override
+  bool get isOwnerOrAdmin => true;
   @override
   GroupSetupPermissionContext capturePermissionContext() => (
         account: 'u',
@@ -28,6 +31,42 @@ class _Logic extends GetxController implements GroupSetupLogic {
 }
 
 void main() {
+  for (final role in [GroupRoleLevel.owner, GroupRoleLevel.admin, GroupRoleLevel.member]) {
+    testWidgets('save rechecks SDK role $role before writing appearance', (tester) async {
+      const channel = MethodChannel('flutter_openim_sdk');
+      OpenIM.iMManager.userID = 'u';
+      final calls = <String>[];
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+        calls.add(call.method);
+        if (call.method == 'getGroupMembersInfo') {
+          return '[{"groupID":"g","userID":"u","roleLevel":$role}]';
+        }
+        if (call.method == 'getGroupsInfo') {
+          return '[{"groupID":"g","groupName":"示例群聊","ex":"{}"}]';
+        }
+        if (call.method == 'setGroupInfo') {
+          // Stop at the transport boundary; this test verifies authorization,
+          // including demotion after opening an editable page.
+          throw PlatformException(code: 'offline');
+        }
+        throw StateError(call.method);
+      });
+      addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null));
+      await tester.pumpWidget(ScreenUtilInit(
+        designSize: const Size(375, 812),
+        builder: (_, __) => MaterialApp(home: GroupPersonalizationPage(logic: _Logic())),
+      ));
+      await tester.pumpAndSettle();
+      await tester.scrollUntilVisible(find.text('保存'), 300);
+      await tester.tap(find.text('保存'));
+      await tester.pumpAndSettle();
+      expect(calls.contains('setGroupInfo'), role != GroupRoleLevel.member);
+      expect(find.text('保存失败，请确认管理权限后重试'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
   for (final dark in [false, true]) {
     testWidgets('preview color and reset fit narrow large-text screen: $dark',
         (tester) async {

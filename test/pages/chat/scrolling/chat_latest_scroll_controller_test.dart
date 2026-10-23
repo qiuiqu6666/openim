@@ -62,6 +62,44 @@ Future<ChatLatestScrollController> _mount(
 }
 
 void main() {
+  for (final reverse in [false, true]) {
+    testWidgets('latest edge follows list direction reverse=$reverse',
+        (tester) async {
+      final scroll = ScrollController();
+      var reached = 0;
+      final latest = ChatLatestScrollController(
+        controller: scroll,
+        isClosed: () => false,
+        shouldFollow: () => true,
+        onReachedLatest: () => reached++,
+      );
+      await tester.pumpWidget(MaterialApp(
+          home: ListView.builder(
+        controller: scroll,
+        reverse: reverse,
+        itemCount: 50,
+        itemBuilder: (_, i) =>
+            SizedBox(height: 60 + i % 4 * 20, child: Text('$i')),
+      )));
+      await tester.pumpAndSettle();
+      scroll.jumpTo(reverse ? 300 : scroll.position.maxScrollExtent - 300);
+      await tester.pumpAndSettle();
+      latest.request(animated: true);
+      await tester.pumpAndSettle();
+      expect(reached, 1);
+      expect(
+          scroll.offset,
+          closeTo(
+              reverse
+                  ? scroll.position.minScrollExtent
+                  : scroll.position.maxScrollExtent,
+              1));
+      latest.close();
+      await tester.pumpWidget(const SizedBox());
+      scroll.dispose();
+    });
+  }
+
   testWidgets('entry reaches latest despite provisional away state',
       (tester) async {
     final scroll = ScrollController(keepScrollOffset: false);

@@ -244,6 +244,7 @@ class StrRes {
 
   static String get search => 'search'.tr;
 
+  static String get synchronizingDoNotExit => 'synchronizingDoNotExit'.tr;
   static String get synchronizing => 'synchronizing'.tr;
 
   static String get syncFailed => 'syncFailed'.tr;

@@ -117,3 +117,9 @@ func (p *MetadataProgress) Checkpoints() int64 {
 	}
 	return p.checkpoints.Load()
 }
+
+// MetadataRecoveryProgress identifies one resumable sweep, not a retry attempt.
+func MetadataRecoveryProgress(ctx context.Context) *MetadataProgress {
+	p, _ := ctx.Value(metadataProgressKey{}).(*MetadataProgress)
+	return p
+}

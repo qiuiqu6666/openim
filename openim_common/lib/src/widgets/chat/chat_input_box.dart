@@ -233,9 +233,9 @@ class _ChatInputBoxState extends State<ChatInputBox>
             : voiceVisible
                 ? ChatVoiceTokens.panelHeight + safeBottom
                 : 0;
-    final content = _inputBlocked &&
-            widget.showDisabledBar &&
-            !widget.pendingSending
+    final showDisabledContent =
+        _inputBlocked && widget.showDisabledBar && !widget.pendingSending;
+    final content = showDisabledContent
         ? ChatDisableInputBox(
             muteNotice: widget.muteNotice && !widget.isNotInGroup,
             showWarning: widget.isNotInGroup || widget.showDisabledWarning,
@@ -431,7 +431,9 @@ class _ChatInputBoxState extends State<ChatInputBox>
               top: false,
               left: false,
               right: false,
-              bottom: _inputBlocked && widget.showDisabledBar,
+              // The regular composer already owns its bottom inset through
+              // the panel slot, including while a forward is being sent.
+              bottom: showDisabledContent,
               child: content),
         ),
       ),

@@ -1,8 +1,15 @@
 import 'dart:convert';
 
+enum GroupIconPosition { before, after }
+
 /// Shared group appearance stored alongside existing SDK metadata.
 class GroupPersonalization {
-  const GroupPersonalization({this.color, this.iconUrl, this.iconKey});
+  const GroupPersonalization(
+      {this.color,
+      this.iconUrl,
+      this.iconKey,
+      this.iconPosition = GroupIconPosition.before});
+  final GroupIconPosition iconPosition;
   final int? color;
   final String? iconUrl, iconKey;
   static const icons = {
@@ -41,6 +48,9 @@ class GroupPersonalization {
       final url = value['iconUrl'];
       final uri = url is String ? Uri.tryParse(url) : null;
       return GroupPersonalization(
+        iconPosition: value['iconPosition'] == 'after'
+            ? GroupIconPosition.after
+            : GroupIconPosition.before,
         iconKey: icons.containsKey(value['iconKey'])
             ? value['iconKey'] as String
             : null,
@@ -62,7 +72,8 @@ class GroupPersonalization {
       'version': 1,
       'color': color,
       'iconUrl': iconUrl,
-      'iconKey': iconKey
+      'iconKey': iconKey,
+      'iconPosition': iconPosition.name
     };
     return jsonEncode(data);
   }

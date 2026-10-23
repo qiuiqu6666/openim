@@ -102,32 +102,44 @@ class WalletDepositAddressCard extends StatelessWidget {
                   ),
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: AppTokens.s2),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          i18n.format(
-                            zhHans: '{code}充值地址',
-                            zhHant: '{code}儲值地址',
-                            en: '{code} deposit address',
-                            ja: '{code}入金アドレス',
-                            ko: '{code} 입금 주소',
-                            vars: {'code': currency.code},
+                    child: Row(children: [
+                      Expanded(
+                          child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Text(
+                            i18n.format(
+                              zhHans: '{code}充值地址',
+                              zhHant: '{code}儲值地址',
+                              en: '{code} deposit address',
+                              ja: '{code}入金アドレス',
+                              ko: '{code} 입금 주소',
+                              vars: {'code': currency.code},
+                            ),
+                            style: labelStyle,
                           ),
-                          style: labelStyle,
-                        ),
-                        const SizedBox(height: AppTokens.s2),
-                        Text(
-                          address.address,
-                          key: const ValueKey('wallet-deposit-address'),
-                          style: TextStyle(
-                            fontSize: WalletDepositTokens.body,
-                            height: 1.4,
-                            color: colors.text,
+                          const SizedBox(height: AppTokens.s2),
+                          Text(
+                            address.address,
+                            key: const ValueKey('wallet-deposit-address'),
+                            style: TextStyle(
+                              fontSize: WalletDepositTokens.body,
+                              height: 1.4,
+                              color: colors.text,
+                            ),
                           ),
-                        ),
-                      ],
-                    ),
+                        ],
+                      )),
+                      const SizedBox(width: AppTokens.s2),
+                      ExcludeSemantics(
+                          child: SizedBox.square(
+                        dimension: WalletDepositTokens.minTap,
+                        child: Icon(Icons.content_copy_rounded,
+                            key: const ValueKey('wallet-deposit-copy-icon'),
+                            size: AppTokens.s6,
+                            color: colors.subText),
+                      )),
+                    ]),
                   ),
                 ),
               ),

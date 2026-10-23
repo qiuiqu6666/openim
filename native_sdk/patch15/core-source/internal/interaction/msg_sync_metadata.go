@@ -72,6 +72,10 @@ func (m *MsgSyncer) doAuxiliaryMetadataSync(ctx context.Context) {
 	}
 	m.auxMetadataPending = false
 	m.auxMetadataProgress = nil
+	if m.auxMetadataFollowup {
+		m.auxMetadataFollowup = false
+		m.requestAuxiliaryMetadata()
+	}
 }
 
 // Keep metadata failures visible and retryable, but only after offline messages
@@ -82,4 +86,20 @@ func (m *MsgSyncer) syncMetadataAfterMessages(ctx context.Context) error {
 		Cmd:   constant.CmdSyncData,
 		Value: sdk_struct.CmdNewMsgComeToConversation{},
 	}, m.conversationCh)
+}
+
+// Preserve resumable work, then run a fresh sweep for a new transport.
+// Scheduler retries on the same transport must not restart the completed prefix.
+func (m *MsgSyncer) observeMetadataConnection() {
+	if m.longConnMgr == nil {
+		return
+	}
+	generation := m.longConnMgr.metrics.generation.Load()
+	if generation == m.auxMetadataGeneration {
+		return
+	}
+	m.auxMetadataGeneration = generation
+	if m.auxMetadataPending {
+		m.auxMetadataFollowup = true
+	}
 }

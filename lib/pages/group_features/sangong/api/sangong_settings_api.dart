@@ -31,7 +31,9 @@ class SangongSettingsApi {
 
   Future<SangongGameSettings> save(SangongGameSettings settings) async {
     if (!canEdit) throw StateError('没有当前群的规则修改权限');
-    if (!settings.isValid) throw ArgumentError('游戏规则无效');
+    if (!settings.isValidForUpdate) {
+      throw ArgumentError('开奖包数须为 2–9 包，且其他游戏规则有效');
+    }
     return SangongGameSettings.fromJson(
         await _api.command('rules.update', settings.toJson()));
   }

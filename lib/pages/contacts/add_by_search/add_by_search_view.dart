@@ -15,57 +15,63 @@ class AddContactsBySearchPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: TitleBar.back(
-        title: logic.isSearchUser ? StrRes.addFriend : StrRes.addGroup,
-        backIconColor: Styles.c_0089FF,
-      ),
-      backgroundColor: Styles.c_FFFFFF,
-      body: Column(
-        children: [
-          SearchBox(
-            focusNode: logic.focusNode,
-            controller: logic.searchCtrl,
-            hintText: logic.isSearchUser
-                ? (Get.locale?.languageCode == 'zh'
-                    ? AppCopy.text('搜索公开账号、手机号或邮箱')
-                    : 'Search public account, phone or email')
-                : StrRes.searchIDAddGroup,
-            enabled: true,
-            autofocus: true,
-            margin: EdgeInsets.symmetric(horizontal: 17.w, vertical: 10.h),
-            onSubmitted: (_) => logic.search(),
-          ),
-          Divider(color: Styles.c_E8EAEF, height: 1.h),
-          Obx(() => Expanded(
-                child: logic.status.value == ContactSearchStatus.loading ||
-                        logic.status.value == ContactSearchStatus.waiting
-                    ? _buildStatusView(Get.locale?.languageCode == 'zh'
-                        ? '正在搜索…'
-                        : 'Searching…')
-                    : logic.status.value == ContactSearchStatus.error
-                        ? Align(
-                            alignment: Alignment.topCenter,
-                            child: TextButton(
-                              onPressed: logic.search,
-                              child: Text(Get.locale?.languageCode == 'zh'
-                                  ? '搜索失败，点击重试'
-                                  : 'Search failed. Tap to retry.'),
-                            ),
-                          )
-                        : logic.isSearchUser
-                            ? (logic.isNotFoundUser
-                                ? _buildNotFoundView()
-                                : _buildUserListView())
-                            : (logic.isNotFoundGroup
-                                ? _buildNotFoundView()
-                                : (Column(
-                                    children: logic.groupInfoList
-                                        .map((e) => _buildItemView(e))
-                                        .toList(),
-                                  ))),
-              ))
-        ],
+    return PopScope(
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) logic.focusNode.unfocus();
+      },
+      child: Scaffold(
+        appBar: TitleBar.back(
+          title: logic.isSearchUser ? StrRes.addFriend : StrRes.addGroup,
+          backIconColor: Styles.c_0089FF,
+        ),
+        backgroundColor: Styles.c_FFFFFF,
+        body: Column(
+          children: [
+            SearchBox(
+              focusNode: logic.focusNode,
+              controller: logic.searchCtrl,
+              hintText: logic.isSearchUser
+                  ? (Get.locale?.languageCode == 'zh'
+                      ? AppCopy.text('搜索公开账号、手机号或邮箱')
+                      : 'Search public account, phone or email')
+                  : StrRes.searchIDAddGroup,
+              enabled: true,
+              autofocus: true,
+              margin: EdgeInsets.symmetric(horizontal: 17.w, vertical: 10.h),
+              onSubmitted: (_) => logic.search(),
+              onCleared: () => logic.focusNode.requestFocus(),
+            ),
+            Divider(color: Styles.c_E8EAEF, height: 1.h),
+            Obx(() => Expanded(
+                  child: logic.status.value == ContactSearchStatus.loading ||
+                          logic.status.value == ContactSearchStatus.waiting
+                      ? _buildStatusView(Get.locale?.languageCode == 'zh'
+                          ? '正在搜索…'
+                          : 'Searching…')
+                      : logic.status.value == ContactSearchStatus.error
+                          ? Align(
+                              alignment: Alignment.topCenter,
+                              child: TextButton(
+                                onPressed: logic.search,
+                                child: Text(Get.locale?.languageCode == 'zh'
+                                    ? '搜索失败，点击重试'
+                                    : 'Search failed. Tap to retry.'),
+                              ),
+                            )
+                          : logic.isSearchUser
+                              ? (logic.isNotFoundUser
+                                  ? _buildNotFoundView()
+                                  : _buildUserListView())
+                              : (logic.isNotFoundGroup
+                                  ? _buildNotFoundView()
+                                  : (Column(
+                                      children: logic.groupInfoList
+                                          .map((e) => _buildItemView(e))
+                                          .toList(),
+                                    ))),
+                ))
+          ],
+        ),
       ),
     );
   }

@@ -42,7 +42,7 @@ class AuthEntryScaffold extends StatelessWidget {
               dark ? Brightness.light : Brightness.dark),
       child: Scaffold(
         backgroundColor: AuthReferenceTokens.brand500,
-        resizeToAvoidBottomInset: false,
+        resizeToAvoidBottomInset: true,
         body: GestureDetector(
             onTap: () => FocusScope.of(context).unfocus(),
             child: LayoutBuilder(
@@ -57,8 +57,7 @@ class AuthEntryScaffold extends StatelessWidget {
         physics: const BouncingScrollPhysics(
             parent: AlwaysScrollableScrollPhysics()),
         keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-        padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(context).bottom + 24),
+        padding: const EdgeInsets.only(bottom: 24),
         child: child,
       );
 
@@ -70,7 +69,9 @@ class AuthEntryScaffold extends StatelessWidget {
       ]));
 
   Widget _mobile(BuildContext context, BoxConstraints constraints) {
-    final compact = constraints.maxHeight < 560;
+    // Keyboard height affects the scrollable panel, not the hero spacing.
+    final media = MediaQuery.of(context);
+    final compact = media.size.height - media.viewPadding.vertical < 560;
     final top = MediaQuery.paddingOf(context).top;
     return Column(children: [
       Stack(children: [

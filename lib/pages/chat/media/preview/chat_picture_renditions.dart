@@ -28,14 +28,21 @@ class ChatPictureRenditions {
   }
 
   static Future<void> _tail = Future<void>.value();
-  static Future<ChatPictureRenditions?> create(String path) async {
+  static Future<ChatPictureRenditions?> create(String path,
+      {bool Function()? isCancelled}) async {
     final previous = _tail;
     final done = Completer<void>();
     _tail = done.future;
     await previous;
     try {
-      return await compute(_create, path,
-          debugLabel: 'chat picture renditions');
+      if (isCancelled?.call() == true) return null;
+      final result =
+          await compute(_create, path, debugLabel: 'chat picture renditions');
+      if (isCancelled?.call() == true) {
+        await result?.dispose();
+        return null;
+      }
+      return result;
     } finally {
       done.complete();
     }

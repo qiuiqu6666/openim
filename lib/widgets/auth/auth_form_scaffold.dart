@@ -33,7 +33,6 @@ class AuthFormScaffold extends StatelessWidget {
   Widget build(BuildContext context) {
     final top = MediaQuery.paddingOf(context).top;
     final bottom = MediaQuery.paddingOf(context).bottom;
-    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
     final dark = AuthReferenceTokens.isDark(context);
     final surface =
         AuthReferenceTokens.color(context, AuthReferenceTokens.surface);
@@ -48,16 +47,14 @@ class AuthFormScaffold extends StatelessWidget {
       ),
       child: Scaffold(
         backgroundColor: surface,
-        resizeToAvoidBottomInset: false,
+        resizeToAvoidBottomInset: true,
         body: GestureDetector(
           onTap: () => FocusScope.of(context).unfocus(),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: EdgeInsets.only(
-              bottom: keyboard > 0
-                  ? keyboard + AuthReferenceTokens.keyboardScrollExtra
-                  : bottom + AuthReferenceTokens.plainFormBottom,
+              bottom: bottom + AuthReferenceTokens.plainFormBottom,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

@@ -13,12 +13,18 @@ class ChatLatestScrollController {
     required this.isClosed,
     required this.shouldFollow,
     required this.onReachedLatest,
+    this.positionLatest,
+    this.cancelPositioning,
+    this.latestAtMinExtent,
   });
 
   final ScrollController controller;
   final bool Function() isClosed;
   final bool Function() shouldFollow;
   final VoidCallback onReachedLatest;
+  final Future<bool> Function()? positionLatest;
+  final VoidCallback? cancelPositioning;
+  final bool? latestAtMinExtent;
   bool _closed = false;
   bool _scheduled = false;
   bool _forced = false;
@@ -29,6 +35,7 @@ class ChatLatestScrollController {
 
   bool get _active => !_closed && !isClosed() && controller.hasClients;
   bool get followingEntry => _entryFollowing;
+  bool get returning => _returning || (_scheduled && _forced);
 
   /// Initial layout offsets are not evidence of a deliberate history read.
   /// Follow both the local preview and the first authoritative page.
@@ -45,6 +52,7 @@ class ChatLatestScrollController {
 
   void request({bool force = true, bool animated = false}) {
     if (_closed || isClosed() || (!force && _returning)) return;
+    if (force && _returning) cancel();
     if (force || !_forced) _animated = animated;
     _forced = _forced || force;
     if (_scheduled) return;
@@ -59,27 +67,43 @@ class ChatLatestScrollController {
       _animated = false;
       if (!_active || (!force && !shouldFollow())) return;
       if (animated &&
-          !WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
-              .disableAnimations &&
-          _distance > ChatLatestScrollTokens.distanceEpsilon) {
+          _distance.abs() > ChatLatestScrollTokens.distanceEpsilon) {
         unawaited(_returnSmoothly(++_revision));
       } else {
         cancel();
-        controller.jumpTo(controller.position.minScrollExtent);
+        controller.jumpTo(_latestEdge);
         if (force) onReachedLatest();
       }
     });
     WidgetsBinding.instance.ensureVisualUpdate();
   }
 
-  double get _distance =>
-      controller.position.pixels - controller.position.minScrollExtent;
+  bool get _latestAtMinimum => latestAtMinExtent ??
+      (controller.position.axisDirection == AxisDirection.up ||
+          controller.position.axisDirection == AxisDirection.left);
+  double get _latestEdge => _latestAtMinimum
+      ? controller.position.minScrollExtent
+      : controller.position.maxScrollExtent;
+  double get _distance => controller.position.pixels - _latestEdge;
 
   bool _current(int revision) => _active && revision == _revision;
 
   Future<void> _returnSmoothly(int revision) async {
     _returning = true;
     try {
+      if (_distance.abs() >
+              controller.position.viewportDimension *
+                  ChatLatestScrollTokens.farViewportThreshold &&
+          positionLatest != null) {
+        final positioned = await positionLatest!();
+        if (!_current(revision) || !positioned) return;
+      }
+      if (WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
+          .disableAnimations) {
+        controller.jumpTo(_latestEdge);
+        onReachedLatest();
+        return;
+      }
       // Keyboard layout and lazy, variable-height rows can refine the target
       // during animation. Re-read the painted edge rather than assuming zero.
       for (var attempt = 0;
@@ -88,7 +112,7 @@ class ChatLatestScrollController {
           attempt++) {
         if (_distance.abs() <= ChatLatestScrollTokens.distanceEpsilon) break;
         await controller.animateTo(
-          controller.position.minScrollExtent,
+          _latestEdge,
           duration: attempt == 0
               ? ChatLatestScrollTokens.durationFor(
                   _distance, controller.position.viewportDimension)
@@ -104,7 +128,7 @@ class ChatLatestScrollController {
       }
       // Finalize on the real edge; the viewport can then choose its latest
       // stable center. Never turn a drifting target into a visible final jump.
-      controller.jumpTo(controller.position.minScrollExtent);
+      controller.jumpTo(_latestEdge);
       onReachedLatest();
     } finally {
       if (revision == _revision) _returning = false;
@@ -113,6 +137,10 @@ class ChatLatestScrollController {
 
   /// Flutter's drag activity stops animateTo; invalidate its completion too.
   void cancel() {
+    if (_returning) {
+      cancelPositioning?.call();
+      if (controller.hasClients) controller.jumpTo(controller.position.pixels);
+    }
     _revision++;
     _scheduled = false;
     _forced = false;

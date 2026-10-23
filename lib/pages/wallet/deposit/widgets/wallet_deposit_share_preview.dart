@@ -5,11 +5,13 @@ import 'package:flutter/material.dart';
 import '../../data/wallet_fund_api.dart';
 import '../../host/wallet_i18n.dart';
 import '../../widgets/wallet_page_colors.dart';
+import '../wallet_deposit_tokens.dart';
+import '../../widgets/wallet_99chat_tokens.dart';
 import '../share/wallet_deposit_share_tokens.dart';
 import 'wallet_deposit_qr.dart';
 
 /// The complete address card captured by the existing save/share service.
-/// Actions belong to the surrounding sheet and never appear in this image.
+/// Save/share actions stay outside the captured card.
 class WalletDepositSharePreview extends StatefulWidget {
   const WalletDepositSharePreview({
     super.key,
@@ -18,6 +20,7 @@ class WalletDepositSharePreview extends StatefulWidget {
     this.createdAt,
     this.qrCaptureKey,
     this.onSaveQr,
+    this.onCopy,
   });
 
   final WalletDepositAddress address;
@@ -25,6 +28,7 @@ class WalletDepositSharePreview extends StatefulWidget {
   final DateTime? createdAt;
   final GlobalKey? qrCaptureKey;
   final VoidCallback? onSaveQr;
+  final VoidCallback? onCopy;
 
   @override
   State<WalletDepositSharePreview> createState() =>
@@ -105,18 +109,21 @@ class _WalletDepositSharePreviewState extends State<WalletDepositSharePreview> {
                     borderRadius: BorderRadius.circular(
                         WalletDepositShareTokens.qrRadius),
                     child: Semantics(
+                      button: widget.onSaveQr != null,
+                      onTap: widget.onSaveQr,
                       onLongPress: widget.onSaveQr,
                       hint: widget.onSaveQr == null
                           ? null
                           : i18n.t(
-                              zhHans: '长按保存二维码',
-                              zhHant: '長按儲存二維碼',
-                              en: 'Long press to save QR code',
-                              ja: '長押ししてQRコードを保存',
-                              ko: '길게 눌러 QR 코드 저장',
+                              zhHans: '点击保存二维码',
+                              zhHant: '點擊儲存二維碼',
+                              en: 'Tap to save QR code',
+                              ja: 'タップしてQRコードを保存',
+                              ko: '탭하여 QR 코드 저장',
                             ),
                       child: GestureDetector(
                         key: const ValueKey('wallet-deposit-save-qr'),
+                        onTap: widget.onSaveQr,
                         onLongPress: widget.onSaveQr,
                         excludeFromSemantics: true,
                         child: RepaintBoundary(
@@ -156,6 +163,7 @@ class _WalletDepositSharePreviewState extends State<WalletDepositSharePreview> {
                   ),
                   widget.address.address,
                   valueKey: const ValueKey('wallet-deposit-share-address'),
+                  addressRow: true,
                 ),
               ],
             ),
@@ -236,14 +244,14 @@ class _WalletDepositSharePreviewState extends State<WalletDepositSharePreview> {
   }
 
   Widget _detailRow(WalletPageColors colors, String label, String value,
-      {Key? valueKey}) {
+      {Key? valueKey, bool addressRow = false}) {
     final style = TextStyle(
       fontSize: WalletDepositShareTokens.detailFontSize,
       height: WalletDepositShareTokens.detailLineHeight,
       color: colors.text,
     );
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         SizedBox(
           width: WalletDepositShareTokens.detailLabelWidth,
@@ -251,9 +259,36 @@ class _WalletDepositSharePreviewState extends State<WalletDepositSharePreview> {
         ),
         const SizedBox(width: WalletDepositShareTokens.detailColumnGap),
         Expanded(
-          child: Text(value,
-              key: valueKey, textAlign: TextAlign.end, style: style),
+          child: addressRow
+              ? FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: AlignmentDirectional.centerEnd,
+                  child: Text(value,
+                      key: valueKey,
+                      maxLines: 1,
+                      softWrap: false,
+                      textDirection: TextDirection.ltr,
+                      style: style))
+              : Text(value,
+                  key: valueKey, textAlign: TextAlign.end, style: style),
         ),
+        if (addressRow && widget.onCopy != null)
+          IconButton(
+            key: const ValueKey('wallet-deposit-share-copy'),
+            onPressed: widget.onCopy,
+            tooltip: AppI18n.of(context).t(
+                zhHans: '复制地址',
+                zhHant: '複製地址',
+                en: 'Copy address',
+                ja: 'アドレスをコピー',
+                ko: '주소 복사'),
+            icon: const Icon(Icons.content_copy_rounded),
+            iconSize: AppTokens.s5,
+            color: colors.subText,
+            constraints: const BoxConstraints(
+                minWidth: WalletDepositTokens.minTap,
+                minHeight: WalletDepositTokens.minTap),
+          ),
       ],
     );
   }

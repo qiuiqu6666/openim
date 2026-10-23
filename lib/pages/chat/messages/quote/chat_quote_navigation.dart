@@ -6,6 +6,7 @@ import 'package:openim_common/openim_common.dart';
 class ChatQuoteNavigation {
   ChatQuoteNavigation(
       {required this.findMessage,
+      this.onStart,
       required this.focusMessage,
       required this.isAvailable,
       required this.showFeedback});
@@ -14,23 +15,34 @@ class ChatQuoteNavigation {
   final Future<bool> Function(Message) focusMessage;
   final bool Function(Message) isAvailable;
   final void Function(String) showFeedback;
-  bool _opening = false;
+  final void Function()? onStart;
+  String? _openingID;
+  int _revision = 0;
+
+  void cancel() {
+    _revision++;
+    _openingID = null;
+  }
 
   Future<bool> open(Message quote, {required bool Function() isCurrent}) async {
-    if (_opening || !isCurrent()) return false;
+    if (!isCurrent()) return false;
     final id = quote.clientMsgID;
     if (id == null || id.isEmpty) {
       showFeedback(AppCopy.text('原消息不存在或已删除'));
       return false;
     }
+    if (_openingID == id) return false;
     if (quote.hasExpired) {
       showFeedback(AppCopy.text('原消息已失效'));
       return false;
     }
-    _opening = true;
+    final revision = ++_revision;
+    _openingID = id;
+    onStart?.call();
+    bool current() => revision == _revision && isCurrent();
     try {
       final target = await findMessage(id);
-      if (!isCurrent()) return false;
+      if (!current()) return false;
       if (target == null || target.clientMsgID != id || !isAvailable(target)) {
         showFeedback(AppCopy.text('原消息不存在或已删除'));
         return false;
@@ -40,14 +52,14 @@ class ChatQuoteNavigation {
         return false;
       }
       final positioned = await focusMessage(target);
-      if (!isCurrent()) return false;
+      if (!current()) return false;
       if (!positioned) showFeedback(AppCopy.text('暂时无法定位原消息，请重试'));
       return positioned;
     } catch (_) {
-      if (isCurrent()) showFeedback(AppCopy.text('暂时无法定位原消息，请重试'));
+      if (current()) showFeedback(AppCopy.text('暂时无法定位原消息，请重试'));
       return false;
     } finally {
-      _opening = false;
+      if (revision == _revision) _openingID = null;
     }
   }
 }

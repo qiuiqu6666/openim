@@ -43,6 +43,7 @@ type Relation struct {
 	relationSyncMutex      sync.Mutex
 	friendProfilesSyncedAt time.Time
 	friendProfilePending   []string
+	friendProfileRecovery  *common.MetadataProgress
 }
 
 func (r *Relation) initSyncer() {

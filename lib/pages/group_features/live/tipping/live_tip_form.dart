@@ -46,7 +46,7 @@ class LiveTipForm extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = Theme.of(context).textTheme;
     final secondary = LiveStyle.secondary(context);
-    final editable = !busy && !pending;
+    final editable = !loading && !busy && !pending;
     final border = OutlineInputBorder(
         borderRadius: BorderRadius.circular(LiveStyle.fieldRadius),
         borderSide: BorderSide.none);
@@ -97,15 +97,15 @@ class LiveTipForm extends StatelessWidget {
                             icon: const Icon(CupertinoIcons.xmark_circle_fill))
                       ]),
                       const SizedBox(height: AppTokens.s4),
-                      if (loading)
-                        const Center(child: CircularProgressIndicator())
-                      else if (pendingUnavailable)
+                      if (!loading && pendingUnavailable)
                         Text(AppCopy.text('上次打赏使用的币种已不再提供，请到钱包核对原交易。'))
-                      else if (currencies.isEmpty)
+                      else if (!loading && currencies.isEmpty)
                         Text(AppCopy.text('暂无可用打赏币种，请稍后重试。'))
                       else ...[
                         // A single supported currency needs no segmented control.
-                        if (currencies.length == 1)
+                        if (currencies.isEmpty)
+                          const SizedBox(height: kMinInteractiveDimension)
+                        else if (currencies.length == 1)
                           _currencyLabel(context, currencies.single, true)
                         else
                           CupertinoSlidingSegmentedControl<String>(
@@ -158,7 +158,7 @@ class LiveTipForm extends StatelessWidget {
                         Row(children: [
                           Expanded(
                               child: Text(
-                                  balanceLoading
+                                  loading || balanceLoading
                                       ? AppCopy.text('可用余额加载中…')
                                       : balanceFailed || balance == null
                                           ? AppCopy.text('余额暂不可用，请重试')

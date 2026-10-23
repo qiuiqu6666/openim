@@ -100,6 +100,8 @@ class ChatMessageTile extends StatelessWidget {
         sendStatusSubject: logic.sendStatusSub,
         transferStatus: logic.transferStatus(message),
         onCheckDelivery: () => logic.checkDelivery(message),
+        onControlMediaSend: logic.canStopMediaSend(message)
+            ? () => logic.controlMediaSend(message) : null,
         leftNickname: logic.getNewestNickname(message),
         leftFaceUrl: logic.isOfficialNotificationChat &&
                 message.sendID == logic.userID &&

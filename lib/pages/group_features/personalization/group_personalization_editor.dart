@@ -6,6 +6,7 @@ import 'group_personalization.dart';
 import 'group_personalization_artwork.dart';
 import 'group_personalization_preview.dart';
 import 'group_personalization_style.dart';
+import 'group_icon_position_picker.dart';
 
 class GroupPersonalizationEditor extends StatelessWidget {
   const GroupPersonalizationEditor(
@@ -26,7 +27,10 @@ class GroupPersonalizationEditor extends StatelessWidget {
   final VoidCallback onUpload, onSave;
   static const palette = GroupPersonalizationStyle.palette;
   void color(int? value) => onChanged(GroupPersonalization(
-      color: value, iconUrl: appearance.iconUrl, iconKey: appearance.iconKey));
+      iconPosition: appearance.iconPosition,
+      color: value,
+      iconUrl: appearance.iconUrl,
+      iconKey: appearance.iconKey));
 
   @override
   Widget build(BuildContext context) {
@@ -179,7 +183,7 @@ class GroupPersonalizationEditor extends StatelessWidget {
                                                     children: [
                                                         Text('自定义小图标',
                                                             style: heading),
-                                                        Text('上传图片，显示在群昵称前',
+                                                        Text('上传图片，自定义群图标',
                                                             style: TextStyle(
                                                                 fontSize:
                                                                     26 * s,
@@ -191,7 +195,7 @@ class GroupPersonalizationEditor extends StatelessWidget {
                                                     Text('自定义小图标',
                                                         style: heading),
                                                     const Spacer(),
-                                                    Text('上传图片，显示在群昵称前',
+                                                    Text('上传图片，自定义群图标',
                                                         style: TextStyle(
                                                             fontSize: 26 * s,
                                                             color:
@@ -207,6 +211,18 @@ class GroupPersonalizationEditor extends StatelessWidget {
                                                                 .muted),
                                                   ]))),
                                     SizedBox(height: 12 * s),
+                                    GroupIconPositionPicker(
+                                      value: appearance.iconPosition,
+                                      onChanged: busy
+                                          ? null
+                                          : (position) => onChanged(
+                                              GroupPersonalization(
+                                                  color: appearance.color,
+                                                  iconUrl: appearance.iconUrl,
+                                                  iconKey: appearance.iconKey,
+                                                  iconPosition: position)),
+                                    ),
+                                    const SizedBox(height: AppTokens.s2),
                                     LayoutBuilder(
                                         builder: (context, constraints) {
                                       final cols = width < 350 ? 6 : 7;
@@ -276,7 +292,9 @@ class GroupPersonalizationEditor extends StatelessWidget {
                                                       GroupPersonalization(
                                                           color:
                                                               appearance.color,
-                                                          iconKey: key))),
+                                                          iconKey: key,
+                                                          iconPosition: appearance
+                                                              .iconPosition))),
                                           ]);
                                     }),
                                   ]))),
@@ -291,7 +309,9 @@ class GroupPersonalizationEditor extends StatelessWidget {
                                     '移除图标',
                                     CupertinoIcons.trash,
                                     () => onChanged(GroupPersonalization(
-                                        color: appearance.color))),
+                                        color: appearance.color,
+                                        iconPosition:
+                                            appearance.iconPosition))),
                                 Divider(
                                     height: 1,
                                     thickness: .5,

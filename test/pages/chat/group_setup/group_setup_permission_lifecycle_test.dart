@@ -514,11 +514,37 @@ void main() {
     expect(controller.busy.value, isFalse);
   });
 
-  test('admin mute permission does not grant owner-only group rules', () async {
+  for (final role in [GroupRoleLevel.owner, GroupRoleLevel.admin]) {
+    test('role $role can change join verification', () async {
+      final controller = openManage();
+      setup.groupInfo.value.ownerUserID =
+          role == GroupRoleLevel.owner ? _self : 'im_owner';
+      setup.myGroupMembersInfo.value.roleLevel = role;
+      final pending = controller.saveRules(verification: 1);
+      await _drain();
+      expect(nativeCalls.single.method, 'setGroupInfo');
+      await completeWrite();
+      groupReplies.single.complete(jsonEncode([
+        {'groupID': _groupID, 'needVerification': 1}
+      ]));
+      await pending;
+      expect(setup.groupInfo.value.needVerification, 1);
+    });
+  }
+
+  test('ordinary member cannot change join verification', () async {
+    final controller = openManage();
+    setup.groupInfo.value.ownerUserID = 'im_owner';
+    setup.myGroupMembersInfo.value.roleLevel = GroupRoleLevel.member;
+    await controller.saveRules(verification: 1);
+    expect(writeReplies, isEmpty);
+  });
+
+  test('admin verification permission does not grant owner-only group rules', () async {
     final controller = openManage();
     setup.groupInfo.value.ownerUserID = 'im_owner';
     setup.myGroupMembersInfo.value.roleLevel = GroupRoleLevel.admin;
-    await controller.saveRules(verification: 1);
+    await controller.saveRules(verification: 1, look: 1);
     await controller.saveRules(look: 1);
     await controller.saveRules(addFriend: 1);
     expect(writeReplies, isEmpty);

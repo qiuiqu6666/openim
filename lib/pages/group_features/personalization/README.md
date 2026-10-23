@@ -1,6 +1,6 @@
 # 群个性化
 
-群管理中的群主可选择群名颜色、通过现有相册裁剪上传流程设置小图标，并预览、移除图标或恢复默认。只修改群名称表现，不修改成员昵称、群头像或权限。
+群管理中的群主和管理员可选择群名颜色、通过现有相册裁剪上传流程设置小图标，并预览、移除图标或恢复默认。只修改群名称表现，不修改成员昵称、群头像或权限。
 
 共享资料位于 GroupInfo.ex.groupPersonalization，version=1，color 为不透明 ARGB 整数，iconUrl 为 HTTPS 图片地址。保存时重新读取群资料并合并，只替换本字段。非法旧 ex 拒绝覆盖。恢复默认写入空颜色与图标；未设置时使用默认主题文字颜色，游戏类型不再参与着色。
 
@@ -13,3 +13,5 @@
 Reference layout uses a 938px baseline with six color columns and seven icon columns (fewer on narrow screens). All thirteen icons reuse source windows from the supplied artwork, including shared group-name rendering. The preview retains real group data. Layout values live in group_personalization_style.dart. CAPTURE_REFERENCE enables local rendered comparison using Windows system fonts.
 
 Appearance is persisted per account and group in the Hive box opened before runApp. First-frame group labels read it synchronously; SDK updates refresh it in the background. Explicit reset values replace old styles, leaving removes cached appearance, and successful saves await the local write before returning. Only display metadata is restored, never membership or permissions. Uploaded icons use ImageUtil disk caching; group avatars retain AvatarView disk caching.
+
+图标位置：`iconPosition` 保存为 `before` / `after`，缺省或未知值按昵称前显示。编辑器、上传图标、颜色切换和本地缓存均保留此字段；恢复默认回到昵称前。位置控件独立在 `group_icon_position_picker.dart`，预览与实际名称复用 `GroupNameLabel`。旧客户端仍按昵称前展示，需升级客户端才能识别昵称后。

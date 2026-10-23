@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../../core/privacy/typing_visibility_preferences.dart';
+import '../../../core/privacy/typing_visibility_sync.dart';
 
 import 'package:flutter/foundation.dart';
 import 'package:openim_common/openim_common.dart';
@@ -16,6 +18,9 @@ import '../../chat/calling/preferences/call_notification_preferences.dart';
 class SettingsDraftStore extends ChangeNotifier {
   SettingsDraftStore() : ownerUserId = _currentOwner() {
     _hydrateLocalSettings();
+    _typingSubscription = TypingVisibilityPreferences.changes.listen((owner) {
+      if (isCurrentAccount && owner == ownerUserId) notifyListeners();
+    });
     _legacySeedValue =
         SpUtil().getDynamic(legacyNotificationSeedKey(ownerUserId));
     _notificationSubscription =
@@ -32,6 +37,7 @@ class SettingsDraftStore extends ChangeNotifier {
   }
 
   StreamSubscription<String>? _notificationSubscription;
+  StreamSubscription<String>? _typingSubscription;
   Object? _legacySeedValue;
   final String ownerUserId;
   bool _disposed = false;
@@ -48,6 +54,7 @@ class SettingsDraftStore extends ChangeNotifier {
   void dispose() {
     _disposed = true;
     unawaited(_notificationSubscription?.cancel());
+    unawaited(_typingSubscription?.cancel());
     super.dispose();
   }
 
@@ -128,6 +135,13 @@ class SettingsDraftStore extends ChangeNotifier {
   String lastSeenScope = 'all';
   bool showOnlineStatus = true;
   bool readReceipts = true;
+  bool get showTypingStatus => TypingVisibilityPreferences.read(ownerUserId);
+
+  Future<void> setShowTypingStatus(bool value) async {
+    if (!isCurrentAccount) return;
+    await TypingVisibilitySync.save(ownerUserId, value);
+    if (isCurrentAccount) notifyListeners();
+  }
 
   int momentsVisibilityDays = 0;
   final Map<String, SettingsContactDraft> momentsHiddenFrom =

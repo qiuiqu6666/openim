@@ -159,4 +159,94 @@ void main() {
     expect(message.videoElem!.videoUrl, isNull);
     expect(message.videoElem!.snapshotUrl, isNull);
   });
+
+  test('video source starts while its cover is still uploading', () async {
+    final cover = Completer<String>();
+    final started = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      final id = call.arguments['id'] as String;
+      started.add(id);
+      if (id.startsWith('chat-snapshot:')) return cover.future;
+      return jsonEncode({'url': 'https://im.test/video.mp4'});
+    });
+    final message = Message(
+        clientMsgID: 'video',
+        contentType: MessageType.video,
+        videoElem: VideoElem(
+            videoPath: '/tmp/video.mp4', snapshotPath: '/tmp/cover.jpg'));
+    final pending = uploader.prepare(message);
+    await Future<void>.delayed(const Duration(milliseconds: 20));
+    final sourceStarted = started.contains('chat-media:video');
+    expect(message.videoElem!.videoUrl, isNull);
+    cover.complete(jsonEncode({'url': 'https://im.test/cover.jpg'}));
+    await pending;
+    expect(sourceStarted, isTrue);
+    expect(message.videoElem!.videoUrl, 'https://im.test/video.mp4');
+  });
+
+  test('failed cover joins the source without committing URLs; retry works',
+      () async {
+    final source = Completer<String>();
+    var sourceStarted = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      if ((call.arguments['id'] as String).startsWith('chat-snapshot:')) {
+        throw PlatformException(code: 'cover-failed');
+      }
+      sourceStarted = true;
+      return source.future;
+    });
+    final message = Message(
+        clientMsgID: 'retry-video',
+        contentType: MessageType.video,
+        videoElem: VideoElem(
+            videoPath: '/tmp/video.mp4', snapshotPath: '/tmp/cover.jpg'));
+    var completed = false;
+    final checked = expectLater(
+        uploader.prepare(message).whenComplete(() {
+          completed = true;
+        }),
+        throwsA(isA<PlatformException>()));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    expect(sourceStarted, isTrue);
+    expect(completed, isFalse);
+    source.complete(jsonEncode({'url': 'https://im.test/late.mp4'}));
+    await checked;
+    expect(message.videoElem!.videoUrl, isNull);
+    expect(message.videoElem!.snapshotUrl, isNull);
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+            channel, (_) async => jsonEncode({'url': 'https://im.test/retry'}));
+    await uploader.prepare(message);
+    expect(message.videoElem!.videoUrl, 'https://im.test/retry');
+    expect(message.clientMsgID, 'retry-video');
+  });
+
+  test('video upload scheduling timing fixture', () async {
+    final clock = Stopwatch()..start();
+    int? sourceStartedMs;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+      final cover =
+          (call.arguments['id'] as String).startsWith('chat-snapshot:');
+      if (!cover) sourceStartedMs = clock.elapsedMilliseconds;
+      await Future<void>.delayed(Duration(milliseconds: cover ? 120 : 180));
+      return jsonEncode(
+          {'url': 'https://im.test/${cover ? 'cover.jpg' : 'video.mp4'}'});
+    });
+    final message = Message(
+        clientMsgID: 'timing-video',
+        contentType: MessageType.video,
+        videoElem: VideoElem(
+            videoPath: '/tmp/fixed-video.mp4',
+            snapshotPath: '/tmp/fixed-cover.jpg'));
+    await uploader.prepare(message);
+    // Controlled transport latency, not a native encoding/network benchmark.
+    // ignore: avoid_print
+    print(
+        'MEDIA_TIMING sourceStartMs=$sourceStartedMs totalMs=${clock.elapsedMilliseconds}');
+    expect(message.videoElem!.videoUrl, endsWith('video.mp4'));
+    expect(message.videoElem!.snapshotUrl, endsWith('cover.jpg'));
+  });
 }

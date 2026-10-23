@@ -1,6 +1,7 @@
 import 'package:openim_common/media_localization.dart';
 import 'dart:async';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
@@ -18,6 +19,7 @@ import 'upload/chat_media_upload.dart';
 import 'video/chat_video_preparation.dart';
 import 'preparation/chat_media_asset_loader.dart';
 import 'preparation/pending_chat_media.dart';
+import 'preparation/media_operation_wait.dart';
 import 'diagnostics/chat_media_diagnostics.dart';
 
 typedef MediaMessageSender = Future Function(Message message,
@@ -345,6 +347,10 @@ class ChatMediaController {
     ];
     PendingChatMedia.entries.addAll(pending);
     onPendingAdded?.call();
+    final traces = List.generate(assets.length, (_) => ChatMediaTrace());
+    for (final trace in traces) {
+      trace.record('pending_visible');
+    }
     final ready = List.generate(assets.length, (_) => Completer<Message?>());
     final messages = <int, Message>{};
     preparingCount.value += assets.length;
@@ -353,7 +359,9 @@ class ChatMediaController {
       try {
         if (!preparationStopped()) {
           message = await _prepareAsset(assets[index],
-              quality: quality, cancelled: preparationStopped);
+              quality: quality,
+              cancelled: preparationStopped,
+              preparationTrace: traces[index]);
           if (message != null && !stopped()) {
             messages[index] = message;
             if (task != null) {
@@ -361,6 +369,7 @@ class ChatMediaController {
             } else if (!isClosed) {
               _stageMessage(message);
             }
+            traces[index].record('message_staged');
             if (!isClosed) {
               onTransfer?.call(
                   message, const ChatTransferStatus(ChatTransferStage.queued));
@@ -412,8 +421,8 @@ class ChatMediaController {
     }
 
     final local = Future.wait([lane(false), lane(true)]);
-    final uploader = ChatMediaUpload(
-        isClosed: stopped,
+    ChatMediaUpload uploaderFor(Message item, bool Function() expired) => ChatMediaUpload(
+        isClosed: () => expired() || stopped() || (task != null && !task.accepts(item)),
         onTransfer: (message, state) {
           task?.transfer(message, state);
           if (!isClosed) onTransfer?.call(message, state);
@@ -421,9 +430,24 @@ class ChatMediaController {
     await runReadyMediaBatch<int>(
       List.generate(assets.length, (index) => index),
       isVideo: (index) => assets[index].type == AssetType.video,
+      waitUntilReady: (index) async { await ready[index].future; },
       prepare: (index) async {
         final message = await ready[index].future;
-        if (message != null && !stopped()) await uploader.prepare(message);
+        if (message == null || stopped()) return;
+        var expired = false;
+        bool cancelled() => stopped() || (task != null && !task.accepts(message));
+        try {
+          // Stop observing cancelled work promptly, while the upload owner
+          // retains temporary files until its native readers actually finish.
+          await waitMediaOperation(
+            uploaderFor(message, () => expired).prepare(message),
+            totalTimeout: const Duration(minutes: 10),
+            idleTimeout: const Duration(minutes: 10),
+            isCancelled: cancelled,
+          );
+        } finally {
+          expired = true;
+        }
       },
       send: (index) async {
         final message = messages[index];
@@ -437,6 +461,7 @@ class ChatMediaController {
       },
       onError: (index, error) {
         final message = messages[index];
+        if (message != null && task?.isStopped(message) == true) return;
         ChatMediaDiagnostics.record('upload_or_send',
             messageID: message?.clientMsgID, outcome: 'failed', error: error);
         if (message != null) {
@@ -612,9 +637,10 @@ class ChatMediaController {
 
   Future<Message?> _prepareAsset(AssetEntity asset,
       {ChatVideoQuality quality = ChatVideoQuality.standard,
-      bool Function()? cancelled}) async {
+      bool Function()? cancelled,
+      ChatMediaTrace? preparationTrace}) async {
     final stopped = cancelled ?? () => isClosed;
-    final trace = ChatMediaTrace();
+    final trace = preparationTrace ?? ChatMediaTrace();
     if (asset.type == AssetType.video) preparationStages[trace.id] = 'download';
     try {
       final originalFile = await trace.run(
@@ -636,27 +662,41 @@ class ChatMediaController {
               trace: trace,
               originalQuality: quality == ChatVideoQuality.original);
         case AssetType.video:
-          final prepared = await trace.run(
-              'compress_video',
-              () => prepareChatVideo(originalFile, quality,
+          late File prepared;
+          late File saved;
+          Uint8List? thumbnail;
+          // The cover reads the original asset, not the encoded output. Keep
+          // its bounded read alongside encoding/copying rather than after it.
+          // Future.wait observes either failure immediately and joins both
+          // owners before releasing this preparation slot.
+          await Future.wait<void>([
+            (() async {
+              prepared = await trace.run(
+                  'compress_video',
+                  () => prepareChatVideo(originalFile, quality,
                       isCancelled: stopped, onPhase: (stage) {
                     if (!stopped()) preparationStages[trace.id] = stage;
                   }));
-          if (stopped()) return null;
-          final saved = await trace.run('retain_video',
-              () => _retainAttachment(prepared.path).timeout(assetReadTimeout));
-          if (stopped()) return null;
-          final thumbnail = await trace.run(
-              'video_thumbnail',
-              () => asset
-                  .thumbnailDataWithSize(const ThumbnailSize(640, 640))
-                  .timeout(assetReadTimeout));
+              if (stopped()) return;
+              saved = await trace.run(
+                  'retain_video',
+                  () => _retainAttachment(prepared.path)
+                      .timeout(assetReadTimeout));
+            })(),
+            (() async {
+              thumbnail = await trace.run(
+                  'video_thumbnail',
+                  () => asset
+                      .thumbnailDataWithSize(const ThumbnailSize(640, 640))
+                      .timeout(assetReadTimeout));
+            })(),
+          ]);
           if (stopped()) return null;
           if (thumbnail == null) {
             throw StateError('Video thumbnail unavailable');
           }
           final snapshot = File('${saved.path}.jpg');
-          await snapshot.writeAsBytes(thumbnail).timeout(assetReadTimeout);
+          await snapshot.writeAsBytes(thumbnail!).timeout(assetReadTimeout);
           final mimeType = prepared.path != path
               ? 'video/mp4'
               : await asset.mimeTypeAsync.timeout(assetReadTimeout) ??
@@ -674,6 +714,8 @@ class ChatMediaController {
                       snapshotPath: snapshot.path)
                   .timeout(messageCreationTimeout));
           if (stopped()) return null;
+          trace.messageID = message.clientMsgID;
+          trace.record('video_ready');
           return message;
         default:
           throw StateError('Unsupported asset type');

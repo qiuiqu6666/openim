@@ -107,6 +107,32 @@ void main() {
   setUp(() => Get.testMode = true);
   tearDown(() => Get.reset());
 
+  testWidgets('search opening animation cannot focus behind another route',
+      (tester) async {
+    final source = _Source();
+    final searches = <GlobalSearchLogic>[];
+    final scroll = ScrollController();
+    addTearDown(source.updates.close);
+    addTearDown(scroll.dispose);
+    await _mount(tester,
+        source: source,
+        searches: searches,
+        modes: [],
+        scroll: scroll,
+        routes: _Routes());
+    await tester.tap(_entry);
+    await tester.pump();
+    Get.to(() => const Scaffold(body: Text('Another page')));
+    await tester.pumpAndSettle();
+    expect(searches.single.focusNode.hasFocus, isFalse);
+    expect(tester.testTextInput.isVisible, isFalse);
+    Get.back<void>();
+    await tester.pumpAndSettle();
+    expect(searches.single.focusNode.hasFocus, isFalse);
+    await tester.pumpWidget(const SizedBox());
+    await tester.pump();
+  });
+
   for (final dark in [false, true]) {
     testWidgets(
         'search expands in current route and cancel restores feed ($dark)',

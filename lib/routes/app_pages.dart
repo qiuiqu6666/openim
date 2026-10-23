@@ -108,13 +108,9 @@ class AppPages {
       GetPage(
         name: name,
         page: () {
-          if (name != AppRoutes.chat &&
-              name != AppRoutes.aiAssistantChat &&
-              name != AppRoutes.officialAccountChat) {
-            return ThemeAwarePage(builder: (_) => page());
-          }
-          // Resolve route-owned controllers once. An older route can rebuild
-          // after another chat/account has become the global current route.
+          // Construct every route inside its binding lifecycle, not again on
+          // a theme rebuild. Covered/outgoing pages may outlive registration
+          // cleanup and must retain their original controller owner.
           final child = page();
           return ThemeAwarePage(builder: (_) => child);
         },

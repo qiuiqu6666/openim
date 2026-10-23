@@ -4,7 +4,6 @@ import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../chat_timeline_controller.dart';
-import '../../scrolling/chat_latest_scroll_tokens.dart';
 
 /// Coordinates history positions with the current chat's latest edge.
 /// The timeline owns SDK windows; the viewport owns row measurements.
@@ -28,22 +27,16 @@ class ChatDateWindowController {
   final void Function(bool smooth) requestLatestScroll;
   final seeking = false.obs;
   final returning = false.obs;
-  final fading = false.obs;
   bool _animateReplacement = false;
 
   Future<void> prepareLatestTransition() async {
-    if (!_animateReplacement ||
-        !returning.value ||
-        isClosed() ||
-        SchedulerBinding.instance.platformDispatcher.accessibilityFeatures
-            .disableAnimations) {
-      return;
-    }
-    fading.value = true;
-    final revision = _revision;
-    await SchedulerBinding.instance.endOfFrame;
-    if (isClosed() || revision != _revision || !returning.value) return;
-    await Future<void>.delayed(ChatLatestScrollTokens.windowFadeDuration);
+    if (!returning.value || isClosed()) return;
+    // Install the latest center before the replacement's first paint. A small
+    // viewport-relative entrance replaces the old fade-to-empty transition.
+    positions.requestLatestLayout(
+        entrance: _animateReplacement &&
+            !SchedulerBinding.instance.platformDispatcher.accessibilityFeatures
+                .disableAnimations);
   }
 
   int _revision = 0;
@@ -59,7 +52,6 @@ class ChatDateWindowController {
     final wasReturning = returning.value;
     timeline.cancelWindowChange();
     returning.value = false;
-    fading.value = false;
     _animateReplacement = false;
     _latestRequest = null;
     final revision = ++_revision;
@@ -74,20 +66,25 @@ class ChatDateWindowController {
           !timeline.historyLoading.value &&
           timeline.messageList
               .any((message) => message.clientMsgID == target.clientMsgID);
-      if ((!loaded || wasReturning) && !await timeline.jumpTo(target)) {
-        return false;
+      if (!loaded || wasReturning) {
+        positions.requestMessageLayout(target.clientMsgID!);
+        if (!await timeline.jumpTo(target)) return false;
       }
       // A loaded target can have arrived before its row identities rebuilt.
       // Position against the next painted list in both paths.
       await SchedulerBinding.instance.endOfFrame;
       if (!current()) return false;
-      succeeded = await positions.jumpToMessage(target.clientMsgID!);
+      succeeded =
+          await positions.jumpToMessage(target.clientMsgID!, alignment: .65);
       return succeeded && current();
     } catch (_) {
       return false;
     } finally {
       if (current()) {
-        if (!succeeded) _failedAction = () => jumpToMessage(target);
+        if (!succeeded) {
+          positions.cancel();
+          _failedAction = () => jumpToMessage(target);
+        }
         seeking.value = false;
         if (!timeline.viewingHistory.value) timeline.flushBuffered();
         updateScrollOffset(
@@ -123,18 +120,15 @@ class ChatDateWindowController {
     positions.cancel();
     seeking.value = false;
     returning.value = true;
-    _animateReplacement = smooth && timeline.latestDeferred.value;
+    // Quote/date jumps also install a separate history window, even without
+    // deferred live arrivals. Stage a bounded entrance before its first paint.
+    _animateReplacement = smooth;
     bool current() => !isClosed() && revision == _revision;
     var succeeded = false;
     try {
       if (!await timeline.returnToLatest() || !current()) return false;
       timeline.flushBuffered();
-      requestLatestScroll(fading.value ? false : smooth);
-      if (fading.value) {
-        // Position the new, potentially disjoint window while it is hidden.
-        await SchedulerBinding.instance.endOfFrame;
-        if (!current()) return false;
-      }
+      requestLatestScroll(smooth);
       succeeded = true;
       return true;
     } catch (_) {
@@ -145,7 +139,6 @@ class ChatDateWindowController {
           _failedAction = () => returnToLatest(smooth: smooth);
         }
         returning.value = false;
-        fading.value = false;
         _animateReplacement = false;
         if (!timeline.viewingHistory.value) {
           timeline.flushBuffered();
@@ -176,7 +169,6 @@ class ChatDateWindowController {
     timeline.cancelWindowChange();
     seeking.value = false;
     returning.value = false;
-    fading.value = false;
     _animateReplacement = false;
     if (!isClosed() && !timeline.viewingHistory.value) {
       timeline.flushBuffered();

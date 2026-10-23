@@ -107,7 +107,9 @@ class AppNavigator {
     _startResolvedChat<void>(
         conversationInfo: conversation,
         resolution: resolution,
-        offUntilHome: false,
+        // Forwarding changes the active conversation; do not retain older chats
+        // or contact pickers underneath the destination.
+        offUntilHome: true,
         pendingForward: pending);
     return true;
   }
@@ -198,10 +200,14 @@ class AppNavigator {
 
   static startAddContactsMethod() => Get.toNamed(AppRoutes.addContactsMethod);
 
-  static startAddContactsBySearch({required SearchType searchType}) =>
+  static startAddContactsBySearch(
+          {required SearchType searchType, String? initialQuery}) =>
       Get.toNamed(
         AppRoutes.addContactsBySearch,
-        arguments: {"searchType": searchType},
+        arguments: {
+          "searchType": searchType,
+          if (initialQuery != null) 'initialQuery': initialQuery.trim(),
+        },
       );
 
   static Future<dynamic> startUserProfilePane({

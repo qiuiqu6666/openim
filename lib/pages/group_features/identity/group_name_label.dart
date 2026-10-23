@@ -48,21 +48,28 @@ class GroupNameLabel extends StatelessWidget {
     if (appearance.iconUrl == null && appearance.iconKey == null) return text;
     final size =
         (style?.fontSize ?? DefaultTextStyle.of(context).style.fontSize ?? 16);
+    final icon = ExcludeSemantics(
+        child: appearance.iconKey != null
+            ? GroupPersonalizationArtwork(
+                iconKey: appearance.iconKey!, size: size)
+            : ImageUtil.networkImage(
+                url: appearance.iconUrl!,
+                width: size,
+                height: size,
+                fit: BoxFit.contain,
+                loadProgress: false,
+                loadingWidget: SizedBox.square(dimension: size),
+                errorWidget: SizedBox.square(dimension: size)));
     return Row(mainAxisSize: MainAxisSize.min, children: [
-      ExcludeSemantics(
-          child: appearance.iconKey != null
-              ? GroupPersonalizationArtwork(
-                  iconKey: appearance.iconKey!, size: size)
-              : ImageUtil.networkImage(
-                  url: appearance.iconUrl!,
-                  width: size,
-                  height: size,
-                  fit: BoxFit.contain,
-                  loadProgress: false,
-                  loadingWidget: SizedBox.square(dimension: size),
-                  errorWidget: SizedBox.square(dimension: size))),
-      const SizedBox(width: AppTokens.s2),
+      if (appearance.iconPosition == GroupIconPosition.before) ...[
+        icon,
+        const SizedBox(width: AppTokens.s2),
+      ],
       Flexible(child: text),
+      if (appearance.iconPosition == GroupIconPosition.after) ...[
+        const SizedBox(width: AppTokens.s2),
+        icon,
+      ],
     ]);
   }
 }

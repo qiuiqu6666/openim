@@ -72,6 +72,43 @@ class _ComposerHarness {
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
+  for (final state in ['current', 'covered', 'inactive']) {
+    testWidgets(
+        'mention completion restores focus only in current chat: $state',
+        (tester) async {
+      final reply = Completer<List<GroupMembersInfo>?>();
+      var inactive = false;
+      final h = _ComposerHarness(
+          group: true,
+          picker: (_, __) => reply.future,
+          inactive: () => inactive);
+      h.composer.initialize('@');
+      final navigator = GlobalKey<NavigatorState>();
+      await tester.pumpWidget(MaterialApp(
+          navigatorKey: navigator,
+          home: Scaffold(
+              body: TextField(
+                  controller: h.composer.inputCtrl,
+                  focusNode: h.composer.focusNode))));
+      await tester.showKeyboard(find.byType(TextField));
+      final pending = h.composer.selectMentions(0);
+      await tester.pump();
+      if (state == 'covered') {
+        navigator.currentState!.push(MaterialPageRoute<void>(
+            builder: (_) => const Scaffold(body: Text('Other page'))));
+        await tester.pumpAndSettle();
+      }
+      inactive = state == 'inactive';
+      reply.complete([]);
+      await pending;
+      await tester.pumpAndSettle();
+      expect(h.composer.focusNode.hasFocus, state == 'current');
+      expect(tester.testTextInput.isVisible, state == 'current');
+      await tester.pumpWidget(const SizedBox());
+      await h.close();
+    });
+  }
+
   test('selected non-friend nickname survives draft and sent mention metadata',
       () async {
     final h = _ComposerHarness(

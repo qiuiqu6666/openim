@@ -36,6 +36,7 @@ class _Harness {
   _Harness({
     required Future<AdvancedMessage> Function(Message?) older,
     required Future<AdvancedMessage> Function(Message?) newer,
+    bool animateReplacement = false,
   }) {
     timeline = ChatTimelineController(
       accountID: 'me',
@@ -54,6 +55,8 @@ class _Harness {
       captureOffset: () => 0,
       restoreOffset: (_) {},
       onFirstLoaded: () {},
+      beforeLatestReplace:
+          animateReplacement ? () => window.prepareLatestTransition() : null,
     )..initialize(prefetch: false);
     timeline.messageList.add(_message('latest-seed', 100));
     window = ChatDateWindowController(
@@ -98,6 +101,51 @@ Future<bool> _paint(WidgetTester tester, Future<bool> request) async {
 }
 
 void main() {
+  for (final distance in [1, 10, 50, 500, 5000]) {
+    testWidgets('window reads stay bounded across $distance messages',
+        (tester) async {
+      final target = _message('target', 10000 - distance);
+      final h = _Harness(
+        older: (cursor) async => cursor == null
+            ? _page([_message('latest', 10001)], end: true)
+            : _page([_message('before', target.seq! - 1)]),
+        newer: (_) async => _page([_message('after', target.seq! + 1)]),
+      );
+      expect(await _paint(tester, h.window.jumpToMessage(target)), isTrue);
+      expect(h.olderCursors, ['target']);
+      expect(h.newerCursors, ['target']);
+      expect(h.ids, ['before', 'target', 'after']);
+      expect(await h.window.returnToLatest(), isTrue);
+      expect(h.olderCursors, ['target', null]);
+      expect(h.newerCursors, ['target']);
+      expect(h.ids, ['latest']);
+      h.close();
+    });
+  }
+  testWidgets('quote history return stages latest before paint without fading',
+      (tester) async {
+    final h = _Harness(
+      animateReplacement: true,
+      older: (cursor) async => cursor == null
+          ? _page([_message('latest', 100)], end: true)
+          : _page([_message('before', 49)]),
+      newer: (_) async => _page([_message('after', 51)]),
+    );
+    await h.timeline.jumpTo(_message('quote', 50));
+    expect(h.timeline.latestDeferred.value, isFalse);
+    final returning = h.window.returnToLatest(smooth: true);
+    await tester.pump();
+    for (var frame = 0; frame < 8; frame++) {
+      await tester.pump(const Duration(milliseconds: 50));
+    }
+    expect(await returning, isTrue);
+    expect(h.ids, ['latest']);
+    expect(h.latestScrolls, [true]);
+    expect(h.positions.takeLatestLayoutRequest(), isTrue);
+    expect(h.positions.takeLatestEntranceRequest(), isTrue);
+    expect(h.window.returning.value, isFalse);
+  });
+
   setUp(ChatHistoryCache.clear);
   tearDown(ChatHistoryCache.clear);
 

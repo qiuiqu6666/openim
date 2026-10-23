@@ -69,6 +69,7 @@ class _ChatListViewportState extends State<ChatListViewport>
   int _restoreAttempts = 0;
   int _jumpGeneration = 0;
   bool _jumping = false;
+  bool _measureNearby = false;
   bool _disposing = false;
   String? _jumpTargetID;
   Completer<bool>? _pendingJump;
@@ -83,7 +84,7 @@ class _ChatListViewportState extends State<ChatListViewport>
     widget.positionController?.takeLatestLayoutRequest();
     _controller.addListener(_onScroll);
     widget.positionController?.attach(this, _jumpToMessage, _cancelPositionJump,
-        refreshViewport: _schedule);
+        refreshViewport: _schedule, latest: _returnToLatest);
   }
 
   @override
@@ -91,11 +92,13 @@ class _ChatListViewportState extends State<ChatListViewport>
     super.didUpdateWidget(oldWidget);
     final latestLayout =
         widget.positionController?.takeLatestLayoutRequest() == true;
+    final messageLayout = widget.positionController
+        ?.takeMessageLayoutRequest(widget.messageIDs);
     if (oldWidget.positionController != widget.positionController) {
       oldWidget.positionController?.detach(this);
       widget.positionController?.attach(
           this, _jumpToMessage, _cancelPositionJump,
-          refreshViewport: _schedule);
+          refreshViewport: _schedule, latest: _returnToLatest);
     }
     if (_jumpTargetID != null && !widget.messageIDs.contains(_jumpTargetID)) {
       _cancelPositionJump();
@@ -110,6 +113,22 @@ class _ChatListViewportState extends State<ChatListViewport>
     } else if (latestLayout) {
       _cancelPositionJump();
       _useLatestCenter(widget.messageIDs);
+      if (widget.positionController?.takeLatestEntranceRequest() == true &&
+          _controller.hasClients &&
+          !MediaQuery.disableAnimationsOf(context)) {
+        _controller.position.correctBy(_controller.position.viewportDimension *
+            ChatPositionMotion.entranceViewportRatio);
+      }
+    } else if (messageLayout != null) {
+      _cancelPositionJump();
+      _centerID = messageLayout;
+      _historyKey = UniqueKey();
+      _newerKey = UniqueKey();
+      _restoreAnchors = null;
+      _lastAnchors.clear();
+      if (_controller.hasClients) {
+        _controller.position.correctBy(-_controller.position.pixels);
+      }
     } else if (!listEquals(_ids, widget.messageIDs)) {
       if (widget.followLatest &&
           !_jumping &&
@@ -124,7 +143,7 @@ class _ChatListViewportState extends State<ChatListViewport>
         _restoreAttempts = 0;
       }
     }
-    if (latestLayout ||
+    if (latestLayout || messageLayout != null ||
         oldWidget.controller != widget.controller ||
         !listEquals(_ids, widget.messageIDs)) {
       _updatePartition();
@@ -184,6 +203,7 @@ class _ChatListViewportState extends State<ChatListViewport>
     _jumpGeneration++;
     final wasJumping = _jumping;
     _jumping = false;
+    _measureNearby = false;
     _jumpTargetID = null;
     final pending = _pendingJump;
     _pendingJump = null;
@@ -201,37 +221,33 @@ class _ChatListViewportState extends State<ChatListViewport>
     }
   }
 
-  Future<bool> _jumpToMessage(String id, double alignment) {
+  Future<bool> _returnToLatest() => _ids.isEmpty
+      ? Future.value(false)
+      : _jumpToMessage(_ids.first, 0, latest: true);
+
+  Future<bool> _jumpToMessage(String id, double alignment,
+      {bool latest = false}) {
     _cancelPositionJump();
     if (!mounted || !_ids.contains(id) || !_controller.hasClients) {
       return Future.value(false);
     }
     final generation = _jumpGeneration;
     final pending = _pendingJump = Completer<bool>();
-    final row = _mountedRows[id];
-    final alreadyMounted = row != null && row.attached && row.hasSize;
     setState(() {
       _jumping = true;
       _jumpTargetID = id;
       _restoreAnchors = null;
       _lastAnchors.clear();
-      // Moving the sliver center materializes the target directly, even with
-      // thousands of variable-height messages between it and the old view.
-      final position = _controller.position;
-      position
-          .jumpTo(position.pixels); // Cancel an outstanding scroll activity.
-      if (!alreadyMounted) {
-        _centerID = id;
-        _historyKey = UniqueKey();
-        _newerKey = UniqueKey();
-        _updatePartition();
-        position.correctBy(-position.pixels);
-      }
+      _controller.jumpTo(_controller.position.pixels);
+      // Measure at most three adjacent screens once. An unmounted row is not
+      // necessarily distant; never infer its offset from an average row height.
+      _measureNearby = !latest && !_mountedRows.containsKey(id);
     });
-    _positionMessage(id, alignment, generation).then((visible) {
+    _preparePosition(id, alignment, generation, latest: latest).then((visible) {
       if (!mounted || generation != _jumpGeneration) return;
       setState(() {
         _jumping = false;
+        _measureNearby = false;
         _jumpTargetID = null;
         _pendingJump = null;
       });
@@ -239,6 +255,46 @@ class _ChatListViewportState extends State<ChatListViewport>
       _schedule();
     });
     return pending.future;
+  }
+
+  Future<bool> _preparePosition(String id, double alignment, int generation,
+      {required bool latest}) async {
+    if (_measureNearby) await _nextPaint();
+    if (!_isCurrentJump(id, generation) || !_controller.hasClients) {
+      return false;
+    }
+    final row = _mountedRows[id];
+    final viewport = _viewportKey.currentContext?.findRenderObject();
+    final nearby = row != null &&
+        row.attached &&
+        row.hasSize &&
+        viewport is RenderBox &&
+        viewport.hasSize &&
+        (row.localToGlobal(Offset.zero, ancestor: viewport).dy -
+                    math.max(
+                        0.0,
+                        (viewport.size.height - row.size.height) *
+                            (1 - alignment)))
+                .abs() <=
+            viewport.size.height * ChatPositionMotion.farViewportThreshold;
+    if (!nearby) {
+      setState(() {
+        _measureNearby = false;
+        // Recenter by identity, without laying out the intervening history.
+        final position = _controller.position;
+        _centerID = id;
+        _historyKey = UniqueKey();
+        _newerKey = UniqueKey();
+        _updatePartition();
+        position.correctBy(-position.pixels);
+        if (latest && !MediaQuery.disableAnimationsOf(context)) {
+          position.correctBy(position.viewportDimension *
+              ChatPositionMotion.entranceViewportRatio);
+        }
+      });
+    }
+    return _positionMessage(id, alignment, generation,
+        relocated: !nearby, latest: latest);
   }
 
   bool _isCurrentJump(String id, int generation) =>
@@ -249,8 +305,8 @@ class _ChatListViewportState extends State<ChatListViewport>
     return WidgetsBinding.instance.endOfFrame;
   }
 
-  Future<bool> _positionMessage(
-      String id, double alignment, int generation) async {
+  Future<bool> _positionMessage(String id, double alignment, int generation,
+      {required bool relocated, required bool latest}) async {
     for (var attempt = 0; attempt < 6; attempt++) {
       await _nextPaint();
       if (!_isCurrentJump(id, generation) || !_controller.hasClients) {
@@ -266,8 +322,8 @@ class _ChatListViewportState extends State<ChatListViewport>
       }
       final actualTop =
           row.localToGlobal(Offset.zero, ancestor: viewportBefore).dy;
-      final desiredTop =
-          (viewportBefore.size.height - row.size.height) * (1 - alignment);
+      final desiredTop = math.max(0.0,
+          (viewportBefore.size.height - row.size.height) * (1 - alignment));
       final position = _controller.position;
       // ensureVisible assumes the standard viewport origin. This viewport's
       // adaptive anchor moves a short history sliver toward the top, so use
@@ -281,9 +337,23 @@ class _ChatListViewportState extends State<ChatListViewport>
             MediaQuery.maybeOf(context)?.disableAnimations == true ||
                 WidgetsBinding.instance.platformDispatcher.accessibilityFeatures
                     .disableAnimations;
-        if (attempt == 0 && !reduceMotion) {
+        if (!reduceMotion) {
+          if (attempt == 0 && relocated) {
+            final delta = pixels - position.pixels;
+            final travel = viewportBefore.size.height *
+                ChatPositionMotion.entranceViewportRatio;
+            if (delta.abs() > travel) {
+              position.jumpTo(pixels - delta.sign * travel);
+            }
+          }
           await position.animateTo(pixels,
-              duration: ChatPositionMotion.duration,
+              duration: attempt > 0
+                  ? ChatPositionMotion.correctionDuration
+                  : relocated
+                      ? ChatPositionMotion.entranceDuration
+                      : ChatPositionMotion.durationFor(
+                          pixels - position.pixels, viewportBefore.size.height,
+                          latest: latest),
               curve: ChatPositionMotion.curve);
           if (!_isCurrentJump(id, generation)) return false;
         } else {
@@ -499,6 +569,10 @@ class _ChatListViewportState extends State<ChatListViewport>
             key: _viewportKey,
             child: _ChatCenteredScrollView(
               controller: _controller,
+              cacheExtent: _measureNearby && _controller.hasClients
+                  ? _controller.position.viewportDimension *
+                      ChatPositionMotion.farViewportThreshold
+                  : null,
               physics: widget.physics,
               center: _historyKey,
               // Historical page edges must not pin to the newly expanded edge.
@@ -586,6 +660,7 @@ class _RenderChatRow extends RenderProxyBox {
 class _ChatCenteredScrollView extends CustomScrollView {
   const _ChatCenteredScrollView(
       {super.controller,
+      super.cacheExtent,
       super.physics,
       this.positioning = false,
       required super.center,

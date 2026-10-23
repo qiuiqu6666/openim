@@ -17,3 +17,5 @@
 只有 SDK 撤回成功后才清理原消息内容、引用和语音状态，并在原位置替换为撤回提示。收到 SDK `RevokedInfo` 时使用撤回人的昵称显示提示；自己撤回显示“你撤回了一条消息”。历史中的 SDK 撤回通知使用相同展示，当前账号缓存和迟到历史页也覆盖为不含原内容的提示。真正删除仍移除列表项，撤回不调用删除接口。失败保留原消息并给出简短提示。
 
 删除和撤回共用 `messages/widgets/message_action_confirmation_sheet.dart` 的原生底部弹窗，颜色、取消按钮及安全区域沿用 Cupertino 的亮暗主题行为。长按菜单继续复用公共消息组件。测试位于 `test/pages/chat/messages/revocation/`，群角色实时更新测试位于 `test/pages/chat/group/chat_group_controller_test.dart`，菜单回调测试沿用 `chat_message_tile_test.dart`。真实部署的 SDK/服务端权限、时限及多设备回调仍需联机验收。
+
+首屏撤回防闪：普通聊天的 `readChatLocalDisplay` 和本地备用读取统一使用带有效窗口证明的 `getLocalMessageWindow`，不再显示旧 `allowIncomplete` 快照。旧快照直接读取正文，可能遗漏持久化撤回覆盖，随后正式窗口替换时会闪现媒体。窗口无效或旧 SDK 不支持时等待正式历史；私密会话仍沿用原本的普通消息筛选。回归覆盖图片/视频首次进入、缓存重入，以及缺失/不完整/错误会话窗口。

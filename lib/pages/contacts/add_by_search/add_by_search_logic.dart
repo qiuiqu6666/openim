@@ -38,6 +38,7 @@ class AddContactsBySearchLogic extends GetxController {
   final status = ContactSearchStatus.idle.obs;
   Timer? _searchTimer;
   bool _composing = false;
+  String? _initialQuery;
 
   @override
   void onClose() {
@@ -54,8 +55,19 @@ class AddContactsBySearchLogic extends GetxController {
   @override
   void onInit() {
     searchType = Get.arguments['searchType'] ?? SearchType.user;
+    final initial = Get.arguments['initialQuery'];
+    if (initial is String) {
+      _initialQuery = initial.trim();
+      searchCtrl.text = _initialQuery!;
+    }
     searchCtrl.addListener(_queryChanged);
     super.onInit();
+  }
+
+  @override
+  void onReady() {
+    super.onReady();
+    if (_initialQuery?.isNotEmpty == true && searchKey == _initialQuery) search();
   }
 
   String _inputKey = '';
@@ -75,7 +87,6 @@ class AddContactsBySearchLogic extends GetxController {
     _entryFields.clear();
     _addSources.clear();
     status.value = ContactSearchStatus.idle;
-    if (key.isEmpty) focusNode.requestFocus();
     // Invite links keep their explicit navigation action.
     if (isSearchUser &&
         key.isNotEmpty &&
@@ -115,6 +126,7 @@ class AddContactsBySearchLogic extends GetxController {
   void search() {
     _searchTimer?.cancel();
     if (_closed || searchKey.isEmpty) return;
+    focusNode.unfocus();
     final invite = parseFriendInvite(searchKey);
     if (isSearchUser && invite != null) {
       AppNavigator.startUserProfilePane(
@@ -243,6 +255,9 @@ class AddContactsBySearchLogic extends GetxController {
   }
 
   void viewInfo(dynamic info) async {
+    // Clear the search route's remembered focus before pushing a profile.
+    // Otherwise popping the profile restores the keyboard during back navigation.
+    focusNode.unfocus();
     if (info is UserFullInfo) {
       final fields = Map<String, String>.from(_entryFields[info.userID] ?? {});
       if (_addSources[info.userID] == FriendAddSource.phone &&

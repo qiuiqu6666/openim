@@ -1,4 +1,6 @@
 import 'dart:async';
+import '../../core/controller/im_controller.dart';
+import 'identity/global_search_group_projection.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
@@ -8,8 +10,12 @@ import '../group_features/data/group_feature_store.dart';
 import 'cloud/global_history_cloud_search.dart';
 import 'cloud/global_keyword_search_api.dart';
 import '../chat/history_search/cloud/chat_keyword_search_api.dart';
+import '../contacts/search/contact_search_source.dart';
 
 class GlobalSearchSource {
+  GlobalSearchSource({ContactSearchSource? directory})
+      : _directory = directory ?? ContactSearchSource();
+  final ContactSearchSource _directory;
   bool allowsContact(FriendInfo friend) =>
       !Get.isRegistered<ConversationLogic>() ||
       Get.find<ConversationLogic>().allowsSearchUser(friend.userID);
@@ -27,6 +33,26 @@ class GlobalSearchSource {
       ? Get.find<ConversationLogic>().groupFeatures
       : null;
 
+  Stream<GroupInfo>? get groupUpdates => Get.isRegistered<IMController>()
+      ? Get.find<IMController>().groupInfoUpdatedSubject
+      : null;
+  Stream<GroupInfo>? get groupJoins => Get.isRegistered<IMController>()
+      ? Get.find<IMController>().joinedGroupAddedSubject
+      : null;
+  Stream<GroupInfo>? get groupRemovals => Get.isRegistered<IMController>()
+      ? Get.find<IMController>().joinedGroupDeletedSubject
+      : null;
+
+  GroupInfo currentGroup(GroupInfo group) {
+    final cached = groupFeatures?.cachedGroupInfo(group.groupID);
+    if (cached == null) return group;
+    return GroupInfo.fromJson({
+      ...group.toJson(),
+      for (final entry in cached.toJson().entries)
+        if (entry.value != null) entry.key: entry.value,
+    });
+  }
+
   /// Reuses the home owner's projection without another SDK listener.
   Stream<List<ConversationInfo>>? get conversationUpdates =>
       Get.isRegistered<ConversationLogic>()
@@ -42,24 +68,52 @@ class GlobalSearchSource {
         .toList();
   }
 
-  Future<List<FriendInfo>> friends(String query) async =>
-      OpenIM.iMManager.friendshipManager.searchFriends(
-          keywordList: [query],
-          isSearchUserID: true,
-          isSearchNickname: true,
-          isSearchRemark: true);
+  Future<List<FriendInfo>> friends(String query) async {
+    final local = await OpenIM.iMManager.friendshipManager.searchFriends(
+        keywordList: [query],
+        isSearchUserID: true,
+        isSearchNickname: true,
+        isSearchRemark: true);
+    // The UID displayed on profiles is a public account, not always the SDK ID.
+    // The friend endpoint only returns existing friends, never strangers.
+    if (normalizePublicAccountSearch(query) == null) return local;
+    try {
+      final accountMatches = await _directory.friends(query);
+      return {
+        for (final friend in [...accountMatches, ...local])
+          if (friend.userID?.isNotEmpty == true) friend.userID!: friend,
+      }.values.toList();
+    } catch (_) {
+      if (local.isNotEmpty) return local;
+      rethrow;
+    }
+  }
+
   Future<List<GroupInfo>> groups(String query) async {
-    final store = groupFeatures;
     final groups = await OpenIM.iMManager.groupManager.searchGroups(
         keywordList: [query], isSearchGroupName: true, isSearchGroupID: true);
-    for (final group in groups) {
-      store?.seed(group);
-    }
-    return groups;
+    final key = query.toLowerCase();
+    return groups
+        .map(currentGroup)
+        .where((group) =>
+            group.groupID.toLowerCase().contains(key) ||
+            (group.groupName?.toLowerCase().contains(key) ?? false))
+        .toList();
   }
 
   Future<List<ConversationInfo>> conversations(String query) async {
-    return matchConversations(Get.find<ConversationLogic>().list, query);
+    return matchConversations(currentConversations.map((item) {
+      if (!item.isGroupChat || item.groupID == null) return item;
+      final group = currentGroup(GroupInfo(
+          groupID: item.groupID!,
+          groupName: item.showName,
+          faceURL: item.faceURL));
+      return ConversationInfo.fromJson({
+        ...item.toJson(),
+        'showName': group.groupName,
+        'faceURL': group.faceURL
+      });
+    }), query);
   }
 
   Future<List<SearchResultItems>> messages(String query, bool files) async {
@@ -117,6 +171,30 @@ class GlobalSearchLogic extends GetxController {
   final pendingSections = <int>{}.obs;
   final query = ''.obs;
   final index = 1.obs;
+  final _groupProjection = GlobalSearchGroupProjection();
+  final groupRevision = 0.obs;
+  final _groupSubscriptions = <StreamSubscription<GroupInfo>>[];
+  Timer? _groupTimer;
+  int _groupRequest = 0;
+
+  GroupInfo currentGroup(GroupInfo group) {
+    groupRevision.value;
+    return _groupProjection.resolve(source.currentGroup(group));
+  }
+
+  ConversationInfo currentConversation(ConversationInfo item) {
+    if (item.groupID == null || !item.isGroupChat) return item;
+    final group = currentGroup(GroupInfo(
+        groupID: item.groupID!,
+        groupName: item.showName,
+        faceURL: item.faceURL));
+    return ConversationInfo.fromJson({
+      ...item.toJson(),
+      'showName': group.groupName,
+      'faceURL': group.faceURL
+    });
+  }
+
   Timer? _debounce;
   Timer? _conversationTimer;
   List<ConversationInfo>? _latestConversations;
@@ -129,8 +207,56 @@ class GlobalSearchLogic extends GetxController {
   void onInit() {
     super.onInit();
     searchCtrl.addListener(_inputChanged);
+    for (final (stream, joined) in [
+      (source.groupUpdates, false),
+      (source.groupJoins, true)
+    ]) {
+      if (stream != null) {
+        _groupSubscriptions.add(stream.listen((group) {
+          if (_closed) return;
+          if (joined) {
+            _groupProjection.join(group);
+          } else {
+            _groupProjection.update(group);
+          }
+          _groupsChanged();
+        }));
+      }
+    }
+    final removals = source.groupRemovals;
+    if (removals != null) {
+      _groupSubscriptions.add(removals.listen((group) {
+        if (_closed) return;
+        _groupProjection.remove(group.groupID);
+        _groupsChanged();
+      }));
+    }
     _conversationSubscription =
         source.conversationUpdates?.listen(_conversationsChanged);
+  }
+
+  void _groupsChanged() {
+    groupRevision.value++;
+    groupList.assignAll(_groupProjection.project(groupList, query.value));
+    _conversationsChanged(source.currentConversations.toList());
+    _groupTimer?.cancel();
+    final request = ++_groupRequest;
+    final generation = _generation;
+    final key = query.value;
+    if (key.isEmpty) return;
+    _groupTimer = Timer(const Duration(milliseconds: 80), () async {
+      bool current() =>
+          !_closed && generation == _generation && request == _groupRequest;
+      try {
+        final groups = await source.groups(key);
+        if (current()) {
+          groupList.assignAll(_groupProjection.project(groups, key));
+          failures.remove(2);
+        }
+      } catch (_) {
+        if (current()) failures.add(2);
+      }
+    });
   }
 
   void _conversationsChanged(List<ConversationInfo> items) {
@@ -145,9 +271,9 @@ class GlobalSearchLogic extends GetxController {
       final latest = _latestConversations;
       _latestConversations = null;
       if (_closed || query.value.isEmpty || latest == null) return;
-      conversations.assignAll(
-          GlobalSearchSource.matchConversations(latest, query.value)
-              .where(source.allowsConversation));
+      conversations.assignAll(GlobalSearchSource.matchConversations(
+              latest.map(currentConversation), query.value)
+          .where(source.allowsConversation));
       failures.remove(3);
     });
   }
@@ -189,6 +315,7 @@ class GlobalSearchLogic extends GetxController {
     final key = searchCtrl.text.trim();
     final version = ++_generation;
     final conversationRevision = _conversationRevision;
+    final groupRequest = _groupRequest;
     query.value = key;
     clearList();
     loading.value = key.isNotEmpty;
@@ -205,7 +332,8 @@ class GlobalSearchLogic extends GetxController {
         int id, Future<List<T>> Function() fetch, RxList<T> output) async {
       bool applicable() =>
           active() &&
-          (id != 3 || conversationRevision == _conversationRevision);
+          (id != 3 || conversationRevision == _conversationRevision) &&
+          (id != 2 || groupRequest == _groupRequest);
       try {
         final results = await fetch();
         if (applicable()) {
@@ -215,9 +343,17 @@ class GlobalSearchLogic extends GetxController {
               ..addAll(results.cast<FriendInfo>());
             contactsList
                 .assignAll(_contactCandidates.where(source.allowsContact));
+          } else if (id == 2) {
+            groupList.assignAll(_groupProjection.project(
+                results.cast<GroupInfo>().map(currentGroup), key));
           } else if (id == 3) {
             conversations.assignAll(results
                 .cast<ConversationInfo>()
+                .map(currentConversation)
+                .where((item) =>
+                    !_groupProjection.hasChanged(item.groupID) ||
+                    GlobalSearchSource.matchConversations([item], key)
+                        .isNotEmpty)
                 .where(source.allowsConversation));
           } else {
             output.assignAll(results);
@@ -336,6 +472,11 @@ class GlobalSearchLogic extends GetxController {
   @override
   void onClose() {
     _closed = true;
+    _groupTimer?.cancel();
+    for (final subscription in _groupSubscriptions) {
+      unawaited(subscription.cancel());
+    }
+    _groupSubscriptions.clear();
     _globalApi?.cancelPending();
     _conversationTimer?.cancel();
     _latestConversations = null;

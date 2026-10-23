@@ -40,7 +40,8 @@ class GroupManageLogic extends GetxController {
         !_closed &&
         !isClosed &&
         groupSetupLogic.isPermissionContextCurrent(context);
-    final canSave = muted != null
+    final canSave = muted != null ||
+            (verification != null && look == null && addFriend == null)
         ? groupSetupLogic.isOwnerOrAdmin
         : groupSetupLogic.isOwner;
     if (busy.value || !isCurrent() || !canSave) return;

@@ -455,7 +455,7 @@ class GroupSetupPage extends StatelessWidget {
                 (logic.groupInfo.value.notification?.trim().isNotEmpty ??
                     false),
             onTap: logic.isOwnerOrAdmin
-                ? () => Get.to(() => const GroupAnnouncementPage())
+                ? () => Get.to(() => GroupAnnouncementPage(logic: logic))
                 : (logic.groupInfo.value.notification?.trim().isNotEmpty ??
                         false)
                     ? () => showGroupAnnouncementSheet(

@@ -12,6 +12,7 @@ import 'package:just_waveform/just_waveform.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:openim_common/openim_common.dart';
 import '../../res/chat_voice_tokens.dart';
+import 'voice/voice_seek_bar.dart';
 
 typedef ChatFileMessageBuilder = Widget Function(
   BuildContext context, {
@@ -399,30 +400,43 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
                         color: Styles.c_0089FF, shape: BoxShape.circle),
                     alignment: Alignment.center,
                     child: Icon(
-                            _failed
-                                ? Icons.refresh_rounded
-                                : _playing
-                                    ? Icons.pause_rounded
-                                    : Icons.play_arrow_rounded,
-                            color: Colors.white,
-                            size: 18.w),
+                        _failed
+                            ? Icons.refresh_rounded
+                            : _playing
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                        color: Colors.white,
+                        size: 18.w),
                   ),
                   6.horizontalSpace,
                   Expanded(
                       child: StreamBuilder<Duration>(
                     stream: _current ? _playback.positionStream : null,
-                    builder: (_, snapshot) => CustomPaint(
-                      size: Size(double.infinity, 18.w),
-                      painter: _VoiceWavePainter(
-                        levels: _waveform,
-                        color: Styles.c_8E9AB0,
-                        playedColor: Styles.c_0089FF,
-                        progress: _playing && duration > 0
-                            ? ((snapshot.data?.inMilliseconds ?? 0) /
-                                    (duration * 1000))
-                                .clamp(0.0, 1.0)
-                            : 0,
-                      ),
+                    initialData: _playback.positionFor(widget.message),
+                    builder: (_, snapshot) => VoiceSeekBar(
+                      key: ValueKey('voice-seek-${widget.message.clientMsgID}'),
+                      levels: _waveform,
+                      color: Styles.c_8E9AB0,
+                      playedColor: Styles.c_0089FF,
+                      waveHeight: 18.w,
+                      progress: _current &&
+                              _playback
+                                      .durationFor(widget.message)
+                                      .inMilliseconds >
+                                  0
+                          ? (_playback
+                                      .positionFor(widget.message)
+                                      .inMilliseconds /
+                                  _playback
+                                      .durationFor(widget.message)
+                                      .inMilliseconds)
+                              .clamp(0.0, 1.0)
+                          : 0,
+                      onSeek:
+                          widget.readOnly || _playback.loading || duration <= 0
+                              ? null
+                              : (fraction) =>
+                                  _playback.seek(widget.message, fraction),
                     ),
                   )),
                   6.horizontalSpace,
@@ -445,46 +459,4 @@ class _ChatVoiceMessageViewState extends State<ChatVoiceMessageView> {
       ),
     );
   }
-}
-
-class _VoiceWavePainter extends CustomPainter {
-  const _VoiceWavePainter(
-      {required this.levels,
-      required this.color,
-      required this.playedColor,
-      required this.progress});
-  final List<double> levels;
-  final Color color;
-  final Color playedColor;
-  final double progress;
-  @override
-  void paint(Canvas canvas, Size size) {
-    if (levels.isEmpty) {
-      canvas.drawLine(
-          Offset(0, size.height / 2),
-          Offset(size.width, size.height / 2),
-          Paint()
-            ..color = color.withValues(alpha: .35)
-            ..strokeWidth = 1);
-      return;
-    }
-    final step = size.width / levels.length;
-    final paint = Paint()
-      ..strokeWidth = math.min(2.0.w, step * .4)
-      ..strokeCap = StrokeCap.round;
-    for (var i = 0; i < levels.length; i++) {
-      paint.color = (i + .5) / levels.length <= progress ? playedColor : color;
-      final height = math.max(0.0, size.height * levels[i] - paint.strokeWidth);
-      final x = step * (i + .5);
-      canvas.drawLine(Offset(x, (size.height - height) / 2),
-          Offset(x, (size.height + height) / 2), paint);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _VoiceWavePainter old) =>
-      old.levels != levels ||
-      old.color != color ||
-      old.playedColor != playedColor ||
-      old.progress != progress;
 }

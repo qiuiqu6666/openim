@@ -10,6 +10,9 @@ abstract final class GroupPersonalizationStyle {
   static const blue = Color(0xFF008BFF);
   static const blueEnd = Color(0xFF3299FF);
   static const tile = Color(0xFFF4F4FB);
+  static const previewBackground =
+      'assets/images/group_personalization_diamond_background.png';
+  static const previewDarkOverlay = Color(0xD91C293C);
   static const previewStart = Color(0xFFE9F1FF);
   static const previewEnd = Color(0xFFD7E6FF);
   static const palette = <int, String>{

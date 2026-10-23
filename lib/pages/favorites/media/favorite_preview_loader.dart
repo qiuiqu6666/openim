@@ -58,8 +58,10 @@ class FavoritePreviewLoader {
       guard();
       _directory = await root.createTemp('favorite-preview-');
       guard();
-      // Use a fixed name, never a filename or private URL supplied by a server.
-      final file = File('${_directory!.path}/original');
+      // Native audio decoders (especially iOS) need a matching extension.
+      // Only use a fixed MIME allowlist, never a supplied filename or URL.
+      final suffix = _audioSuffix(asset.mimeType);
+      final file = File('${_directory!.path}/original$suffix');
       final response = await _client.download(access.url.toString(), file.path,
           cancelToken: _cancel,
           options: Options(
@@ -86,6 +88,19 @@ class FavoritePreviewLoader {
       rethrow;
     }
   }
+
+  static String _audioSuffix(String mimeType) =>
+      const {
+        'audio/mp4': '.m4a',
+        'audio/x-m4a': '.m4a',
+        'audio/mpeg': '.mp3',
+        'audio/aac': '.aac',
+        'audio/wav': '.wav',
+        'audio/x-wav': '.wav',
+        'audio/ogg': '.ogg',
+        'audio/flac': '.flac',
+      }[mimeType.split(';').first.trim().toLowerCase()] ??
+      '';
 
   Future<void> _removeDirectory() async {
     final directory = _directory;

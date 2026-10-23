@@ -439,6 +439,69 @@ void main() {
     });
   }
 
+  for (final platform in [TargetPlatform.android, TargetPlatform.iOS]) {
+    for (final fromMenu in [false, true]) {
+      testWidgets('grid back preserves preview on $platform menu=$fromMenu',
+          (tester) async {
+        final fixture = _Fixture();
+        await fixture.mount(tester, platform: platform);
+        Future<void> openGrid() async {
+          if (fromMenu) {
+            await fixture.openMenu(tester);
+            await _choose(tester, '图片和视频');
+          } else {
+            await tester.tap(find.byTooltip('图片和视频'));
+            await tester.pumpAndSettle();
+          }
+          expect(find.byType(GridView), findsOneWidget);
+        }
+
+        await openGrid();
+        await tester.timedDragFrom(const Offset(80, 300), const Offset(35, 0),
+            const Duration(milliseconds: 500));
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsOneWidget);
+        final cancelled = await tester.startGesture(const Offset(80, 300));
+        await cancelled.moveBy(const Offset(100, 0));
+        await cancelled.cancel();
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsOneWidget);
+        await tester.dragFrom(const Offset(80, 300), const Offset(-70, 0));
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsOneWidget);
+        await tester.dragFrom(const Offset(80, 300), const Offset(0, -120));
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsOneWidget);
+        await tester.dragFrom(const Offset(20, 300), const Offset(240, 0));
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsNothing);
+        expect(find.byType(MediaBrowser), findsOneWidget);
+        expect(fixture.events, isNot(contains('pop:preview')));
+
+        await openGrid();
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsNothing);
+        expect(find.byType(MediaBrowser), findsOneWidget);
+
+        await openGrid();
+        await tester.tap(find.byType(MediaGridThumbnail).last);
+        await tester.pumpAndSettle();
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsOneWidget);
+        await tester.dragFrom(const Offset(80, 300), const Offset(240, 0));
+        await tester.pumpAndSettle();
+        expect(find.byType(GridView), findsNothing);
+        await tester.binding.handlePopRoute();
+        await tester.pumpAndSettle();
+        expect(find.byType(MediaBrowser), findsNothing);
+        expect(find.text('原聊天页面'), findsOneWidget);
+        expect(tester.takeException(), isNull);
+      });
+    }
+  }
+
   testWidgets('delete closes menu and preview before notifying caller',
       (tester) async {
     final fixture = _Fixture();

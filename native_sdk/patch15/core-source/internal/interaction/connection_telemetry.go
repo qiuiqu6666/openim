@@ -10,6 +10,7 @@ import (
 )
 
 type connectionTelemetry struct {
+	generation     atomic.Int64
 	attempts       atomic.Int64
 	connectedAt    atomic.Int64
 	lastPing       atomic.Int64
@@ -34,6 +35,7 @@ func observedConnectionError(err error) string {
 }
 
 func (m *connectionTelemetry) connected(ctx context.Context, background bool) {
+	m.generation.Add(1)
 	now := time.Now().UnixMilli()
 	m.connectedAt.Store(now)
 	m.lastPing.Store(0)

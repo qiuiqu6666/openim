@@ -45,7 +45,9 @@ void main() {
       }
       await tester.pumpAndSettle();
       expect(find.text('sdkMuteAll'.tr), findsOneWidget);
-      expect(find.text('sdkJoinRule'.tr), findsNothing);
+      expect(find.text('sdkJoinRule'.tr), findsOneWidget);
+      expect(find.text('群个性化'), findsOneWidget);
+      expect(find.text('新成员历史消息'), findsNothing);
       expect(find.text(StrRes.transferGroupOwnerRight), findsNothing);
       expect(tester.widget<AppSwitch>(find.byType(AppSwitch)).value, isFalse);
       expect(tester.widget<AppSwitch>(find.byType(AppSwitch)).onChanged,
@@ -70,7 +72,13 @@ void main() {
           .update((member) => member!.roleLevel = GroupRoleLevel.member);
       await tester.pumpAndSettle();
       expect(find.text('sdkMuteAll'.tr), findsNothing);
+      expect(find.text('sdkJoinRule'.tr), findsNothing);
+      expect(find.text('群个性化'), findsNothing);
       expect(find.byType(AppSwitch), findsNothing);
+      fixture.setup.myGroupMembersInfo
+          .update((member) => member!.roleLevel = GroupRoleLevel.owner);
+      await tester.pumpAndSettle();
+      expect(find.text('新成员历史消息'), findsOneWidget);
       expect(tester.takeException(), isNull);
       await tester.pumpWidget(const SizedBox());
     });

@@ -7,6 +7,8 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
 import 'group_manage_logic.dart';
+import 'history_visibility/group_history_page.dart';
+import 'history_visibility/group_history_policy.dart';
 
 class GroupManagePage extends StatelessWidget {
   final GroupManageLogic logic;
@@ -58,16 +60,24 @@ class GroupManagePage extends StatelessWidget {
                         _row('sdkAdminList'.tr, onTap: logic.admins),
                         if (!isChannelEx(info.ex))
                           _row('sdkMutedList'.tr, onTap: logic.mutedMembers),
-                        if (owner)
+                        if (logic.groupSetupLogic.isOwnerOrAdmin)
                           _row('sdkJoinRule'.tr,
                               subtitle: 'sdkJoinRule${rule.clamp(0, 2)}'.tr,
                               onTap: busy
                                   ? null
                                   : () => _selectJoinRule(context, rule)),
                       ]),
-                      if (!isChannelEx(info.ex) && logic.groupSetupLogic.isOwner) ...[
+                      if (!isChannelEx(info.ex) && logic.groupSetupLogic.isOwnerOrAdmin) ...[
                         const SizedBox(height: 16),
                         _section([_row('群个性化', onTap: busy ? null : () => Get.to(() => GroupPersonalizationPage(logic: logic.groupSetupLogic)))]),
+                      ],
+                      if (owner && !isChannelEx(info.ex)) ...[
+                        const SizedBox(height: 16),
+                        _section([_row('新成员历史消息',
+                          subtitle: GroupHistoryPolicy.read(info.ex)
+                              ? '允许查看入群前消息' : '仅查看入群后消息',
+                          onTap: busy ? null : () => Get.to(() => GroupHistoryPage(logic: logic.groupSetupLogic)),
+                        )]),
                       ],
                       const SizedBox(height: 16),
                       _section([

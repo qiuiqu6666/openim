@@ -133,3 +133,28 @@ waits, native plugin failures and image transparency. Focused analysis and the
 Android debug build passed. The generated package is
 `app-deposit-share-fix-debug-20261006.apk`; native sharing and gallery writes
 were verified at the mocked plugin boundary rather than on a physical device.
+
+## Main-page QR tap saving
+
+The ready page uses `widgets/wallet_deposit_saveable_qr.dart` to capture only the
+existing QR (including its quiet zone and coin logo) through WalletShareService.
+`share/wallet_deposit_save_once.dart` coalesces concurrent writes and persists a
+hashed currency/network/address receipt only after the gallery reports success.
+Repeated taps, including after revisiting the page or restarting the app, do not
+write another copy. Permission denial and failed writes remain retryable. Account,
+address and widget lifecycle checks prevent stale writes or feedback.
+
+The receipt records a successful write; it does not inspect subsequent manual
+photo deletion. The existing save/share sheet remains available for an explicit
+new export. No new gallery permission or plugin is introduced.
+
+Coverage: `share/wallet_deposit_save_once_test.dart` and
+`share/wallet_deposit_tap_save_test.dart` under `test/pages/wallet/deposit/`.
+
+Share-card interaction update: tapping the QR uses the same persistent save
+receipt as the main page (long press remains supported). The address is rendered
+in a single line using scale-down fitting, with a labeled copy control on the
+right. Blank backdrop taps dismiss the sheet; taps inside the card or action
+panel are absorbed. The existing full-card export remains an explicit new export.
+Verified by `wallet_deposit_share_interaction_test.dart`, QR decode tests and
+light/dark, 320px large-text and landscape preview exports.

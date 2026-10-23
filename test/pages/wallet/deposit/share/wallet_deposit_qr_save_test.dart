@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -12,15 +13,15 @@ import '../support/wallet_deposit_qr_expectation.dart';
 import '../support/wallet_deposit_test_support.dart';
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
   for (final brightness in Brightness.values) {
-    testWidgets('long press saves only a scannable QR in $brightness',
-        (tester) async {
+    testWidgets('tap saves only a scannable QR in $brightness', (tester) async {
       final share = DepositTestShareService();
       await pumpWalletDeposit(tester,
           api: WalletTestFundApi(), share: share, brightness: brightness);
       await tester.tap(depositKey('wallet-deposit-share'));
       await tester.pumpAndSettle();
-      await tester.longPress(depositKey('wallet-deposit-save-qr'));
+      await tester.tap(depositKey('wallet-deposit-save-qr'));
       await tester.pumpAndSettle();
       expect(share.saves, hasLength(1));
       expect(share.saveBackgrounds.single, WalletDepositTokens.qrBackground);
@@ -52,17 +53,16 @@ void main() {
     });
   }
 
-  testWidgets('long press cannot start duplicate saves while saving',
-      (tester) async {
+  testWidgets('tap cannot start duplicate saves while saving', (tester) async {
     final pending = Completer<WalletSaveImgResult>();
     final share = DepositTestShareService()
       ..saveResponse = (_, __) => pending.future;
     await pumpWalletDeposit(tester, api: WalletTestFundApi(), share: share);
     await tester.tap(depositKey('wallet-deposit-share'));
     await tester.pumpAndSettle();
-    await tester.longPress(depositKey('wallet-deposit-save-qr'));
+    await tester.tap(depositKey('wallet-deposit-save-qr'));
     await tester.pump();
-    await tester.longPress(depositKey('wallet-deposit-save-qr'));
+    await tester.tap(depositKey('wallet-deposit-save-qr'));
     expect(share.saves, hasLength(1));
     pending.complete(WalletSaveImgResult.success);
     await tester.pumpAndSettle();

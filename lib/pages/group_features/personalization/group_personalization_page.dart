@@ -24,7 +24,7 @@ class _GroupPersonalizationPageState extends State<GroupPersonalizationPage> {
   bool get current =>
       mounted &&
       widget.logic.isPermissionContextCurrent(permission) &&
-      widget.logic.isOwner;
+      widget.logic.isOwnerOrAdmin;
 
   @override
   void initState() {
@@ -52,8 +52,10 @@ class _GroupPersonalizationPageState extends State<GroupPersonalizationPage> {
       if (!current) return;
       final url = result['url'];
       if (url is String && Uri.tryParse(url)?.scheme == 'https') {
-        setState(() => appearance =
-            GroupPersonalization(color: appearance.color, iconUrl: url));
+        setState(() => appearance = GroupPersonalization(
+            color: appearance.color,
+            iconUrl: url,
+            iconPosition: appearance.iconPosition));
       }
     } catch (_) {
       if (mounted) setState(() => error = '图标上传失败，请重试');
@@ -73,8 +75,10 @@ class _GroupPersonalizationPageState extends State<GroupPersonalizationPage> {
       final members = await manager.getGroupMembersInfo(
           groupID: permission.groupID, userIDList: [OpenIM.iMManager.userID]);
       if (!current) return;
-      if (members.isEmpty || members.first.roleLevel != GroupRoleLevel.owner) {
-        throw StateError('只有群主可以设置群个性化');
+      if (members.isEmpty ||
+          (members.first.roleLevel != GroupRoleLevel.owner &&
+              members.first.roleLevel != GroupRoleLevel.admin)) {
+        throw StateError('只有群主和管理员可以设置群个性化');
       }
       final groups =
           await manager.getGroupsInfo(groupIDList: [permission.groupID]);

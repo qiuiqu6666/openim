@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:openim/pages/chat/scrolling/chat_latest_scroll_controller.dart';
 import 'package:openim_common/src/widgets/chat/chat_list_viewport.dart';
 
 class _ChatFixture extends StatefulWidget {
@@ -103,6 +104,102 @@ Future<bool> _jump(
 }
 
 void main() {
+  testWidgets('a disjoint quote window paints its target in the first frame', (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    final fixture = await _mount(tester, position, scroll, count: 5100);
+    await _jump(tester, position, 'm-5000');
+    position.requestMessageLayout('m-20');
+    fixture.replace(List.generate(40, (index) => 'm-$index'));
+    await tester.pump();
+    _expectVisible(tester, 'm-20');
+    expect(await _jump(tester, position, 'm-20'), isTrue);
+    _expectVisible(tester, 'm-20');
+  });
+  testWidgets('a short latest window never paints an empty entrance', (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    final fixture = await _mount(tester, position, scroll, count: 5100);
+    await _jump(tester, position, 'm-5000');
+    position.requestLatestLayout(entrance: true);
+    fixture.replace(['m-0']);
+    await tester.pump();
+    _expectVisible(tester, 'm-0');
+    final returning = position.returnToLatest();
+    await tester.pumpAndSettle();
+    expect(await returning, isTrue);
+    _expectVisible(tester, 'm-0');
+  });
+  testWidgets('return controller relocates 5000 rows without traversing them',
+      (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    final fixture = await _mount(tester, position, scroll, count: 5100);
+    await _jump(tester, position, 'm-5000');
+    fixture.builds = 0;
+    var reached = 0;
+    final latest = ChatLatestScrollController(
+      controller: scroll,
+      isClosed: () => false,
+      shouldFollow: () => true,
+      positionLatest: position.returnToLatest,
+      cancelPositioning: position.cancel,
+      onReachedLatest: () => reached++,
+    );
+    latest.request(animated: true);
+    await tester.pumpAndSettle();
+    expect(reached, 1);
+    expect(fixture.builds, lessThan(200));
+    _expectVisible(tester, 'm-0');
+    latest.close();
+  });
+
+  for (final distance in [1, 10, 50, 500, 5000]) {
+    testWidgets('quote and latest across $distance variable-height messages',
+        (tester) async {
+      final position = ChatListPositionController();
+      final scroll = ScrollController();
+      final fixture = await _mount(tester, position, scroll, count: 5100);
+      fixture.builds = 0;
+      expect(await _jump(tester, position, 'm-$distance'), isTrue);
+      _expectVisible(tester, 'm-$distance');
+      final rect = tester.getRect(find.byKey(ValueKey('m-$distance')).first);
+      // At the newest edge there is no trailing content to scroll underneath
+      // a centered row; preserve its fully visible edge placement instead.
+      if (distance > 1) {
+        expect(rect.top, closeTo((600 - rect.height) * .35, 1));
+      }
+      expect(fixture.builds, lessThan(200));
+      fixture.builds = 0;
+      final returning = position.returnToLatest();
+      await tester.pumpAndSettle();
+      expect(await returning, isTrue);
+      _expectVisible(tester, 'm-0');
+      expect(scroll.offset, closeTo(scroll.position.minScrollExtent, 1));
+      expect(fixture.builds, lessThan(200));
+      expect(fixture.ids.length, 5100);
+      expect(tester.takeException(), isNull);
+    });
+  }
+
+  testWidgets('latest window entrance paints content before its short travel',
+      (tester) async {
+    final position = ChatListPositionController();
+    final scroll = ScrollController();
+    final fixture = await _mount(tester, position, scroll, count: 5100);
+    await _jump(tester, position, 'm-5000');
+    position.requestLatestLayout(entrance: true);
+    fixture.replace(List.generate(40, (index) => 'm-$index'));
+    await tester.pump();
+    expect(find.byType(Text), findsWidgets);
+    expect(scroll.offset - scroll.position.minScrollExtent,
+        inExclusiveRange(0, 600));
+    final returning = position.returnToLatest();
+    await tester.pumpAndSettle();
+    expect(await returning, isTrue);
+    _expectVisible(tester, 'm-0');
+  });
+
   testWidgets('latest replacement is aligned before its first painted frame',
       (tester) async {
     final position = ChatListPositionController();
@@ -120,7 +217,7 @@ void main() {
     expect(tester.getRect(find.byKey(const ValueKey('new-0')).first), first);
   });
 
-  testWidgets('positioning accelerates and resolves only after travel',
+  testWidgets('positioning decelerates and resolves only after travel',
       (tester) async {
     final position = ChatListPositionController();
     final scroll = ScrollController();
@@ -139,7 +236,7 @@ void main() {
     await tester.pump(const Duration(milliseconds: 100));
     final later = scroll.offset;
     expect((early - start).abs(), greaterThan(0));
-    expect((later - early).abs(), greaterThan((early - start).abs()));
+    expect((later - early).abs(), lessThan((early - start).abs()));
     await tester.pumpAndSettle();
     expect(await pending, isTrue);
     _expectVisible(tester, 'm-6');

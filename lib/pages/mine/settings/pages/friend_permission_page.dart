@@ -1,5 +1,6 @@
 import 'package:openim_common/localization.dart';
 import 'dart:async';
+import '../../../../core/privacy/typing_visibility_sync.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:openim_common/openim_common.dart';
@@ -25,6 +26,7 @@ class FriendPermissionPage extends StatefulWidget {
 
 class _FriendPermissionPageState extends State<FriendPermissionPage> {
   bool _loading = false, _saving = false;
+  bool _savingTyping = false;
   String? _error;
   PresenceVisibilityStore? _visibility;
   StreamSubscription? _notifications;
@@ -32,6 +34,8 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
   @override
   void initState() {
     super.initState();
+    unawaited(TypingVisibilitySync.refresh(widget.store.ownerUserId)
+        .catchError((Object _) {}));
     if (widget.service.supportsFriendPermissions) _load();
     if (widget.service.supportsPresenceVisibility) {
       _visibility = PresenceVisibilityStore();
@@ -126,6 +130,21 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
     }
   }
 
+  Future<void> _setTypingVisibility(bool value) async {
+    if (_savingTyping || !widget.store.isCurrentAccount) return;
+    setState(() => _savingTyping = true);
+    try {
+      await widget.store.setShowTypingStatus(value);
+    } catch (error) {
+      if (mounted && widget.store.isCurrentAccount) {
+        showSettingsError(context, error,
+            text(AppCopy.text('保存失败，请重试'), 'Could not save. Retry.'));
+      }
+    } finally {
+      if (mounted) setState(() => _savingTyping = false);
+    }
+  }
+
   @override
   void dispose() {
     _notifications?.cancel();
@@ -177,8 +196,7 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                                   ? text(AppCopy.text('已禁止别人添加你，自动通过暂不生效。'),
                                       'Friend requests are disabled. Automatic approval is inactive.')
                                   : text(
-                                      AppCopy.text(
-                                          '开启后，自动通过新的好友申请，不影响已有申请。'),
+                                      AppCopy.text('开启后，自动通过新的好友申请，不影响已有申请。'),
                                       'Accept new friend requests without review. Existing requests are unchanged.'),
                           value: !store.requireFriendVerification,
                           onChanged: ready &&
@@ -244,6 +262,19 @@ class _FriendPermissionPageState extends State<FriendPermissionPage> {
                             child: Text(text(AppCopy.text('上线时间权限加载失败，点击重试'),
                                 'Could not load last-seen privacy. Retry.')))
                         : const SizedBox.shrink()),
+                ]),
+                SettingsGroup(children: [
+                  MergeSemantics(
+                      child: _ToggleCell(
+                    title: text(AppCopy.text('展示输入状态'), 'Show Typing Status'),
+                    subtitle: text(AppCopy.text('关闭后，对方无法看到你正在输入。'),
+                        'When off, others cannot see when you are typing.'),
+                    showDivider: false,
+                    value: store.showTypingStatus,
+                    onChanged: !_savingTyping && store.isCurrentAccount
+                        ? _setTypingVisibility
+                        : null,
+                  )),
                 ]),
               ]),
           if (_loading || _saving)

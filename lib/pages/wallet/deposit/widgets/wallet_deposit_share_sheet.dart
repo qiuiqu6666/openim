@@ -6,6 +6,7 @@ import '../../host/wallet_toast.dart';
 import '../../wallet_share_service.dart';
 import '../../widgets/wallet_page_colors.dart';
 import '../share/wallet_deposit_share_tokens.dart';
+import '../share/wallet_deposit_save_once.dart';
 import '../wallet_deposit_controller.dart';
 import '../wallet_deposit_tokens.dart';
 import 'wallet_deposit_share_preview.dart';
@@ -50,6 +51,17 @@ class _WalletDepositShareSheetState extends State<WalletDepositShareSheet> {
 
   String _text(String zh, String en) {
     final (hant, ja, ko) = switch (zh) {
+      '已保存，请到相册查看' => (
+          '已儲存，請至相簿查看',
+          '保存済みです。写真をご確認ください',
+          '이미 저장되었습니다. 사진을 확인하세요'
+        ),
+      '地址已复制' => ('地址已複製', 'アドレスをコピーしました', '주소가 복사되었습니다'),
+      '复制失败，请重试' => (
+          '複製失敗，請重試',
+          'コピーできませんでした。再試行してください',
+          '복사하지 못했습니다. 다시 시도하세요'
+        ),
       '图片已保存' => ('圖片已儲存', '画像を保存しました', '이미지가 저장되었습니다'),
       '图片未保存，请检查相册权限后重试' => (
           '圖片未儲存，請檢查相簿權限後重試',
@@ -82,18 +94,42 @@ class _WalletDepositShareSheetState extends State<WalletDepositShareSheet> {
     final address = _address;
     if (_busy || address.isEmpty) return;
     setState(() => _saving = true);
-    final result = await widget.service.saveQrImg(
-        context, qrOnly ? _qrBoundary : _boundary,
-        isCurrent: () => _current(address),
-        backgroundColor:
-            qrOnly ? WalletDepositTokens.qrBackground : _imageBackground);
+    Future<WalletSaveImgResult> write() async {
+      if (!_current(address)) return WalletSaveImgResult.unknown;
+      return widget.service.saveQrImg(context, qrOnly ? _qrBoundary : _boundary,
+          isCurrent: () => _current(address),
+          backgroundColor:
+              qrOnly ? WalletDepositTokens.qrBackground : _imageBackground);
+    }
+
+    final result = qrOnly
+        ? await WalletDepositSaveOnce.instance.save(
+            currency: widget.currency.code,
+            network: widget.controller.address!.network,
+            address: address,
+            write: write)
+        : (await write() == WalletSaveImgResult.success
+            ? DepositSaveResult.saved
+            : DepositSaveResult.failed);
     if (!mounted) return;
     setState(() => _saving = false);
     if (!_current(address)) return;
-    ToastUtils.toast(result == WalletSaveImgResult.success
-        ? _text('图片已保存', 'Image saved')
-        : _text('图片未保存，请检查相册权限后重试',
-            'Image was not saved. Check photo access and retry.'));
+    ToastUtils.toast(result == DepositSaveResult.alreadySaved
+        ? _text('已保存，请到相册查看', 'Already saved. Check your photos.')
+        : result == DepositSaveResult.saved
+            ? _text('图片已保存', 'Image saved')
+            : _text('图片未保存，请检查相册权限后重试',
+                'Image was not saved. Check photo access and retry.'));
+  }
+
+  Future<void> _copy() async {
+    final address = _address;
+    if (address.isEmpty) return;
+    final result = await widget.service.copyAddr(address);
+    if (!_current(address)) return;
+    ToastUtils.toast(result == WalletCopyResult.success
+        ? _text('地址已复制', 'Address copied')
+        : _text('复制失败，请重试', 'Copy failed. Please retry.'));
   }
 
   Future<void> _share() async {
@@ -228,44 +264,57 @@ class _WalletDepositShareSheetState extends State<WalletDepositShareSheet> {
         builder: (_, __) {
           final colors = WalletPageColors.of(context);
           return LayoutBuilder(builder: (context, constraints) {
-            return Align(
-              alignment: Alignment.bottomCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(
-                    maxWidth: WalletDepositShareTokens.maxWidth),
-                child: SizedBox(
-                  key: const ValueKey('wallet-deposit-share-sheet'),
-                  width: double.infinity,
-                  height: constraints.maxHeight,
-                  child: Column(children: [
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.fromLTRB(
-                            WalletDepositShareTokens.previewHorizontalInset,
-                            WalletDepositShareTokens.panelPadding,
-                            WalletDepositShareTokens.previewHorizontalInset,
-                            WalletDepositShareTokens.previewBottomGap),
-                        child: Align(
-                          alignment: Alignment.bottomCenter,
-                          child: SingleChildScrollView(
-                            child: _address.isNotEmpty
-                                ? RepaintBoundary(
-                                    key: _boundary,
-                                    child: WalletDepositSharePreview(
-                                        qrCaptureKey: _qrBoundary,
-                                        onSaveQr: _busy
-                                            ? null
-                                            : () => _save(qrOnly: true),
-                                        address: widget.controller.address!,
-                                        currency: widget.currency,
-                                        createdAt: _createdAt))
-                                : const SizedBox.shrink(),
+            return GestureDetector(
+              key: const ValueKey('wallet-deposit-share-backdrop'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => Navigator.of(context).pop(),
+              child: Align(
+                alignment: Alignment.bottomCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(
+                      maxWidth: WalletDepositShareTokens.maxWidth),
+                  child: SizedBox(
+                    key: const ValueKey('wallet-deposit-share-sheet'),
+                    width: double.infinity,
+                    height: constraints.maxHeight,
+                    child: Column(children: [
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(
+                              WalletDepositShareTokens.previewHorizontalInset,
+                              WalletDepositShareTokens.panelPadding,
+                              WalletDepositShareTokens.previewHorizontalInset,
+                              WalletDepositShareTokens.previewBottomGap),
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: SingleChildScrollView(
+                              child: _address.isNotEmpty
+                                  ? RepaintBoundary(
+                                      key: _boundary,
+                                      child: GestureDetector(
+                                          behavior: HitTestBehavior.opaque,
+                                          onTap: () {},
+                                          child: WalletDepositSharePreview(
+                                              onCopy: _copy,
+                                              qrCaptureKey: _qrBoundary,
+                                              onSaveQr: _busy
+                                                  ? null
+                                                  : () => _save(qrOnly: true),
+                                              address:
+                                                  widget.controller.address!,
+                                              currency: widget.currency,
+                                              createdAt: _createdAt)))
+                                  : const SizedBox.shrink(),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                    _actions(colors),
-                  ]),
+                      GestureDetector(
+                          onTap: () {},
+                          behavior: HitTestBehavior.opaque,
+                          child: _actions(colors)),
+                    ]),
+                  ),
                 ),
               ),
             );

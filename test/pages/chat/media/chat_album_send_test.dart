@@ -716,6 +716,33 @@ void main() {
     expect(media.failedPreparationCount.value, 0);
   });
 
+  test('video cover starts before the encoder completes', () async {
+    const encoder = MethodChannel('video_compress');
+    final release = Completer<String>();
+    final encoding = Completer<void>();
+    var coverStarted = false;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(encoder, (_) {
+      encoding.complete();
+      return release.future;
+    });
+    addTearDown(() => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(encoder, null));
+    selected = [_VideoAsset(photo, () async {
+      coverStarted = true;
+      return Uint8List.fromList([1, 2, 3]);
+    })];
+    final pending = media.onTapAlbum();
+    await encoding.future;
+    await Future<void>.delayed(Duration.zero);
+    final overlapped = coverStarted;
+    release.complete(jsonEncode({'path': photo.path}));
+    await pending;
+    expect(overlapped, isTrue);
+    expect(sends, ['video-1']);
+    expect(failures, 0);
+  });
+
   test('explicit original retry bypasses a failed video encoder', () async {
     const encoder = MethodChannel('video_compress');
     var encodes = 0;

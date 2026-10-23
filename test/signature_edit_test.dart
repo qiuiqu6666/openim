@@ -37,7 +37,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField), '你好👨‍👩‍👧‍👦');
     await tester.pump();
-    expect(find.text('3/100'), findsOneWidget);
+    expect(find.text('3/35'), findsOneWidget);
     await tester.tap(find.text('完成'));
     await tester.pumpAndSettle();
     expect(service.saved, ['你好👨‍👩‍👧‍👦']);
@@ -51,6 +51,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(service.saved.last, '');
     expect(store.profileSignature, '');
+    await tester.pumpWidget(const SizedBox());
+    await tester.pumpWidget(host());
+    await tester.pumpAndSettle();
+    final fullSignature = '${List.filled(34, '字').join()}👨‍👩‍👧‍👦';
+    await tester.enterText(find.byType(TextField), '$fullSignature多');
+    await tester.pump();
+    expect(tester.widget<TextField>(find.byType(TextField)).controller!.text,
+        fullSignature);
+    expect(find.text('35/35'), findsOneWidget);
+    await tester.tap(find.text('完成'));
+    await tester.pumpAndSettle();
+    expect(service.saved.last, fullSignature);
+    expect(store.profileSignature, fullSignature);
   });
 
   test(

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
@@ -8,6 +9,7 @@ import 'package:get/get.dart';
 import 'package:openim/pages/contacts/add_by_search/add_by_search_logic.dart';
 import 'package:openim/pages/contacts/add_by_search/add_by_search_view.dart';
 import 'package:openim/pages/contacts/search/contact_search_source.dart';
+import 'package:openim/routes/app_pages.dart';
 import 'package:openim_common/openim_common.dart';
 
 class _Source extends ContactSearchSource {
@@ -52,6 +54,60 @@ void main() {
   tearDown(() {
     LoadingView.singleton.dismiss();
     Get.reset();
+  });
+
+  testWidgets('profile and search back navigation do not restore the keyboard',
+      (tester) async {
+    const sdk = MethodChannel('flutter_openim_sdk');
+    tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(sdk, (call) async => '[]');
+    addTearDown(() => tester.binding.defaultBinaryMessenger
+        .setMockMethodCallHandler(sdk, null));
+    final source = _Source();
+    late AddContactsBySearchLogic logic;
+    await tester.pumpWidget(ScreenUtilInit(
+      designSize: const Size(375, 812),
+      builder: (_, __) => GetMaterialApp(
+        initialRoute: AppRoutes.home,
+        getPages: [
+          GetPage(name: AppRoutes.home, page: () => const Scaffold()),
+          GetPage(
+              name: AppRoutes.addContactsBySearch,
+              page: () => AddContactsBySearchPage(),
+              binding: BindingsBuilder(() {
+                logic = Get.put(AddContactsBySearchLogic(source: source));
+              })),
+          GetPage(
+              name: AppRoutes.userProfilePanel,
+              page: () => const Scaffold(body: Text('Profile'))),
+        ],
+      ),
+    ));
+    await tester.pumpAndSettle();
+    Get.toNamed(AppRoutes.addContactsBySearch,
+        arguments: {'searchType': SearchType.user});
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+    await tester.enterText(find.byType(TextField), 'friend');
+    await tester.pump(const Duration(milliseconds: 350));
+    source.userReplies.single.complete([UserFullInfo(userID: 'friend')]);
+    await tester.pumpAndSettle();
+    expect(logic.focusNode.hasFocus, isTrue);
+    logic.viewInfo(UserFullInfo(userID: 'friend'));
+    await tester.pumpAndSettle();
+    expect(Get.currentRoute, AppRoutes.userProfilePanel);
+    Get.back<void>();
+    await tester.pumpAndSettle();
+    expect(logic.focusNode.hasFocus, isFalse);
+    expect(tester.testTextInput.isVisible, isFalse);
+    expect(logic.searchCtrl.text, 'friend');
+    // Refocusing is still allowed; leaving this route must close that keyboard.
+    await tester.showKeyboard(find.byType(TextField));
+    expect(logic.focusNode.hasFocus, isTrue);
+    Get.back<void>();
+    await tester.pumpAndSettle();
+    expect(Get.currentRoute, AppRoutes.home);
+    expect(tester.testTextInput.isVisible, isFalse);
   });
 
   for (final brightness in Brightness.values) {

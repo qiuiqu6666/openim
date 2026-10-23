@@ -267,7 +267,20 @@ func (g *Group) onlineSyncGroupAndMember(ctx context.Context, groupID string, de
 			return false
 		},
 	}
-	return groupMemberSyncer.CheckVersionSync()
+	err := groupMemberSyncer.CheckVersionSync()
+	if err == nil || !errs.ErrNoPermission.Is(err) {
+		return err
+	}
+	// Offline notifications may outlive membership. Only an authoritative
+	// departure check and successful cleanup can acknowledge this notification.
+	pending, recoveryErr := g.retireDepartedMemberRequests(ctx, "group-members", []*group.GetIncrementalGroupMemberReq{{GroupID: groupID}})
+	if recoveryErr != nil {
+		return recoveryErr
+	}
+	if len(pending) == 0 {
+		return nil
+	}
+	return err
 }
 
 func (g *Group) IncrSyncJoinGroup(ctx context.Context) error {

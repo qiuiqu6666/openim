@@ -95,7 +95,10 @@ class _SearchSurfaceState extends State<InlineGlobalSearchSurface>
     if (status == AnimationStatus.completed) {
       final search = _search;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && !_closing && identical(_search, search)) {
+        if (mounted &&
+            !_closing &&
+            identical(_search, search) &&
+            ModalRoute.of(context)?.isCurrent != false) {
           search?.focusNode.requestFocus();
         }
       });

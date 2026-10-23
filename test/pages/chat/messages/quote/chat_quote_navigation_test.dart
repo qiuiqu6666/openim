@@ -5,6 +5,35 @@ import 'package:openim/pages/chat/messages/quote/chat_quote_navigation.dart';
 
 void main() {
   Message message(String id) => Message()..clientMsgID = id;
+  test('a newer quote supersedes an outstanding lookup and cancellation wins',
+      () async {
+    final reads = <String, Completer<Message?>>{};
+    final focused = <String?>[];
+    final feedback = <String>[];
+    final navigation = ChatQuoteNavigation(
+      findMessage: (id) => (reads[id] = Completer<Message?>()).future,
+      focusMessage: (value) async {
+        focused.add(value.clientMsgID);
+        return true;
+      },
+      isAvailable: (_) => true,
+      showFeedback: feedback.add,
+    );
+    final first = navigation.open(message('first'), isCurrent: () => true);
+    final second = navigation.open(message('second'), isCurrent: () => true);
+    reads['second']!.complete(message('second'));
+    expect(await second, isTrue);
+    reads['first']!.complete(message('first'));
+    expect(await first, isFalse);
+    expect(focused, ['second']);
+    final cancelled =
+        navigation.open(message('cancelled'), isCurrent: () => true);
+    navigation.cancel();
+    reads['cancelled']!.complete(message('cancelled'));
+    expect(await cancelled, isFalse);
+    expect(focused, ['second']);
+    expect(feedback, isEmpty);
+  });
   test('lookup failure releases the guard so the user can retry', () async {
     var fail = true;
     final feedback = <String>[];

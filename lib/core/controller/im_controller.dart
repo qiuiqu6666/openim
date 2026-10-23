@@ -10,6 +10,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:openim_live/openim_live.dart';
 
 import '../im_callback.dart';
+import '../privacy/typing_visibility_sync.dart';
 import '../session/message_events.dart';
 import '../calling/data/call_signal_persistence.dart';
 import '../calling/data/call_state_runtime.dart';
@@ -332,6 +333,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
           },
           onSyncServerFinish: (reInstall) {
             imSdkStatus(IMSdkStatus.syncEnded, reInstall: reInstall ?? false);
+            unawaited(TypingVisibilitySync.refresh(OpenIM.iMManager.userID)
+                .catchError((Object _) {}));
           },
           onSyncServerStart: (reInstall) {
             imSdkStatus(IMSdkStatus.syncStart, reInstall: reInstall ?? false);
@@ -458,6 +461,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       }
       _hasUserInfo = true;
       _profileSessionGeneration = generation;
+      unawaited(TypingVisibilitySync.accept(user).catchError((Object _) {}));
       bool isCurrentConnection() =>
           !isClosed &&
           _sessionQueue.isCurrent(generation!) &&
@@ -595,6 +599,7 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
       return;
     }
     super.selfInfoUpdated(user);
+    unawaited(TypingVisibilitySync.accept(user).catchError((Object _) {}));
     userInfo.update((value) {
       value?.nickname = user.nickname;
       value?.faceURL = user.faceURL;
@@ -606,6 +611,8 @@ class IMController extends GetxController with IMCallback, OpenIMLive {
 
   /// Login, foreground and feature entries share the authenticated full profile.
   Future<bool> refreshMyFullInfo() async {
+    unawaited(TypingVisibilitySync.refresh(OpenIM.iMManager.userID)
+        .catchError((Object _) {}));
     final generation = _profileSessionGeneration;
     if (isClosed ||
         !_hasUserInfo ||

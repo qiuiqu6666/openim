@@ -15,6 +15,7 @@ class ChatMediaDiagnostics {
       String? outcome,
       Object? error,
       int? elapsedMs,
+      int? durationMs,
       int? count}) {
     if (!Logger().sdkIsInited) return;
     final code = error is PlatformException ? int.tryParse(error.code) : null;
@@ -25,6 +26,7 @@ class ChatMediaDiagnostics {
       if (messageID != null) 'clientMsgID': messageID,
       if (outcome != null) 'outcome': outcome,
       if (elapsedMs != null) 'elapsedMs': elapsedMs,
+      if (durationMs != null) 'durationMs': durationMs,
       if (count != null) 'count': count,
       if (error != null) 'errorType': error.runtimeType.toString(),
       if (error != null) ...mediaErrorFields(error),
@@ -53,23 +55,29 @@ class ChatMediaTrace {
   final _elapsed = Stopwatch()..start();
   String? messageID;
 
-  void record(String stage, {String? outcome, Object? error, int? count}) =>
+  void record(String stage,
+          {String? outcome, Object? error, int? count, int? durationMs}) =>
       ChatMediaDiagnostics.record(stage,
           traceID: id,
           messageID: messageID,
           outcome: outcome,
           error: error,
           count: count,
+          durationMs: durationMs,
           elapsedMs: _elapsed.elapsedMilliseconds);
 
   Future<T> run<T>(String stage, Future<T> Function() action) async {
+    final timer = Stopwatch()..start();
     record(stage, outcome: 'start');
     try {
       final value = await action();
-      record(stage, outcome: 'complete');
+      record(stage, outcome: 'complete', durationMs: timer.elapsedMilliseconds);
       return value;
     } catch (error) {
-      record(stage, outcome: 'failed', error: error);
+      record(stage,
+          outcome: 'failed',
+          error: error,
+          durationMs: timer.elapsedMilliseconds);
       rethrow;
     }
   }

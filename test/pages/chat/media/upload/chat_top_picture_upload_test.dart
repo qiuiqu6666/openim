@@ -95,6 +95,31 @@ void main() {
     expect(await original.readAsBytes(), orderedEquals(originalBytes));
   }
 
+  test('top preview starts while source upload is waiting', () async {
+    final sourceGate = Completer<dynamic>();
+    final previewStarted = Completer<void>();
+    uploader = ChatMediaUpload(
+        createRenditions: (_) async => null,
+        createPreview: (_, {required isCancelled}) async {
+          previewStarted.complete();
+          return null;
+        },
+        isClosed: () => closed,
+        onTransfer: (_, state) => stages.add(state.stage));
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (_) => sourceGate.future);
+    final outgoing = message();
+    final work = uploader.prepare(outgoing);
+    try {
+      await previewStarted.future.timeout(const Duration(seconds: 1));
+      expect(outgoing.pictureElem!.sourcePicture!.url, isNull);
+    } finally {
+      sourceGate.complete(jsonEncode({'url': _sourceURL}));
+      await work;
+    }
+    expect(outgoing.pictureElem!.sourcePicture!.url, _sourceURL);
+  });
+
   test('separate uploads preserve the original and publish an identified crop',
       () async {
     final outgoing = message();

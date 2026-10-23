@@ -1,4 +1,5 @@
 import 'media_browser/media_grid_order.dart';
+import 'media_browser/media_grid_back_gesture.dart';
 import 'media_browser/media_grid_pagination.dart';
 import 'package:openim_common/localization.dart';
 import 'dart:async';
@@ -148,6 +149,14 @@ class _MediaBrowserState extends State<MediaBrowser> {
   bool _showGrid = false;
   bool _returnToGrid = false;
   bool _allowRouteExit = false;
+
+  void _closeGrid() {
+    setState(() {
+      _showGrid = false;
+      _returnToGrid = false;
+    });
+    _notifyChrome();
+  }
 
   void _backToGallery() {
     setState(() {
@@ -416,9 +425,14 @@ class _MediaBrowserState extends State<MediaBrowser> {
     final size = MediaQuery.of(context).size;
     const background = Colors.black;
     return PopScope(
-      canPop: !_returnToGrid || _allowRouteExit,
+      canPop: (!_showGrid && !_returnToGrid) || _allowRouteExit,
       onPopInvokedWithResult: (didPop, result) {
-        if (!didPop && _returnToGrid) _backToGallery();
+        if (didPop) return;
+        if (_showGrid) {
+          _closeGrid();
+        } else if (_returnToGrid) {
+          _backToGallery();
+        }
       },
       child: AnnotatedRegion<SystemUiOverlayStyle>(
         value: const SystemUiOverlayStyle(
@@ -714,10 +728,8 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     if (widget.showGallery)
                       _roundAction(context,
                           icon: Icons.grid_view_rounded,
-                          tooltip: AppCopy.text('图片和视频'), onPressed: () {
-                        _showGrid = true;
-                        _notifyChrome();
-                      }),
+                          tooltip: AppCopy.text('图片和视频'),
+                          onPressed: _backToGallery),
                     if (widget.onSave != null ||
                         widget.onForward != null ||
                         widget.onFavorite != null ||
@@ -738,7 +750,10 @@ class _MediaBrowserState extends State<MediaBrowser> {
         ),
       if ((_showGrid || _returnToGrid) && !widget.closeOnly)
         Positioned.fill(
-            child: Offstage(offstage: !_showGrid, child: _buildGrid(context))),
+            child: Offstage(
+                offstage: !_showGrid,
+                child: MediaGridBackGesture(
+                    onBack: _closeGrid, child: _buildGrid(context)))),
     ]);
   }
 
@@ -928,8 +943,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
       case MediaAction.favorite:
         widget.onFavorite?.call(index);
       case MediaAction.gallery:
-        _showGrid = true;
-        _notifyChrome();
+        _backToGallery();
       case MediaAction.viewInChat:
         final locate = widget.onViewInChat;
         if (locate == null) return;
@@ -962,13 +976,7 @@ class _MediaBrowserState extends State<MediaBrowser> {
                     tooltip: zh ? AppCopy.text('返回预览') : 'Back to preview',
                     color: AppTokens.accent,
                     icon: const Icon(Icons.chevron_left_rounded, size: 32),
-                    onPressed: () {
-                      setState(() {
-                        _showGrid = false;
-                        _returnToGrid = false;
-                      });
-                      _notifyChrome();
-                    },
+                    onPressed: _closeGrid,
                   )),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 56),

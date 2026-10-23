@@ -22,7 +22,7 @@ class EditSignaturePage extends StatefulWidget {
 }
 
 class _EditSignaturePageState extends State<EditSignaturePage> {
-  static const int _maxLength = 30;
+  static const int _maxLength = 35;
   late final TextEditingController _controller;
   bool _saving = false;
 

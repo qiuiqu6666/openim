@@ -29,8 +29,19 @@ class GroupPersonalizationPreview extends StatelessWidget {
         height: avatarSize);
     return ClipRRect(
         borderRadius: BorderRadius.circular(28 * scale),
-        child: CustomPaint(
-            painter: _PreviewDecor(dark),
+        child: DecoratedBox(
+            decoration: BoxDecoration(
+              image: DecorationImage(
+                image: const AssetImage(
+                    GroupPersonalizationStyle.previewBackground),
+                fit: BoxFit.fill,
+                colorFilter: dark
+                    ? const ColorFilter.mode(
+                        GroupPersonalizationStyle.previewDarkOverlay,
+                        BlendMode.srcATop)
+                    : null,
+              ),
+            ),
             child: Container(
                 constraints: BoxConstraints(minHeight: 314 * scale),
                 padding: EdgeInsets.symmetric(
@@ -58,19 +69,22 @@ class GroupPersonalizationPreview extends StatelessWidget {
                                     color: GroupPersonalizationStyle.blue,
                                     fontSize: 25 * scale))),
                         SizedBox(height: 18 * scale),
-                        GroupNameLabel(
-                            name: name,
-                            ex: appearance.mergeInto(null),
-                            maxLines: largeText ? 2 : 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                                fontSize: 46 * scale,
-                                fontWeight: FontWeight.w700,
-                                color: appearance.color == null
-                                    ? (dark
-                                        ? Colors.white
-                                        : GroupPersonalizationStyle.ink)
-                                    : Color(appearance.color!))),
+                        Padding(
+                            padding:
+                                EdgeInsetsDirectional.only(end: 130 * scale),
+                            child: GroupNameLabel(
+                                name: name,
+                                ex: appearance.mergeInto(null),
+                                maxLines: largeText ? 2 : 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                    fontSize: 46 * scale,
+                                    fontWeight: FontWeight.w700,
+                                    color: appearance.color == null
+                                        ? (dark
+                                            ? Colors.white
+                                            : GroupPersonalizationStyle.ink)
+                                        : Color(appearance.color!)))),
                         SizedBox(height: 18 * scale),
                         Text('保存后，所有群成员都能看到群昵称颜色和图标。',
                             style: TextStyle(
@@ -82,102 +96,4 @@ class GroupPersonalizationPreview extends StatelessWidget {
                       ])),
                 ]))));
   }
-}
-
-class _PreviewDecor extends CustomPainter {
-  const _PreviewDecor(this.dark);
-  final bool dark;
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    canvas.drawRect(
-        rect,
-        Paint()
-          ..shader = LinearGradient(
-                  colors: dark
-                      ? [const Color(0xFF24354F), const Color(0xFF1C293C)]
-                      : [
-                          GroupPersonalizationStyle.previewStart,
-                          const Color(0xFFF5F8FF),
-                          GroupPersonalizationStyle.previewEnd
-                        ])
-              .createShader(rect));
-    canvas.save();
-    canvas.scale(size.width / 882, size.height / 314);
-    void bubble(double x, double y, double r) {
-      final circle = Rect.fromCircle(center: Offset(x, y), radius: r);
-      canvas.drawCircle(
-          Offset(x, y),
-          r,
-          Paint()
-            ..shader = LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  Colors.white.withValues(alpha: dark ? .05 : .45),
-                  GroupPersonalizationStyle.blue.withValues(alpha: .03)
-                ]).createShader(circle));
-      canvas.drawArc(
-          circle,
-          3.2,
-          2.5,
-          false,
-          Paint()
-            ..color = Colors.white.withValues(alpha: dark ? .12 : .8)
-            ..style = PaintingStyle.stroke
-            ..strokeWidth = 3);
-    }
-
-    bubble(92, 118, 69);
-    bubble(614, 186, 101);
-    bubble(800, 80, 109);
-    bubble(720, 220, 68);
-    bubble(790, 308, 59);
-    canvas.save();
-    canvas.translate(725, 49);
-    canvas.rotate(.16);
-    final speech = RRect.fromRectAndRadius(
-        const Rect.fromLTWH(0, 0, 145, 120), const Radius.circular(30));
-    canvas.drawRRect(
-        speech,
-        Paint()
-          ..shader = LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: [
-                Colors.white.withValues(alpha: dark ? .1 : .7),
-                const Color(0xFF80B2FF).withValues(alpha: .55)
-              ]).createShader(speech.outerRect));
-    canvas.drawRRect(
-        speech,
-        Paint()
-          ..color = Colors.white.withValues(alpha: .5)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3);
-    canvas.drawPath(
-        Path()
-          ..moveTo(38, 118)
-          ..lineTo(43, 146)
-          ..quadraticBezierTo(46, 152, 52, 146)
-          ..lineTo(73, 117)
-          ..close(),
-        Paint()..color = const Color(0xFFBDDAFF).withValues(alpha: .65));
-    for (final x in [36.0, 71.0, 106.0]) {
-      canvas.drawCircle(Offset(x, 64), 13,
-          Paint()..color = Colors.white.withValues(alpha: .85));
-    }
-    canvas.restore();
-    canvas.drawPath(
-        Path()
-          ..moveTo(207, 81)
-          ..quadraticBezierTo(211, 100, 230, 104)
-          ..quadraticBezierTo(211, 110, 207, 126)
-          ..quadraticBezierTo(201, 109, 186, 104)
-          ..quadraticBezierTo(202, 99, 207, 81),
-        Paint()..color = const Color(0xFF68C9FA));
-    canvas.restore();
-  }
-
-  @override
-  bool shouldRepaint(_PreviewDecor oldDelegate) => oldDelegate.dark != dark;
 }

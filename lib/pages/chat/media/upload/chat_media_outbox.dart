@@ -5,10 +5,12 @@ import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:openim_common/openim_common.dart';
 
 import '../../../../services/chat_history_cache.dart';
+import '../../../../services/chat_revocation_notice.dart';
 import '../../../../services/chat_message_sender.dart';
 import '../../../../services/favorite_send_coordinator.dart';
 import '../../../../services/messaging/message_send_session.dart';
 import '../diagnostics/chat_media_diagnostics.dart';
+import 'chat_media_upload.dart';
 
 /// Process-local owner of accepted media. A route only observes these tasks.
 class ChatMediaOutbox {
@@ -33,6 +35,91 @@ class ChatMediaOutbox {
 
   final _changes = StreamController<MediaOutboxEntry>.broadcast(sync: true);
   Stream<MediaOutboxEntry> get changes => _changes.stream;
+
+  bool canStop(String? id) {
+    final entry = _entries[id];
+    return entry != null &&
+        entry.task.current &&
+        !entry.stopped &&
+        entry.sending == null &&
+        entry.message.status == MessageStatus.sending;
+  }
+
+  bool canCancel(String? id) {
+    final entry = _entries[id];
+    return entry != null &&
+        entry.task.current &&
+        !entry.stopped &&
+        !entry.cancelling &&
+        entry.message.status == MessageStatus.sending;
+  }
+
+  Future<bool> cancel(String? id) async {
+    if (!canCancel(id)) return false;
+    if (canStop(id)) return stop(id);
+    final entry = _entries[id]!;
+    entry.cancelling = true;
+    try {
+      await entry.sending;
+      if (!entry.task.current) return false;
+      if (entry.message.status == MessageStatus.sending) {
+        final result = await _sender
+            .lookup(entry.message, entry.task.target)
+            .timeout(confirmTimeout);
+        if (!entry.task.current || !result.isSuccess) return false;
+      }
+      if (entry.message.status == MessageStatus.succeeded) {
+        await OpenIM.iMManager.messageManager
+            .revokeMessage(
+                conversationID: entry.task.target.conversationID,
+                clientMsgID: id!)
+            .timeout(confirmTimeout);
+        if (!entry.task.current) return false;
+        final info = RevokedInfo(
+            clientMsgID: id, revokerID: entry.task.session.accountID);
+        ChatHistoryCache.revokeMessage(entry.task.session.accountID, info);
+        entry.message.update(ChatRevocationNotice.replace(entry.message, info));
+      } else if (entry.message.status != MessageStatus.failed) {
+        return false;
+      }
+      entry.stopped = true;
+      _publish(entry);
+      return true;
+    } catch (_) {
+      return false;
+    } finally {
+      entry.cancelling = false;
+    }
+  }
+
+  bool stop(String? id) {
+    if (!canStop(id)) return false;
+    final entry = _entries[id]!;
+    entry.stopped = true;
+    entry.message.status = MessageStatus.failed;
+    _publish(entry);
+    return true;
+  }
+
+  bool retryStopped(Message message) {
+    final old = _entries[message.clientMsgID];
+    if (old == null || !old.stopped || !old.task.current) return false;
+    final task = accept(old.task.target);
+    final copy = Message.fromJson(message.toJson())
+      ..status = MessageStatus.sending;
+    task.stage(copy);
+    unawaited(() async {
+      try {
+        await ChatMediaUpload(
+                isClosed: () => !task.accepts(copy), onTransfer: task.transfer)
+            .prepare(copy);
+        await task.send(copy);
+      } catch (_) {
+        task.failed(copy);
+      }
+    }());
+    return true;
+  }
 
   MediaSendTask accept(FavoriteTarget target) {
     _entries.removeWhere((_, entry) => !entry.task.visible);
@@ -97,6 +184,8 @@ class MediaOutboxEntry {
   ChatTransferStatus transfer =
       const ChatTransferStatus(ChatTransferStage.queued);
   Future<void>? sending;
+  bool stopped = false;
+  bool cancelling = false;
 }
 
 class MediaSendTask {
@@ -113,6 +202,12 @@ class MediaSendTask {
       _generation == _owner._generation &&
       session.current;
 
+  bool accepts(Message message) => current && !isStopped(message);
+
+  bool isStopped(Message message) =>
+      _owner._entries[message.clientMsgID]?.stopped == true ||
+      _owner._entries[message.clientMsgID]?.task != this;
+
   void stage(Message message) {
     if (!current) return;
     message.recvID = target.userID;
@@ -125,20 +220,20 @@ class MediaSendTask {
 
   void transfer(Message message, ChatTransferStatus status) {
     final entry = _owner._entries[message.clientMsgID];
-    if (!current || entry == null) return;
+    if (!accepts(message) || entry == null) return;
     entry.transfer = status;
     _owner._publish(entry);
   }
 
   void failed(Message message) {
-    if (!current) return;
+    if (!accepts(message)) return;
     message.status = MessageStatus.failed;
     final entry = _owner._entries[message.clientMsgID];
     if (entry != null) _owner._publish(entry);
   }
 
   Future<void> send(Message message) {
-    if (!current) return Future.value();
+    if (!accepts(message)) return Future.value();
     final entry = _owner._entries[message.clientMsgID]!;
     return entry.sending ??= _send(entry);
   }

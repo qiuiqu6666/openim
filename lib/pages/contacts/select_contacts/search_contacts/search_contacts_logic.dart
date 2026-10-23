@@ -49,6 +49,7 @@ class SelectContactsFromSearchLogic extends CommonSearchLogic {
 
   Future<void> search() async {
     if (_closed || searchKey.isEmpty) return;
+    focusNode.unfocus();
     final generation = ++_generation;
     final keyword = searchKey;
     final account = OpenIM.iMManager.userID;

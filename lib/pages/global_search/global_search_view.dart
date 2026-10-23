@@ -50,8 +50,10 @@ class GlobalSearchPage extends StatelessWidget {
                 child: Column(children: [
               _searchHeader(context),
               Expanded(child: Obx(() {
+                logic.groupRevision.value;
                 final groupMessages = <String, ConversationInfo>{
-                  for (final item in logic.source.currentConversations)
+                  for (final item in logic.source.currentConversations
+                      .map(logic.currentConversation))
                     if (item.isGroupChat && item.groupID != null)
                       item.groupID!: item,
                 };
@@ -103,10 +105,13 @@ class GlobalSearchPage extends StatelessWidget {
                         Get.find<ConversationLogic>()
                             .toChat(userID: friend.userID, offUntilHome: false);
                       },
-                          subtitleWidget: GlobalSearchContactAccount(
-                            key: ValueKey(friend.userID),
-                            userID: friend.userID ?? '',
-                          ),
+                          subtitleWidget:
+                              friend.userID?.contains(logic.query.value) == true
+                                  ? Text('UID: ${friend.userID}')
+                                  : GlobalSearchContactAccount(
+                                      key: ValueKey(friend.userID),
+                                      userID: friend.userID ?? '',
+                                    ),
                           titleWidget: OfficialAccountNameLabel(
                             name: name,
                             userID: friend.userID,
@@ -114,32 +119,43 @@ class GlobalSearchPage extends StatelessWidget {
                           ));
                     }).toList());
                 for (final channel in [false, true]) {
-                section(
-                    channel ? 5 : 2,
-                    logic.groupList.where((group) => isChannelEx(group.ex) == channel)
-                        .map((group) => _row(
-                                group.groupName ?? group.groupID,
-                                channel ? channelText(context, '${group.memberCount ?? 0} 位订阅者', '${group.memberCount ?? 0} subscribers') : groupMessages[group.groupID] == null
-                                    ? ''
-                                    : conversationLatestMessageText(
-                                        groupMessages[group.groupID]!),
-                                group.faceURL,
-                                true, () {
-                              Get.find<ConversationLogic>().toChat(
-                                  groupID: group.groupID,
-                                  sessionType: group.sessionType,
-                                  offUntilHome: false);
-                            },
-                                titleWidget: GroupNameLabel(
-                                    name: group.groupName ?? group.groupID,
+                  section(
+                      channel ? 5 : 2,
+                      logic.groupList
+                          .map(logic.currentGroup)
+                          .where((group) => isChannelEx(group.ex) == channel)
+                          .map((group) => _row(
+                                  group.groupName ?? group.groupID,
+                                  group.groupID.contains(logic.query.value)
+                                      ? 'UID: ${group.groupID}'
+                                      : channel
+                                          ? channelText(
+                                              context,
+                                              '${group.memberCount ?? 0} 位订阅者',
+                                              '${group.memberCount ?? 0} subscribers')
+                                          : groupMessages[group.groupID] == null
+                                              ? ''
+                                              : conversationLatestMessageText(
+                                                  groupMessages[
+                                                      group.groupID]!),
+                                  group.faceURL,
+                                  true, () {
+                                Get.find<ConversationLogic>().toChat(
                                     groupID: group.groupID,
-                                    ex: group.ex,
-                                    store: logic.source.groupFeatures)))
-                        .toList());
+                                    sessionType: group.sessionType,
+                                    offUntilHome: false);
+                              },
+                                  titleWidget: GroupNameLabel(
+                                      name: group.groupName ?? group.groupID,
+                                      groupID: group.groupID,
+                                      ex: group.ex,
+                                      store: logic.source.groupFeatures)))
+                          .toList());
                 }
                 section(
                     3,
                     logic.conversations
+                        .map(logic.currentConversation)
                         .map((item) => _row(
                             item.showName ?? '',
                             '',
@@ -411,12 +427,25 @@ class GlobalSearchPage extends StatelessWidget {
   Widget _messages(SearchResultItems item, bool files) {
     final message = item.messageList?.firstOrNull;
     final preview = message == null ? '' : IMUtils.parseMsg(message);
+    final conversation = logic.source.currentConversations
+        .where((row) => row.conversationID == item.conversationID)
+        .map(logic.currentConversation)
+        .firstOrNull;
+    final groupID = conversation?.groupID ?? message?.groupID;
+    final group = groupID == null || groupID.isEmpty
+        ? null
+        : logic.currentGroup(GroupInfo(
+            groupID: groupID, groupName: item.showName, faceURL: item.faceURL));
     return _row(
-        item.showName ?? item.conversationID ?? '',
+        group?.groupName ??
+            conversation?.showName ??
+            item.showName ??
+            item.conversationID ??
+            '',
         '${'globalSearchMatchCount'.trArgs([
               '${item.messageCount ?? item.messageList?.length ?? 0}'
             ])} · $preview',
-        item.faceURL,
+        group?.faceURL ?? conversation?.faceURL ?? item.faceURL,
         item.conversationType != ConversationType.single, () {
       if (item.conversationID == null) return;
       Get.to(() => ChatHistorySearchPage(
@@ -430,18 +459,21 @@ class GlobalSearchPage extends StatelessWidget {
 
   bool _isChannelConversation(String id) {
     final conversation = logic.source.currentConversations
-        .where((item) => item.conversationID == id).firstOrNull;
+        .where((item) => item.conversationID == id)
+        .firstOrNull;
     final groupID = conversation?.groupID;
     if (groupID == null) return false;
-    final group = logic.groupList.where((item) => item.groupID == groupID).firstOrNull
-        ?? logic.source.groupFeatures?.cachedGroupInfo(groupID);
+    final group =
+        logic.groupList.where((item) => item.groupID == groupID).firstOrNull ??
+            logic.source.groupFeatures?.cachedGroupInfo(groupID);
     return isChannelEx(group?.ex);
   }
 
   Widget _cloudConversation(CloudKeywordMessage message) {
     final matches = logic.source.currentConversations
         .where((c) => c.conversationID == message.conversationID);
-    final conversation = matches.isEmpty ? null : matches.first;
+    final conversation =
+        matches.isEmpty ? null : logic.currentConversation(matches.first);
     return _row(
         conversation?.showName ?? message.conversationID,
         message.summary,

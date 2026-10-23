@@ -5,6 +5,26 @@ import 'package:openim/pages/chat/media/preview/chat_picture_renditions.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+  test('expired queued rendition skips generation and preserves the source',
+      () async {
+    final dir = await Directory.systemTemp.createTemp('renditions-cancel-');
+    final source = await File('${dir.path}/source.jpg')
+        .writeAsBytes(img.encodeJpg(img.Image(width: 640, height: 480)));
+    var cancelled = false;
+    final first = ChatPictureRenditions.create(source.path);
+    final queued =
+        ChatPictureRenditions.create(source.path, isCancelled: () => cancelled);
+    cancelled = true;
+    final result = await first;
+    try {
+      expect(result, isNotNull);
+      expect(await queued, isNull);
+      expect(await source.exists(), isTrue);
+    } finally {
+      await result?.dispose();
+      await dir.delete(recursive: true);
+    }
+  });
   test('fixed tiers preserve aspect ratio, metadata and original bytes',
       () async {
     final dir = await Directory.systemTemp.createTemp('renditions-test-');

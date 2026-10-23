@@ -55,6 +55,21 @@ void main() {
     expect(await ChatMediaTrace().run('load_asset', () async => 7), 7);
     await Future<void>.delayed(Duration.zero);
   });
+  test('overlapping stages record their own duration and shared elapsed time',
+      () async {
+    final trace = ChatMediaTrace();
+    await trace.run(
+        'first', () => Future<void>.delayed(const Duration(milliseconds: 40)));
+    await trace.run('second', () async {});
+    await Future<void>.delayed(Duration.zero);
+    final events = calls.map((call) => jsonDecode(
+            (call.arguments['msgs'] as String).substring('chat_media '.length))
+        as Map);
+    final completed =
+        events.where((event) => event['outcome'] == 'complete').toList();
+    expect(completed.first['durationMs'], greaterThanOrEqualTo(30));
+    expect(completed.last['durationMs'], lessThan(completed.last['elapsedMs']));
+  });
   test('trace captures failures without swallowing the original exception',
       () async {
     final error = TimeoutException('private source path');

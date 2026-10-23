@@ -4,8 +4,6 @@ import (
 	"context"
 	"errors"
 	"github.com/openimsdk/openim-sdk-core/v3/pkg/common"
-	"github.com/openimsdk/openim-sdk-core/v3/pkg/constant"
-	"github.com/openimsdk/openim-sdk-core/v3/sdk_struct"
 	"sort"
 )
 
@@ -16,6 +14,17 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 	leavePages := protectMessagePages(ctx)
 	defer leavePages()
 	m.recoveryReadSeqReady = common.RecoveryMetadataPrepared(ctx)
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	before := len(ranges)
+	ranges = m.pendingRecentRecoveryRanges(ranges)
+	if skipped := before - len(ranges); skipped > 0 {
+		common.RecordSyncMetric(ctx, "sync_recent_covered_skipped", int64(skipped), 0)
+	}
+	if len(ranges) == 0 {
+		return m.finishRecoveryReadReconciliation(ctx, reinstall)
+	}
 	pending := make(map[string][][2]int64, len(ranges))
 	var ids []string
 	var failures []error
@@ -96,15 +105,5 @@ func (m *MsgSyncer) syncCompleteMessageRanges(ctx context.Context, ranges map[st
 	if len(failures) > 0 {
 		return errors.Join(failures...)
 	}
-	// Out-of-order live rows may close the whole latest window before the
-	// recovery job runs. Reconcile unread even when no message page is missing.
-	if m.pendingReadReconcile && !reinstall {
-		if !m.recoveryReadSeqReady {
-			if err := common.SendCmdWithReceipt(ctx, common.Cmd2Value{Cmd: constant.CmdNewMsgCome, Value: sdk_struct.CmdNewMsgComeToConversation{ReconcileReadSeq: true, Recovery: true}}, m.conversationCh); err != nil {
-				return err
-			}
-		}
-		m.pendingReadReconcile = false
-	}
-	return nil
+	return m.finishRecoveryReadReconciliation(ctx, reinstall)
 }

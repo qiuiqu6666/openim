@@ -15,15 +15,18 @@ class ChatNewMessageTracker {
     required bool Function() isClosed,
     double Function()? viewportDimension,
     bool Function()? hasMissingNewer,
+    bool Function()? isReturning,
   })  : _currentUserID = currentUserID,
         _isClosed = isClosed,
         _viewportDimension = viewportDimension,
-        _hasMissingNewer = hasMissingNewer;
+        _hasMissingNewer = hasMissingNewer,
+        _isReturning = isReturning;
 
   final String Function() _currentUserID;
   final bool Function() _isClosed;
   final double Function()? _viewportDimension;
   final bool Function()? _hasMissingNewer;
+  final bool Function()? _isReturning;
   final unseenCount = 0.obs;
   final awayFromLatest = false.obs;
   final showBackToBottom = false.obs;
@@ -36,6 +39,13 @@ class ChatNewMessageTracker {
 
   void updateScrollOffset(double pixels, {bool viewportConfirmed = true}) {
     if (_inactive || !pixels.isFinite) return;
+    // Keep the affordance stable during automatic travel and window staging.
+    // Only the confirmed latest edge clears arrivals; manual input cancels
+    // the return owner before its next viewport observation.
+    if (_isReturning?.call() == true &&
+        pixels > ChatLatestScrollTokens.distanceEpsilon) {
+      return;
+    }
     final missingNewer = _hasMissingNewer?.call() == true;
     if (missingNewer || pixels > ChatLatestScrollTokens.leaveLatestDistance) {
       awayFromLatest.value = true;

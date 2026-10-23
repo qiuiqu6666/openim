@@ -147,7 +147,9 @@ class _PasswordPaymentSheetState<T> extends State<PasswordPaymentSheet<T>> {
     } finally {
       if (_canHandleResult) {
         setState(() => _changingPaymentMethod = false);
-        _focus.requestFocus();
+        if (mounted && ModalRoute.of(context)?.isCurrent != false) {
+          _focus.requestFocus();
+        }
       }
     }
   }
@@ -178,7 +180,9 @@ class _PasswordPaymentSheetState<T> extends State<PasswordPaymentSheet<T>> {
         _state = PasswordPaymentState.enteringPassword;
         _error = message;
       });
-      _focus.requestFocus();
+      if (mounted && ModalRoute.of(context)?.isCurrent != false) {
+        _focus.requestFocus();
+      }
       await _notifyError(message);
       return;
     }

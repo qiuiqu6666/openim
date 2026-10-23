@@ -46,6 +46,7 @@ class ChatItemContainer extends StatelessWidget {
     this.sendStatusStream,
     this.transferStatus,
     this.onCheckDelivery,
+    this.onControlMediaSend,
     this.onTapLeftAvatar,
     this.onTapRightAvatar,
     this.onLongPressRightAvatar,
@@ -96,6 +97,7 @@ class ChatItemContainer extends StatelessWidget {
   final Stream<MsgStreamEv<bool>>? sendStatusStream;
   final ValueListenable<ChatTransferStatus?>? transferStatus;
   final VoidCallback? onCheckDelivery;
+  final VoidCallback? onControlMediaSend;
   final Function()? onTapLeftAvatar;
   final Function()? onTapRightAvatar;
   final Function()? onLongPressRightAvatar;
@@ -174,11 +176,17 @@ class ChatItemContainer extends StatelessWidget {
               )
             : isSending
                 ? transferStatus != null
-                    ? ChatTransferStatusView(
+                    ? Semantics(
+                        button: onControlMediaSend != null,
+                        label: onControlMediaSend != null ? '暂停或取消发送' : null,
+                        child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onTap: onControlMediaSend,
+                        child: ChatTransferStatusView(
                         status: transferStatus!,
                         onCheck: onCheckDelivery,
                         color: embeddedStatusColor ??
-                            (overlay || centeredStatus ? AppTokens.onAccent : null))
+                            (overlay || centeredStatus ? AppTokens.onAccent : null))))
                     : ChatDelayedStatusView(
                         isSending: true,
                         color: embeddedStatusColor ??
@@ -216,8 +224,8 @@ class ChatItemContainer extends StatelessWidget {
             baseChild,
             Positioned.fill(
               child: Center(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
+                child: Container(
+                  decoration: isSending ? null : BoxDecoration(
                     color: Theme.of(context).colorScheme.scrim.withValues(alpha: .4),
                     borderRadius: BorderRadius.circular(ChatBubbleTokens.radius),
                   ),
@@ -416,7 +424,9 @@ class ChatItemContainer extends StatelessWidget {
       isOutgoing: isISend,
       child: content,
     );
-    return bubbleWrapper?.call(bubble) ?? bubble;
+    final highlighted = ChatMessageHighlight.wrap(
+        context, bubble, ChatBubbleTokens.radius);
+    return bubbleWrapper?.call(highlighted) ?? highlighted;
   }
 
   Widget _buildLeftView(BuildContext context) => Row(

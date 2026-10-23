@@ -7,17 +7,48 @@ Future<void> runReadyMediaBatch<T>(
   required void Function(T, Object) onError,
   required bool Function() isClosed,
   bool Function(T)? isVideo,
-  int concurrency = 2,
+  Future<void> Function(T)? waitUntilReady,
+  int concurrency = 4,
 }) async {
   if (concurrency < 1) throw ArgumentError.value(concurrency);
+  final confirmations = <Future<void>>[];
+  Future<void> confirm(T item) async {
+    try {
+      if (!isClosed()) await send(item);
+    } catch (error) {
+      if (!isClosed()) onError(item, error);
+    }
+  }
+
   Future<void> lane(List<T> queue, int workers) async {
     var cursor = 0;
+    // Resolve local preparation outside upload slots. A slow photo-library
+    // read or encoder must not hide already prepared items behind its index.
+    final pending = waitUntilReady == null
+        ? null
+        : {
+            for (var i = 0; i < queue.length; i++)
+              i: waitUntilReady(queue[i])
+                  .then((_) => i, onError: (Object _) => i),
+          };
     Future<void> worker() async {
-      while (cursor < queue.length && !isClosed()) {
-        final item = queue[cursor++];
+      while (!isClosed()) {
+        late final T item;
+        if (pending == null) {
+          if (cursor >= queue.length) return;
+          item = queue[cursor++];
+        } else {
+          if (pending.isEmpty) return;
+          final index = await Future.any(pending.values);
+          if (pending.remove(index) == null) continue;
+          if (isClosed()) return;
+          item = queue[index];
+        }
         try {
           await prepare(item);
-          if (!isClosed()) await send(item);
+          // A receipt owns no upload resources. Observe it immediately without
+          // holding this worker; keep the batch alive until all receipts settle.
+          if (!isClosed()) confirmations.add(confirm(item));
         } catch (error) {
           if (!isClosed()) onError(item, error);
         }
@@ -32,4 +63,5 @@ Future<void> runReadyMediaBatch<T>(
         concurrency),
     lane(items.where((item) => isVideo?.call(item) ?? false).toList(), 1),
   ]);
+  await Future.wait(confirmations);
 }

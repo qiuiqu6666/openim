@@ -67,7 +67,9 @@ void main() {
     await expectDepositAddressQr(
         tester, depositKey('wallet-deposit-qr'), testDepositAddress);
     await tester.ensureVisible(depositKey('wallet-deposit-address-copy'));
-    await tester.tap(depositKey('wallet-deposit-address-copy'));
+    expect(tester.getCenter(depositKey('wallet-deposit-copy-icon')).dx,
+        greaterThan(tester.getCenter(depositKey('wallet-deposit-address')).dx));
+    await tester.tap(depositKey('wallet-deposit-copy-icon'));
     await tester.pumpAndSettle();
     expect(service.copies, [testDepositAddress]);
     await tester.ensureVisible(depositKey('wallet-deposit-share'));

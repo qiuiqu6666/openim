@@ -7,6 +7,7 @@ import 'deposit/wallet_deposit_tokens.dart';
 import 'deposit/widgets/wallet_deposit_help_sheet.dart';
 import 'deposit/widgets/wallet_deposit_ready_content.dart';
 import 'deposit/widgets/wallet_deposit_share_sheet.dart';
+import 'deposit/widgets/wallet_deposit_saveable_qr.dart';
 import 'home/widgets/wallet_overview_icon.dart';
 import 'host/wallet_i18n.dart';
 import 'host/wallet_navigation.dart';
@@ -219,6 +220,12 @@ class _WalletReceiveScreenState extends State<WalletReceiveScreen>
                             onCopy: _copy,
                             onShare: _openShare,
                             onNetworkInfo: _openHelp,
+                            qr: WalletDepositSaveableQr(
+                              controller: _controller,
+                              address: address,
+                              currency: _currency,
+                              service: _share,
+                            ),
                           )
                         : _status(i18n, colors),
                   ),

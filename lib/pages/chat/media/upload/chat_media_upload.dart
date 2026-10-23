@@ -22,8 +22,8 @@ class ChatMediaUpload {
               {required bool Function() isCancelled})?
           createPreview})
       : _createPreview = createPreview ?? ChatTopPicturePreview.create,
-        _createRenditions = createRenditions ?? ChatPictureRenditions.create;
-  final Future<ChatPictureRenditions?> Function(String) _createRenditions;
+        _createRenditions = createRenditions;
+  final Future<ChatPictureRenditions?> Function(String)? _createRenditions;
   final bool Function() isClosed;
   final void Function(Message, ChatTransferStatus) onTransfer;
   final Duration previewTimeout, uploadTimeout;
@@ -61,11 +61,11 @@ class ChatMediaUpload {
     });
   }
 
-  Future<({PictureInfo picture, String? extra})?> _optionalPreview(
-      Message message, String sourceURL, ChatMediaTrace trace) async {
+  Future<PictureInfo?> _optionalPreview(
+      Message message, ChatMediaTrace trace) async {
     var expired = false;
     bool cancelled() => expired || isClosed();
-    Future<({PictureInfo picture, String? extra})?> build() async {
+    Future<PictureInfo?> build() async {
       ChatTopPicturePreview? preview;
       try {
         preview = await _createPreview(message.pictureElem!.sourcePath!,
@@ -74,16 +74,12 @@ class ChatMediaUpload {
         final url = await _upload('chat-top-preview:${message.clientMsgID}',
             preview.path, 'image/png', trace);
         if (cancelled()) return null;
-        return (
-          picture: PictureInfo(
-              url: url,
-              width: preview.width,
-              height: preview.height,
-              size: preview.length,
-              type: 'image/png'),
-          extra: ChatPicturePreviewMetadata.withTopCrop(message.ex,
-              sourceURL: sourceURL, previewURL: url),
-        );
+        return PictureInfo(
+            url: url,
+            width: preview.width,
+            height: preview.height,
+            size: preview.length,
+            type: 'image/png');
       } finally {
         // A timeout does not cancel native IO. Dispose only after its reader
         // completes, and never let a late result mutate the submitted message.
@@ -113,6 +109,12 @@ class ChatMediaUpload {
       // Attach both error handlers immediately, and wait for native readers before
       // any temporary files are released. Optional work overlaps source upload.
       String? sourceURL;
+      PictureInfo? topPreview;
+      final needsTopPreview = (source.width ?? 0) > 0 &&
+          (source.height ?? 0) >
+              source.width! * ChatPicturePreviewMetadata.heightRatio &&
+          source.type?.toLowerCase() != 'image/gif' &&
+          ChatPicturePreviewMetadata.canAnnotate(message.ex);
       ({PictureInfo thumbnail, PictureInfo preview})? renditions;
       await Future.wait<void>([
         _upload('chat-media:$id', picture.sourcePath!, source.type, trace)
@@ -122,19 +124,12 @@ class ChatMediaUpload {
         _optionalRenditions(message, trace).then((value) {
           renditions = value;
         }),
+        if (needsTopPreview)
+          _optionalPreview(message, trace).then((value) {
+            topPreview = value;
+          }),
       ]);
       final url = sourceURL!;
-      PictureInfo? topPreview;
-      String? previewExtra;
-      if ((source.width ?? 0) > 0 &&
-          (source.height ?? 0) >
-              source.width! * ChatPicturePreviewMetadata.heightRatio &&
-          source.type?.toLowerCase() != 'image/gif' &&
-          ChatPicturePreviewMetadata.canAnnotate(message.ex)) {
-        final preview = await _optionalPreview(message, url, trace);
-        topPreview = preview?.picture;
-        previewExtra = preview?.extra;
-      }
       if (isClosed()) throw StateError('Chat closed');
       source.url = url;
       picture.bigPicture =
@@ -142,16 +137,22 @@ class ChatMediaUpload {
       picture.snapshotPicture = topPreview ??
           renditions?.thumbnail ??
           _fallbackPicture(source, url, 640);
-      if (previewExtra != null) message.ex = previewExtra;
+      if (topPreview != null) {
+        message.ex = ChatPicturePreviewMetadata.withTopCrop(message.ex,
+            sourceURL: url, previewURL: topPreview!.url!);
+      }
     } else if (message.contentType == MessageType.video) {
       final video = message.videoElem!;
-      final snapshot = await _upload(
-          'chat-snapshot:$id', video.snapshotPath!, 'image/jpeg', trace);
-      final url = await _upload(
-          'chat-media:$id', video.videoPath!, video.videoType, trace);
+      // The cover must not delay the large source upload. Observe both errors
+      // immediately and retain ownership until both native readers finish.
+      final urls = await Future.wait([
+        _upload('chat-snapshot:$id', video.snapshotPath!, 'image/jpeg', trace),
+        _upload('chat-media:$id', video.videoPath!, video.videoType, trace),
+      ]);
+      if (isClosed()) throw StateError('Media send stopped');
       // Commit both URLs together; a failed partial upload uses the SDK retry.
-      video.snapshotUrl = snapshot;
-      video.videoUrl = url;
+      video.snapshotUrl = urls[0];
+      video.videoUrl = urls[1];
     }
     if (!isClosed()) {
       onTransfer(message, const ChatTransferStatus(ChatTransferStage.queued));
@@ -181,7 +182,11 @@ class ChatMediaUpload {
     Future<({PictureInfo thumbnail, PictureInfo preview})?> build() async {
       ChatPictureRenditions? images;
       try {
-        images = await _createRenditions(message.pictureElem!.sourcePath!);
+        final path = message.pictureElem!.sourcePath!;
+        images = await (_createRenditions != null
+            ? _createRenditions(path)
+            : ChatPictureRenditions.create(path,
+                isCancelled: () => expired || isClosed()));
         if (images == null || expired || isClosed()) return null;
         Future<PictureInfo> upload(
             ChatPictureRendition image, String tier) async {

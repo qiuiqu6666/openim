@@ -127,6 +127,27 @@ void main() {
     expect(await root.list().toList(), isEmpty);
   });
 
+  test('M4A preview keeps a decoder extension and removes the private file',
+      () async {
+    final loader = FavoritePreviewLoader(
+        client: _client(), temporaryRoot: () async => root);
+    addTearDown(loader.close);
+    // Transport fixture: decoding is the native player's responsibility.
+    final asset = FavoriteAsset(
+        id: 'original-1',
+        mimeType: 'audio/mp4',
+        fileName: '../../wrong.mp3',
+        sizeBytes: body.length,
+        sha256: sha256.convert(body).toString());
+    final file = await loader.load(
+        repository, _item('audio'), asset, repository.sessionScope);
+    expect(file.uri.pathSegments.last, 'original.m4a');
+    expect(await file.readAsBytes(), body);
+    await loader.close();
+    expect(await file.exists(), isFalse);
+    expect(await root.list().toList(), isEmpty);
+  });
+
   test('redirect does not follow another media URL', () async {
     status = 302;
     final loader = FavoritePreviewLoader(

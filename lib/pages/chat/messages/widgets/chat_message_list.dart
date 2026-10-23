@@ -15,7 +15,6 @@ import '../selection/message_selection_row.dart';
 import '../arrival/chat_message_arrival_animations.dart';
 import 'chat_message_tile.dart';
 import '../chat_message_index.dart';
-import '../../scrolling/chat_latest_scroll_tokens.dart';
 import '../loading/chat_entry_loading_hint.dart';
 import '../loading/chat_initial_window_transition.dart';
 
@@ -123,10 +122,14 @@ class _ChatMessageListState extends State<ChatMessageList>
           final latestRows = [
             ...widget.latestRows,
             for (final pending in PendingChatMedia.entries.reversed)
-              if (pending.conversationID == logic.conversationInfo.conversationID &&
+              if (pending.conversationID ==
+                      logic.conversationInfo.conversationID &&
                   pending.visible())
-                ChatTransientRow(id: pending.id,
-                    child: PendingChatMediaBubble(key: ValueKey(pending.id), pending: pending,
+                ChatTransientRow(
+                    id: pending.id,
+                    child: PendingChatMediaBubble(
+                        key: ValueKey(pending.id),
+                        pending: pending,
                         isChannel: logic.isChannel)),
             if (!logic.viewingHistory.value && !logic.hasDeferredLatest)
               for (final card in logic.confirmedFundCards)
@@ -145,7 +148,6 @@ class _ChatMessageListState extends State<ChatMessageList>
           ];
           final sdkCount =
               logic.initialWindowReady.value ? logic.messageList.length : 0;
-          final focusedID = logic.focusedMessageID.value;
           final count = sdkCount + latestRows.length;
           if (_indexDirty || _messageIndex.ids.length != sdkCount) {
             _messageIndex.sync(sdkCount == 0 ? <Message>[] : logic.messageList);
@@ -193,97 +195,90 @@ class _ChatMessageListState extends State<ChatMessageList>
                     logic.entryTrace?.painted(
                         publishable: logic.initialWindowReady.value,
                         hasVisibleMessages: _hasPaintedMessages,
-                        contentVisible: !logic.latestWindowFading,
+                        contentVisible: true,
                         canInteract: interactive,
                         current: logic.isMessageNavigationCurrent);
                   },
-            child: AnimatedOpacity(
-                opacity: logic.latestWindowFading ? 0 : 1,
-                duration: MediaQuery.disableAnimationsOf(context)
-                    ? Duration.zero
-                    : ChatLatestScrollTokens.windowFadeDuration,
-                child: NotificationListener<ScrollNotification>(
-                  onNotification: (notification) {
-                    if (notification.depth == 0) {
-                      if (notification is ScrollStartNotification) {
-                        _imagePrewarmer.setScrolling(true);
-                      } else if (notification is ScrollEndNotification) {
-                        _imagePrewarmer.setScrolling(false);
-                      }
+            child: NotificationListener<ScrollNotification>(
+              onNotification: (notification) {
+                if (notification.depth == 0) {
+                  if (notification is ScrollStartNotification) {
+                    _imagePrewarmer.setScrolling(true);
+                  } else if (notification is ScrollEndNotification) {
+                    _imagePrewarmer.setScrolling(false);
+                  }
+                }
+                return logic.onChatScrollNotification(notification);
+              },
+              child: MessageSelectionDragRegion(
+                controller: logic.messageSelection,
+                scrollController: logic.scrollController,
+                child: ChatListView(
+                  emptyView: widget.emptyView,
+                  onTouch: logic.closeToolbox,
+                  itemCount: count,
+                  messageIDs: messageIDs,
+                  onViewportChanged: (ids, distance) {
+                    _hasPaintedMessages = ids.any(persistedIDs.contains);
+                    if (_entryTransitionKey.currentState?.canReportContent ==
+                        true) {
+                      logic.onChatViewportChanged(
+                          ids.where(persistedIDs.contains).toList(), distance);
+                      _imagePrewarmer.update(logic.messageList, ids);
                     }
-                    return logic.onChatScrollNotification(notification);
                   },
-                  child: MessageSelectionDragRegion(
-                    controller: logic.messageSelection,
-                    scrollController: logic.scrollController,
-                    child: ChatListView(
-                      emptyView: widget.emptyView,
-                      onTouch: logic.closeToolbox,
-                      itemCount: count,
-                      messageIDs: messageIDs,
-                      onViewportChanged: (ids, distance) {
-                        _hasPaintedMessages = ids.any(persistedIDs.contains);
-                        if (_entryTransitionKey
-                                .currentState?.canReportContent ==
-                            true) {
-                          logic.onChatViewportChanged(
-                              ids.where(persistedIDs.contains).toList(),
-                              distance);
-                          _imagePrewarmer.update(logic.messageList, ids);
-                        }
-                      },
-                      controller: logic.scrollController,
-                      positionController: logic.messagePositionController,
-                      onScrollToBottomLoad: logic.onScrollToBottomLoad,
-                      enabledScrollTopLoad: logic.historyNewerHasMore.value,
-                      newerHasMore: logic.historyNewerHasMore.value,
-                      pagingWindow: logic.historyWindowRevision.value,
-                      onScrollToTopLoad: logic.onScrollToTopLoad,
-                      onScrollToTop: logic.onScrollToTop,
-                      loadOnInit: false,
-                      followLatest: !logic.viewingHistory.value &&
-                          !logic.hasDeferredLatest,
-                      initialLoading: logic.initialHistoryLoading.value,
-                      initialLoadingView: const SizedBox.expand(),
-                      historyLoading: logic.historyPagingLoading.value,
-                      historyError: logic.historyError.value,
-                      historyScanLimited: logic.historyScanLimited.value,
-                      hasMore: logic.historyHasMore.value,
-                      onRetry: logic.retryHistory,
-                      findChildIndexCallback: (key) =>
-                          key is ValueKey<String> ? indices[key.value] : null,
-                      itemBuilder: (context, index) {
-                        final id = messageIDs[index];
-                        final row = transientByID[id];
-                        if (row != null) {
-                          return KeyedSubtree(
-                              key: ValueKey(row.id), child: row.child);
-                        }
-                        final message = logic.indexOfMessage(sdkIndices[id]!);
-                        return KeyedSubtree(
-                          key: logic.itemKey(message),
-                          child: _arrivals.wrap(
-                              id,
-                              ColoredBox(
-                                color: id == focusedID
-                                    ? AppTokens.accent.withValues(
-                                        alpha: ChatMessageFocusTokens
-                                            .highlightOpacity)
-                                    : Colors.transparent,
-                                child: MessageSelectionRow(
-                                  controller: logic.messageSelection,
-                                  message: message,
-                                  child: widget.messageBuilder
-                                          ?.call(context, message) ??
-                                      ChatMessageTile(
-                                          logic: logic, message: message),
-                                ),
-                              )),
-                        );
-                      },
-                    ),
-                  ),
-                )),
+                  controller: logic.scrollController,
+                  positionController: logic.messagePositionController,
+                  onScrollToBottomLoad: logic.onScrollToBottomLoad,
+                  enabledScrollTopLoad: logic.historyNewerHasMore.value,
+                  newerHasMore: logic.historyNewerHasMore.value,
+                  pagingWindow: logic.historyWindowRevision.value,
+                  onScrollToTopLoad: logic.onScrollToTopLoad,
+                  onScrollToTop: logic.onScrollToTop,
+                  loadOnInit: false,
+                  followLatest:
+                      !logic.viewingHistory.value && !logic.hasDeferredLatest,
+                  initialLoading: logic.initialHistoryLoading.value,
+                  initialLoadingView: const SizedBox.expand(),
+                  historyLoading: logic.historyPagingLoading.value,
+                  historyError: logic.historyError.value,
+                  historyScanLimited: logic.historyScanLimited.value,
+                  hasMore: logic.historyHasMore.value,
+                  onRetry: logic.retryHistory,
+                  findChildIndexCallback: (key) =>
+                      key is ValueKey<String> ? indices[key.value] : null,
+                  itemBuilder: (context, index) {
+                    final id = messageIDs[index];
+                    final row = transientByID[id];
+                    if (row != null) {
+                      return KeyedSubtree(
+                          key: ValueKey(row.id), child: row.child);
+                    }
+                    final message = logic.indexOfMessage(sdkIndices[id]!);
+                    final messageRow = MessageSelectionRow(
+                      controller: logic.messageSelection,
+                      message: message,
+                      child: widget.messageBuilder?.call(context, message) ??
+                          ChatMessageTile(logic: logic, message: message),
+                    );
+                    return KeyedSubtree(
+                      key: logic.itemKey(message),
+                      child: _arrivals.wrap(
+                          id,
+                          Obx(() => ChatMessageHighlight(
+                                active: id == logic.focusedMessageID.value,
+                                color: AppTokens.accent.withValues(
+                                    alpha: ChatMessageFocusTokens
+                                        .highlightOpacity),
+                                fadeDuration:
+                                    ChatMessageFocusTokens.fadeDuration,
+                                child: messageRow,
+                              ))),
+                    );
+                  },
+                ),
+              ),
+            ),
           );
         }));
   }

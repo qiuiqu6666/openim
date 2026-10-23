@@ -55,7 +55,12 @@ class SelectContactsFromSearchPage extends StatelessWidget {
           child: InkWell(
             key: ValueKey(
                 'search-contact-row-${SelectContactsLogic.parseID(info)}'),
-            onTap: selectContactsLogic.onTap(info),
+            onTap: selectContactsLogic.onTap(info) == null
+                ? null
+                : () {
+                    logic.focusNode.unfocus();
+                    selectContactsLogic.onTap(info)?.call();
+                  },
             child: Container(
               constraints: readOnly ? BoxConstraints(minHeight: 64.h) : null,
               padding: EdgeInsets.symmetric(

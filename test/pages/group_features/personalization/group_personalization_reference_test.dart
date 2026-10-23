@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:openim/pages/group_features/personalization/group_personalization_style.dart';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:openim/pages/group_features/personalization/group_personalization_artwork.dart';
@@ -59,6 +60,9 @@ void main() {
                       onSave: () => saved = true,
                     ))))));
     await tester.runAsync(() => precacheImage(
+        const AssetImage(GroupPersonalizationStyle.previewBackground),
+        boundaryKey.currentContext!));
+    await tester.runAsync(() => precacheImage(
         const AssetImage(GroupPersonalizationArtwork.asset),
         boundaryKey.currentContext!));
     await tester.pumpAndSettle();
@@ -79,9 +83,13 @@ void main() {
         image.dispose();
       });
     }
+    await tester.tap(find.text('昵称后'));
+    await tester.pump();
+    expect(appearance.iconPosition, GroupIconPosition.after);
     await tester.tap(find.byTooltip('图标 樱花'));
     await tester.pump();
     expect(appearance.iconKey, 'flower');
+    expect(appearance.iconPosition, GroupIconPosition.after);
     await tester.ensureVisible(find.text('保存'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存'));

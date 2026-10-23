@@ -39,12 +39,60 @@ class VoicePlaybackController extends ChangeNotifier
   String? _loadedID;
   String? _resumeID;
   Duration _resumePosition = Duration.zero;
+  Duration? _duration;
   Message? current;
   bool loading = false, playing = false, failed = false;
   bool _disposed = false;
   int _generation = 0;
   String _stage = 'idle';
   Stream<Duration>? get positionStream => _player?.positionStream;
+  Duration durationFor(Message message) =>
+      (current?.clientMsgID == message.clientMsgID ? _duration : null) ??
+      Duration(seconds: message.soundElem?.duration ?? 0);
+
+  Duration positionFor(Message message) {
+    if (current?.clientMsgID != message.clientMsgID) return Duration.zero;
+    return _player?.position ??
+        (_resumeID == message.clientMsgID ? _resumePosition : Duration.zero);
+  }
+
+  Future<void> _seekChange = Future<void>.value();
+
+  /// Seek the active player in place, or start this message at the chosen time.
+  Future<void> seek(Message message, double fraction) async {
+    if (_disposed || coordinator.recording || loading || !fraction.isFinite) {
+      return;
+    }
+    final active = current?.clientMsgID == message.clientMsgID && playing;
+    final player = active ? _player : null;
+    final duration = durationFor(message);
+    if (duration <= Duration.zero) return;
+    final target = Duration(
+        milliseconds:
+            (duration.inMilliseconds * fraction.clamp(0.0, 1.0)).round());
+    if (player == null) {
+      unawaited(_play(message, initialPosition: target));
+      return;
+    }
+    final generation = _generation;
+    final change = _seekChange.then((_) async {
+      if (_disposed ||
+          generation != _generation ||
+          !identical(player, _player)) {
+        return;
+      }
+      try {
+        await player.seek(target);
+      } catch (error) {
+        VoicePlaybackLog.write('seek_failed',
+            error: error, attempt: generation);
+      }
+      if (!_disposed && generation == _generation) notifyListeners();
+    });
+    _seekChange = change;
+    await change;
+  }
+
   bool get paused =>
       !playing &&
       !loading &&
@@ -123,9 +171,10 @@ class VoicePlaybackController extends ChangeNotifier
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> _play(Message message) async {
+  Future<void> _play(Message message, {Duration? initialPosition}) async {
     if (_disposed || coordinator.recording) return;
     final generation = ++_generation;
+    if (current?.clientMsgID != message.clientMsgID) _duration = null;
     current = message;
     loading = true;
     playing = failed = false;
@@ -164,7 +213,9 @@ class VoicePlaybackController extends ChangeNotifier
       }
       _lease = lease;
       final player = ownedPlayer = _player = _playerFactory();
-      await _prepare(player, message, generation).timeout(prepareTimeout);
+      await _prepare(player, message, generation,
+              requestedPosition: initialPosition)
+          .timeout(prepareTimeout);
       if (_disposed || generation != _generation || !lease.valid) return;
       _setStage('play', generation);
       Future<void>? playback;
@@ -211,8 +262,8 @@ class VoicePlaybackController extends ChangeNotifier
     }
   }
 
-  Future<void> _prepare(
-      AudioPlayer player, Message message, int generation) async {
+  Future<void> _prepare(AudioPlayer player, Message message, int generation,
+      {Duration? requestedPosition}) async {
     if (Platform.isAndroid) {
       await player.setAndroidAudioAttributes(const AndroidAudioAttributes(
           usage: AndroidAudioUsage.voiceCommunication,
@@ -223,15 +274,16 @@ class VoicePlaybackController extends ChangeNotifier
     if (_disposed || generation != _generation) return;
     if (_loadedID != message.clientMsgID || _loadedID == null) {
       _loadedID = null;
-      final initialPosition =
-          _resumeID == message.clientMsgID ? _resumePosition : Duration.zero;
+      final initialPosition = requestedPosition ??
+          (_resumeID == message.clientMsgID ? _resumePosition : Duration.zero);
       _setStage('resolve_source', generation);
       final source = await _sourceLoader(message);
       if (_disposed || generation != _generation) return;
       _setStage(source.isFile ? 'load_file' : 'load_remote', generation);
+      Duration? preparedDuration;
       if (source.isFile) {
         try {
-          await player.setFilePath(source.value,
+          preparedDuration = await player.setFilePath(source.value,
               initialPosition: initialPosition);
         } catch (error) {
           if (_disposed || generation != _generation) return;
@@ -240,12 +292,15 @@ class VoicePlaybackController extends ChangeNotifier
           VoicePlaybackLog.write('load_file_fallback',
               error: error, attempt: generation);
           _setStage('load_remote', generation);
-          await player.setUrl(fallback, initialPosition: initialPosition);
+          preparedDuration =
+              await player.setUrl(fallback, initialPosition: initialPosition);
         }
       } else {
-        await player.setUrl(source.value, initialPosition: initialPosition);
+        preparedDuration =
+            await player.setUrl(source.value, initialPosition: initialPosition);
       }
       if (_disposed || generation != _generation) return;
+      _duration = preparedDuration;
       _loadedID = message.clientMsgID;
     } else if (player.processingState == ProcessingState.completed ||
         (player.duration != null && player.position >= player.duration!)) {

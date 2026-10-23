@@ -7,13 +7,39 @@ class ChatListPositionController {
   Future<bool> Function(String, double)? _jump;
   VoidCallback? _cancel;
   VoidCallback? _refreshViewport;
+  Future<bool> Function()? _latest;
   bool _disposed = false;
   bool _latestLayoutPending = false;
+  bool _latestEntrancePending = false;
+  String? _messageLayoutPending;
+
+  void requestMessageLayout(String messageID) {
+    if (!_disposed) _messageLayoutPending = messageID;
+  }
+
+  String? takeMessageLayoutRequest(List<String> ids) {
+    final id = _messageLayoutPending;
+    if (_disposed || id == null || !ids.contains(id)) return null;
+    _messageLayoutPending = null;
+    return id;
+  }
 
   /// Apply the latest edge in the next list layout, before its first paint.
-  void requestLatestLayout() {
-    if (!_disposed) _latestLayoutPending = true;
+  void requestLatestLayout({bool entrance = false}) {
+    if (!_disposed) {
+      _latestLayoutPending = true;
+      _latestEntrancePending = entrance;
+    }
   }
+
+  bool takeLatestEntranceRequest() {
+    final pending = !_disposed && _latestEntrancePending;
+    _latestEntrancePending = false;
+    return pending;
+  }
+
+  Future<bool> returnToLatest() =>
+      _disposed ? Future.value(false) : _latest?.call() ?? Future.value(false);
 
   bool takeLatestLayoutRequest() {
     final pending = !_disposed && _latestLayoutPending;
@@ -23,7 +49,7 @@ class ChatListPositionController {
 
   /// Resolves after the message has painted in the current chat viewport.
   /// A missing message, cancellation, or detached viewport resolves to false.
-  Future<bool> jumpToMessage(String messageID, {double alignment = 0.5}) {
+  Future<bool> jumpToMessage(String messageID, {double alignment = 0.65}) {
     assert(alignment >= 0 && alignment <= 1);
     if (_disposed || messageID.isEmpty || !alignment.isFinite) {
       return Future.value(false);
@@ -40,13 +66,15 @@ class ChatListPositionController {
   /// Invalidates a pending position request before an explicit scroll or exit.
   void cancel() {
     _latestLayoutPending = false;
+    _latestEntrancePending = false;
+    _messageLayoutPending = null;
     if (!_disposed) _cancel?.call();
   }
 
   /// Used by the owning chat viewport to bind its positioning callbacks.
   void attach(Object owner, Future<bool> Function(String, double) jump,
       VoidCallback cancel,
-      {VoidCallback? refreshViewport}) {
+      {VoidCallback? refreshViewport, Future<bool> Function()? latest}) {
     if (_disposed) return;
     assert(_owner == null || identical(_owner, owner),
         'A chat position controller can only control one viewport.');
@@ -55,6 +83,7 @@ class ChatListPositionController {
     _jump = jump;
     _cancel = cancel;
     _refreshViewport = refreshViewport;
+    _latest = latest;
   }
 
   /// Used by the owning chat viewport to release its positioning callbacks.
@@ -65,6 +94,7 @@ class ChatListPositionController {
     _jump = null;
     _cancel = null;
     _refreshViewport = null;
+    _latest = null;
   }
 
   void dispose() {
@@ -75,5 +105,6 @@ class ChatListPositionController {
     _jump = null;
     _cancel = null;
     _refreshViewport = null;
+    _latest = null;
   }
 }

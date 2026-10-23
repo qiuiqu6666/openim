@@ -82,6 +82,7 @@ export 'src/widgets/chat/chat_item_container.dart';
 export 'src/widgets/chat/chat_message_content_anchor.dart';
 export 'src/widgets/chat/chat_item_view.dart';
 export 'src/widgets/chat/chat_listview.dart';
+export 'src/widgets/chat/scrolling/chat_message_highlight.dart';
 export 'src/widgets/chat/chat_nickname_view.dart';
 export 'src/widgets/chat/chat_picture_preview.dart';
 export 'src/widgets/chat/chat_picture_view.dart';

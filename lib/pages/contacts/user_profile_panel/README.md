@@ -1,5 +1,13 @@
 # 用户详细资料
 
+## 对方个性签名刷新
+
+`identity/profile_extension_source.dart` 通过现有 HttpUtil 和 IM token 读取正式 `/user/get_users_info` 接口中目标用户的 `ex`。SDK 的 `getUsersInfo` 会命中进程缓存，`FriendInfo.ex` 是好友关系扩展，不能用作最新签名。
+
+资料页在初次确认关系、好友新增/资料变更、目标群成员资料变更及 App 回到前台时刷新扩展；无后台轮询。成功时同步页面与 UserCacheManager，空扩展会清空旧签名，失败保留已有值。控制器按请求代次、用户、IM token、服务地址和关闭状态丢弃失效响应，群上下文关闭后不再应用结果。主控制器保留局部修复以沿用现有订阅所有权，正式读取职责独立放在 identity 目录。
+
+回归测试在 `test/pages/contacts/user_profile_panel/user_profile_panel_logic_loading_test.dart`，覆盖缓存更新、清空、前台刷新、乱序、失败、关闭和账号切换。尚未进行双账号真机联调。
+
 正文参考 `E:/openim/reference-99chat/lib/src/user_profile.dart` 的移动端详细资料分支；顶部复用公共包的 `GlassAppBar` 实色模式，与页面背景使用同一颜色，不叠加玻璃效果。导航保持固定，初始内容按真实状态栏与导航高度留出空间。
 
 ## 维护入口

@@ -18,6 +18,13 @@ const friendProfileBatchSize = 100
 func (r *Relation) SyncFriendsWithProfilesWithLock(ctx context.Context) error {
 	r.relationSyncMutex.Lock()
 	defer r.relationSyncMutex.Unlock()
+	// New recovery rechecks profiles even within the normal cooldown.
+	// Retries share this progress identity and retain incomplete batches.
+	if progress := common.MetadataRecoveryProgress(ctx); progress != nil && progress != r.friendProfileRecovery {
+		r.friendProfileRecovery = progress
+		r.friendProfilePending = nil
+		r.friendProfilesSyncedAt = time.Time{}
+	}
 	if err := r.IncrSyncFriends(ctx); err != nil {
 		return err
 	}

@@ -79,7 +79,8 @@ void main() {
       await tester.scrollUntilVisible(find.text('庄家抽水（%）'), 300,
           scrollable: find.byType(Scrollable).first);
       expect(find.text('庄家抽水（%）'), findsOneWidget);
-      expect(find.byType(TextField), findsNWidgets(4));
+      expect(find.byType(TextField), findsNWidgets(3));
+      expect(find.text('开奖包数'), findsOneWidget);
       expect(find.text('赔率'), findsNothing);
       expect(find.text('闲抽水'), findsNothing);
       expect(find.textContaining('输赢按 1:1'), findsOneWidget);

@@ -1,0 +1,32 @@
+{
+  "sdk_version": "v3.8.3-patch.15+recovery.51-idle-recovery.1",
+  "source_sha256": "087da035925bff237fddfcf74f83581d83c265a038db7fcb24a7d9c2a5ba8188",
+  "patch_sha256": "bf019bf2ebf07fea16897d53c7a793027ab40229b129ac30690a620cbcee8446",
+  "aar_sha256": "9c040b9c7b12ac3322b33d6a07b53566df2b3b201fc310c2fe45ea2e3f9be505",
+  "apk_sha256": "73aba6ba943992a7a3b75c199682b4d822828b92a262d92d7411b5127f018ff4",
+  "apk_libraries": {
+    "arm64-v8a": "e3c11ebf7e08dd74bee2ba609835eb6206f862deb91fe2414af1dfbe64f1465a"
+  },
+  "library_parity": "all four AAR libraries match merged inputs; packaged ARM64 library matches stripped output",
+  "tests": "14 native package/test invocations and 15 build-tool tests passed; canonical interaction tests passed",
+  "idle_regression": {
+    "conversations": 332,
+    "rounds": 3,
+    "bounds_reads_before": 9,
+    "bounds_reads_after": 0,
+    "page_yields_before": 1992,
+    "page_yields_after": 0
+  },
+  "synthetic_windows_benchmark": {
+    "median_ns_before": 106460,
+    "median_ns_after": 41045,
+    "bytes_before": 152981,
+    "bytes_after": 55985,
+    "allocations_before": 52,
+    "allocations_after": 17,
+    "note": "in-memory database, no device thermal measurement"
+  },
+  "source_reconstruction": "718 files match normalized patch reconstruction",
+  "device_runtime": "not tested",
+  "ios": "macOS rebuild required"
+}
