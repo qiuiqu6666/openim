@@ -2,6 +2,8 @@ import 'package:openim_common/localization.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 
+import '../../../../services/chat_history_cache.dart';
+import '../../../../services/chat_revocation_notice.dart';
 import '../../group/member_actions/chat_member_action_sources.dart';
 import 'chat_revocation_policy.dart';
 import 'chat_revocation_trace.dart';
@@ -131,10 +133,12 @@ class ChatMessageRevocation {
       return;
     }
     final account = currentUserID();
+    final cacheEpoch = ChatHistoryCache.epoch;
     final conversation = conversationID();
     final group = groupID();
     bool current() =>
         !isClosed() &&
+        ChatHistoryCache.epoch == cacheEpoch &&
         currentUserID() == account &&
         conversationID() == conversation &&
         groupID() == group;
@@ -212,6 +216,21 @@ class ChatMessageRevocation {
       // SDK failures may precede HTTP dispatch; this is not an HTTP receipt.
       trace.record('request_result', outcome: 'sdk_success');
       stage = 'local_update';
+      // The route may have closed while the SDK accepted the recall. Retain
+      // that fact for reentry even if the native event arrives later. Never
+      // repopulate a cleared login session, including logout/login as self.
+      if (currentUserID() == account && ChatHistoryCache.epoch == cacheEpoch) {
+        ChatHistoryCache.applyRevocation(
+            account,
+            ChatRevocationNotice.replace(
+                message,
+                RevokedInfo(
+                    clientMsgID: id,
+                    revokerID: account,
+                    sourceMessageSendID: message.sendID,
+                    sourceMessageSenderNickname: message.senderNickname,
+                    sessionType: message.sessionType)));
+      }
       // A role change after dispatch does not undo an accepted server result.
       if (current()) {
         onRevoked(id);

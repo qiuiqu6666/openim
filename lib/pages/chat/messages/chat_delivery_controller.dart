@@ -8,6 +8,7 @@ import 'package:openim_common/openim_common.dart';
 import 'package:rxdart/rxdart.dart';
 
 import '../../../services/chat_message_sender.dart';
+import '../../../services/chat_history_cache.dart';
 import '../../../services/favorite_send_coordinator.dart';
 
 /// Owns message delivery status and SDK failure hints for the chat timeline.
@@ -165,6 +166,10 @@ class ChatDeliveryController {
 
   void updateMessage(Message message, Message update) {
     if (isClosed || message.clientMsgID != update.clientMsgID) return;
+    // A late send receipt is not allowed to undo a recall, including a recall
+    // learned from history rather than the live notification stream.
+    ChatHistoryCache.applyRevocation(_accountID, message);
+    update = ChatHistoryCache.applyRevocation(_accountID, update);
     final oldTime = message.sendTime;
     final showTime = message.exMap['showTime'] == true;
     final alreadyRead = message.isRead == true;

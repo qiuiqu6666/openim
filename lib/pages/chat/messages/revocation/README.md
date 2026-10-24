@@ -1,5 +1,7 @@
 # 消息撤回
 
+相册发送队列保留最近的成功消息，用于离页期间的发送回执恢复。重新绑定队列时，必须先读取当前行的持久化撤回事实，再对队列副本应用撤回覆盖；否则旧图片会覆盖 ready 快照中的撤回提示，直到历史返回才消失。直接发送的迟到回执在 `ChatDeliveryController.updateMessage` 使用同样规则，保持撤回不可逆。拦截旧媒体时记录 `outbox_reconcile / revoked_payload_blocked`，用于真机日志核对。回归见 `chat_revocation_outbox_test.dart`。
+
 `ChatMessageRevocation` 由当前聊天创建，复用消息长按菜单和 OpenIM `revokeMessage`。对照 99chat `lib/src/chat.dart` 的 `isGroupAdminRecallEnabled` 入口；权限按 OpenIM 的群角色校验，不依赖三公业务特权或 `gameType`。
 
 - 自己的成功消息继续保留两分钟限制。
@@ -15,6 +17,8 @@
 菜单使用当前群控制器的角色快照。群控制器读取 SDK 完整群主/管理员名单，避免原来前 20 人的分页限制误判角色。角色、成员和群资料事件会更新菜单；点击管理撤回时复用 `ChatMemberActionSources` 查询最新群资料、双方成员及入群状态，复核后才提交。权限查询中发生成员变化则要求重新长按。退出、切换账号/令牌或会话后丢弃迟到结果，重复点击只提交一次。
 
 只有 SDK 撤回成功后才清理原消息内容、引用和语音状态，并在原位置替换为撤回提示。收到 SDK `RevokedInfo` 时使用撤回人的昵称显示提示；自己撤回显示“你撤回了一条消息”。历史中的 SDK 撤回通知使用相同展示，当前账号缓存和迟到历史页也覆盖为不含原内容的提示。真正删除仍移除列表项，撤回不调用删除接口。失败保留原消息并给出简短提示。
+
+成功回包也必须独立于页面生命周期记录撤回：请求期间返回会话列表时，原页面已关闭仍应更新当前登录会话的撤回覆盖记录，让再次进入的 ready 快照和迟到历史不能恢复图片。账号变化或缓存 epoch 已清理时丢弃旧回包；页面回调仍受关闭保护。复用 `ChatHistoryCache.applyRevocation` 保留已经收到的完整撤回信息。SDK Dart 适配器在成功回包时使该会话的 `MessageWindowCache` 失效，同时阻止撤回前的在途读取重新缓存；失败不清缓存。回归见 `chat_revocation_reentry_test.dart`、`chat_revocation_sdk_test.dart` 和历史模块的 `chat_revoked_first_frame_test.dart`。
 
 删除和撤回共用 `messages/widgets/message_action_confirmation_sheet.dart` 的原生底部弹窗，颜色、取消按钮及安全区域沿用 Cupertino 的亮暗主题行为。长按菜单继续复用公共消息组件。测试位于 `test/pages/chat/messages/revocation/`，群角色实时更新测试位于 `test/pages/chat/group/chat_group_controller_test.dart`，菜单回调测试沿用 `chat_message_tile_test.dart`。真实部署的 SDK/服务端权限、时限及多设备回调仍需联机验收。
 

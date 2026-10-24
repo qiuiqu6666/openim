@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'package:flutter_openim_sdk/flutter_openim_sdk.dart';
 import 'package:get/get.dart';
+import '../../../../services/chat_history_cache.dart';
 import '../../messages/chat_delivery_controller.dart';
+import '../../messages/revocation/chat_revocation_trace.dart';
 import 'chat_media_outbox.dart';
 
 /// Disposable presentation subscription; disposal never cancels delivery.
@@ -28,7 +30,21 @@ StreamSubscription<MediaOutboxEntry> bindMediaOutbox({
         entry.message.status != MessageStatus.succeeded) {
       return;
     }
-    final copy = Message.fromJson(entry.message.toJson());
+    final account = entry.task.session.accountID;
+    // The SDK/cached row may already be a recall while this process still owns
+    // the successful upload. Learn that fact before reconciling its old receipt.
+    if (existing != null) ChatHistoryCache.applyRevocation(account, existing);
+    final copy = ChatHistoryCache.applyRevocation(
+        account, Message.fromJson(entry.message.toJson()));
+    if (copy.contentType != entry.message.contentType &&
+        copy.contentType == MessageType.revokeMessageNotification) {
+      ChatRevocationTrace(
+        accountID: account,
+        conversationID: conversationID,
+        clientMsgID: copy.clientMsgID,
+        seq: copy.seq,
+      ).record('outbox_reconcile', outcome: 'revoked_payload_blocked');
+    }
     if (existing == null) {
       messages.add(copy);
       if (!seeding) onAdded?.call();

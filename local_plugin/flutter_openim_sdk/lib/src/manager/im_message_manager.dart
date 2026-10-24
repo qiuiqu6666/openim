@@ -566,14 +566,19 @@ class MessageManager {
     required String conversationID,
     required String clientMsgID,
     String? operationID,
-  }) =>
-      _channel.invokeMethod(
-          'revokeMessage',
-          _buildParam({
-            'conversationID': conversationID,
-            'clientMsgID': clientMsgID,
-            "operationID": Utils.checkOperationID(operationID),
-          }));
+  }) async {
+    final result = await _channel.invokeMethod(
+        'revokeMessage',
+        _buildParam({
+          'conversationID': conversationID,
+          'clientMsgID': clientMsgID,
+          "operationID": Utils.checkOperationID(operationID),
+        }));
+    // A successful request is authoritative even before the listener arrives.
+    // Fence pre-recall reads as well as already warmed local windows.
+    windowCache.invalidate(conversationID);
+    return result;
+  }
 
   /// Mark messages as read
   /// [conversationID] Conversation ID

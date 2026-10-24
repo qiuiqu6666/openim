@@ -7,6 +7,7 @@ import 'package:openim/pages/chat/group/chat_group_sources.dart';
 import 'package:openim/pages/chat/messages/revocation/chat_message_revocation.dart';
 
 import 'support/revocation_fixture.dart';
+import '../../history/message_window_ingress_test.dart' show window;
 
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
@@ -66,6 +67,21 @@ void main() {
     test('default adapter uses SDK revoke, never local delete; failure=$fail',
         () async {
       deny = fail;
+      final cache = MessageWindowCache.shared;
+      cache.invalidate();
+      addTearDown(cache.invalidate);
+      await cache.read(
+          'admin',
+          'sg_group',
+          40,
+          () async => AdvancedMessage(
+                  window: window(40, id: 'sg_group'),
+                  messageList: [
+                    Message(
+                        clientMsgID: 'message',
+                        contentType: MessageType.picture)
+                  ]));
+      expect(cache.peek('admin', 'sg_group', 40), isNotNull);
       final f = RevocationFixture();
       final controller = ChatMessageRevocation(
         conversationID: () => f.conversation,
@@ -93,7 +109,9 @@ void main() {
       expect(calls.last.arguments['conversationID'], 'sg_group');
       expect(calls.last.arguments['clientMsgID'], 'message');
       expect(calls.last.arguments['operationID'], startsWith('revoke-'));
-      expect(calls.last.arguments['operationID'], f.events.first['operationID']);
+      expect(
+          calls.last.arguments['operationID'], f.events.first['operationID']);
+      expect(cache.peek('admin', 'sg_group', 40), fail ? isNotNull : isNull);
       expect(f.removed, fail ? isEmpty : ['message']);
       expect(f.feedback.length, fail ? 1 : 0);
     });
